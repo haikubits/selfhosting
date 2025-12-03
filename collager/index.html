@@ -196,6 +196,22 @@
             z-index: 101;
         }
 
+        /* Resizing Handles */
+        .resize-handle {
+            position: absolute;
+            width: 12px; height: 12px;
+            background: var(--accent);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            z-index: 102;
+            display: none; /* Only for selected */
+        }
+        .frame.selected .resize-handle { display: block; }
+        .handle-n { top: -6px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .handle-e { right: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+        .handle-s { bottom: -6px; left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+        .handle-w { left: -6px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+
         .frame img {
             position: absolute;
             top: 50%;
@@ -372,6 +388,8 @@ class CollageApp {
         this.history = [];
         this.historyIndex = -1;
         this.isDragging = false;
+        this.isResizing = false;
+        this.resizeState = null;
         this.dragStart = { x:0, y:0 };
         this.initialPan = { x:0, y:0 };
 
@@ -467,7 +485,7 @@ class CollageApp {
             }
         });
 
-        // Workspace Interaction (Panning Image)
+        // Workspace Interaction (Panning Image & Resizing)
         const ws = this.ui.canvas;
         ws.addEventListener('pointerdown', this.onPointerDown.bind(this));
         document.addEventListener('pointermove', this.onPointerMove.bind(this));
@@ -662,20 +680,11 @@ class CollageApp {
             // Better: use calc. 
             // f.x is %, f.w is %.
             
-            div.style.left = `calc(${pad}px + ${f.x}% + ${f.x > 0 ? gap/2 : 0}px)`;
-            div.style.top = `calc(${pad}px + ${f.y}% + ${f.y > 0 ? gap/2 : 0}px)`;
-            div.style.width = `calc(${f.w}% * ${availW/finalW} - ${gap}px + ${gap * (f.w/100)}px)`; // Simple approximation
-            // Precise logic:
-            // width = (percent/100 * availW) - (isEdge ? 0 : gap) -- too complex for simple model.
-            // We will do a simpler calc:
-            // Pixel coordinates:
             const pxX = pad + (f.x/100 * availW);
             const pxY = pad + (f.y/100 * availH);
             const pxW = (f.w/100 * availW);
             const pxH = (f.h/100 * availH);
             
-            // Adjust for gaps. If not touching edge, shrink.
-            // This is a simplified "gap" logic (just shrinks everything)
             const gapAdj = gap / 2;
             
             div.style.left = (pxX + gapAdj) + 'px';
@@ -717,8 +726,28 @@ class CollageApp {
                 div.innerHTML = '<div class="empty-msg">+</div>';
             }
 
+            // Handles (only if selected)
+            if (this.state.selection === f.id) {
+                const createHandle = (d) => {
+                    const h = document.createElement('div');
+                    h.className = `resize-handle handle-${d}`;
+                    h.onpointerdown = (e) => {
+                        e.stopPropagation();
+                        this.startResize(e, f, d);
+                    };
+                    return h;
+                };
+                div.appendChild(createHandle('n'));
+                div.appendChild(createHandle('e'));
+                div.appendChild(createHandle('s'));
+                div.appendChild(createHandle('w'));
+            }
+
             // Events
             div.onpointerdown = (e) => {
+                // Ignore if clicked on handle
+                if (e.target.classList.contains('resize-handle')) return;
+                
                 e.stopPropagation();
                 this.selectFrame(f.id);
                 // Setup drag/pan
@@ -834,25 +863,71 @@ class CollageApp {
         this.render();
     }
 
-    /* --- Interaction: Drag/Pan --- */
+    /* --- Interaction: Drag/Pan/Resize --- */
+    
+    startResize(e, frame, direction) {
+        this.pushHistory();
+        this.isResizing = true;
+        this.resizeState = {
+            id: frame.id,
+            dir: direction,
+            startX: e.clientX,
+            startY: e.clientY,
+            startF: { ...frame }
+        };
+    }
     
     onPointerDown(e) {
         // Handled in frame div, but if we need global handling
     }
 
     onPointerMove(e) {
-        if (this.isDragging && this.state.selection !== null) {
+        if (this.isResizing && this.resizeState) {
+            e.preventDefault();
+            const rs = this.resizeState;
+            const f = this.state.frames.find(x => x.id === rs.id);
+            if (!f) return;
+
+            // Convert px delta to % delta
+            const rect = this.ui.canvas.getBoundingClientRect();
+            // Need actual drawable area (accounting for padding?)
+            // We simplify by using full rect width as 100% basis
+            // Note: our frame x/y/w/h are relative to the padded area? 
+            // In render: `pad + (f.x/100 * availW)`
+            // So delta% = deltaPx / availW * 100
+            
+            const pad = parseInt(this.state.canvas.padding);
+            const availW = rect.width - (pad * 2);
+            const availH = rect.height - (pad * 2);
+
+            const dx = (e.clientX - rs.startX) / availW * 100;
+            const dy = (e.clientY - rs.startY) / availH * 100;
+
+            if (rs.dir === 'e') {
+                f.w = Math.max(5, rs.startF.w + dx);
+            }
+            if (rs.dir === 'w') {
+                const maxD = rs.startF.w - 5; 
+                const d = Math.min(maxD, dx); // can't shrink below 5
+                f.x = rs.startF.x + d;
+                f.w = rs.startF.w - d;
+            }
+            if (rs.dir === 's') {
+                f.h = Math.max(5, rs.startF.h + dy);
+            }
+            if (rs.dir === 'n') {
+                const maxD = rs.startF.h - 5;
+                const d = Math.min(maxD, dy);
+                f.y = rs.startF.y + d;
+                f.h = rs.startF.h - d;
+            }
+            this.render();
+        }
+        else if (this.isDragging && this.state.selection !== null) {
             const f = this.state.frames.find(x => x.id === this.state.selection);
             if (f && f.image) {
                 const dx = e.clientX - this.dragStart.x;
                 const dy = e.clientY - this.dragStart.y;
-                
-                // We must account for rotation? 
-                // Simple implementation: Pan is always X/Y of screen, applied to translation.
-                // If the image is rotated, 'translate' axes rotate with it.
-                // To pan intuitively (screen space), we might need trigonometry if we applied rotate BEFORE translate.
-                // Our CSS: translate(-50,-50) translate(panX, panY) rotate(deg).
-                // Here panX/panY align with screen X/Y (mostly).
                 
                 f.image.panX = this.initialPan.x + dx;
                 f.image.panY = this.initialPan.y + dy;
@@ -869,7 +944,12 @@ class CollageApp {
     onPointerUp(e) {
         if (this.isDragging) {
             this.isDragging = false;
-            this.saveLocally(); // Save after drag end
+            this.saveLocally(); 
+        }
+        if (this.isResizing) {
+            this.isResizing = false;
+            this.resizeState = null;
+            this.saveLocally();
         }
     }
 
@@ -971,12 +1051,27 @@ class CollageApp {
                 ctx.translate(x + w/2, y + h/2);
                 
                 // Pan (Scaled)
-                // Pan in State is screen pixels. We need to scale that to canvas size.
                 const scaleFactor = width / this.ui.canvas.offsetWidth;
                 ctx.translate(f.image.panX * scaleFactor, f.image.panY * scaleFactor);
                 
                 ctx.rotate(f.image.rot * Math.PI / 180);
-                ctx.scale(f.image.zoom, f.image.zoom);
+
+                // --- FIX: COVER SCALING ---
+                // Calculate scale needed to cover the frame, matching DOM behavior
+                // DOM min-width:100% essentially ensures the image covers the frame.
+                // We must swap target dimensions if rotated 90/270 degrees relative to image.
+                let frameW = w;
+                let frameH = h;
+                if (f.image.rot % 180 !== 0) {
+                    frameW = h;
+                    frameH = w;
+                }
+                const scaleX = frameW / iW;
+                const scaleY = frameH / iH;
+                const coverScale = Math.max(scaleX, scaleY);
+
+                // Apply Zoom on top of cover scale
+                ctx.scale(coverScale * f.image.zoom, coverScale * f.image.zoom);
                 
                 // Draw Image centered
                 ctx.drawImage(imgEl, -iW/2, -iH/2);
