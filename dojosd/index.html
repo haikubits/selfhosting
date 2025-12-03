@@ -540,4 +540,34 @@ class MainScene extends Phaser.Scene {
     }
 
     endGame(msg) {
-        this.gameOver
+        this.gameOver = true;
+        this.physics.pause();
+        this.player.setTint(0x555555);
+        this.enemy.setTint(0x555555);
+        this.winText.setText(msg);
+        this.winText.setVisible(true);
+        this.add.text(400, 300, 'Press R to Restart', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+    }
+}
+
+// Initialize Game
+const gameConfig = {
+    type: Phaser.AUTO,
+    width: CONFIG.width,
+    height: CONFIG.height,
+    parent: 'game-container',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: CONFIG.gravity },
+            debug: false
+        }
+    },
+    scene: MainScene
+};
+
+const game = new Phaser.Game(gameConfig);
+
+</script>
+</body>
+</html>
