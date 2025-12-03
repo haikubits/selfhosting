@@ -1,57 +1,259 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Apps</title>
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Portfolio | Apps Showcase</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Custom Config & Styles -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        slate: {
+                            850: '#1e293b',
+                            900: '#0f172a',
+                            950: '#020617',
+                        }
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-out',
+                        'slide-up': 'slideUp 0.6s ease-out forwards',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { opacity: '0', transform: 'translateY(20px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
     <style>
-      body {
-        margin: 0;
-        font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-          sans-serif;
-        padding: 32px 18px;
-      }
-      main {
-        max-width: 720px;
-        margin: 0 auto;
-      }
-      h1 {
-        margin: 0 0 16px;
-        font-size: 28px;
-      }
-      ul {
-        margin: 0;
-        padding-left: 20px;
-        line-height: 1.9;
-      }
-      a {
-        text-decoration: none;
-      }
-      a:hover {
-        text-decoration: underline;
-      }
+        /* Hide scrollbar for clean look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+
+        /* Iframe Scaling Magic 
+           This tricks the iframe into rendering at a larger width (desktop size)
+           and then scales it down to fit the card.
+        */
+        .iframe-container {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            background-color: #f8fafc; /* Light bg for iframes so transparent sites look right */
+        }
+        
+        .iframe-scaler {
+            width: 200%; /* Render at 2x width */
+            height: 200%; /* Render at 2x height */
+            border: 0;
+            transform: scale(0.5);
+            transform-origin: 0 0;
+            pointer-events: none; /* Prevents scroll trapping in iframe */
+        }
+
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
     </style>
-  </head>
-  <body>
-    <main>
-      <h1>Apps</h1>
-      <ul>
-        <li>
-          <a href="https://haikubits.github.io/selfhosting/mergepdf/" target="_blank" rel="noopener noreferrer">Merge pdfs</a>
-        </li>
-        <li>
-          <a href="https://haikubits.github.io/selfhosting/dojosd/" target="_blank" rel="noopener noreferrer">DOJO Showdown</a>
-        </li>
-        <li>
-          <a href="https://haikubits.github.io/selfhosting/mdb/" target="_blank" rel="noopener noreferrer">Moodboard</a>
-        </li>
-        <li>
-          <a href="https://haikubits.github.io/selfhosting/collager/" target="_blank" rel="noopener noreferrer">Collage Studio</a>
-        </li>
-        <li>
-          <a href="https://haikubits.github.io/selfhosting/framestudio/" target="_blank" rel="noopener noreferrer">Frame Studio</a>
-        </li>
-      </ul>
+</head>
+<body class="bg-slate-950 text-slate-200 antialiased min-h-screen flex flex-col">
+
+    <!-- Header / Navbar -->
+    <nav class="fixed w-full z-50 top-0 start-0 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between mx-auto p-4">
+            <a href="#" class="flex items-center space-x-3 rtl:space-x-reverse">
+                <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg">
+                    <i data-lucide="code-2"></i>
+                </div>
+                <span class="self-center text-2xl font-bold whitespace-nowrap text-white">DevHub</span>
+            </a>
+            <div class="hidden w-full md:block md:w-auto" id="navbar-default">
+                <ul class="font-medium flex flex-col p-4 md:p-0 mt-4 border border-gray-100 rounded-lg md:flex-row md:space-x-8 rtl:space-x-reverse md:mt-0 md:border-0">
+                    <li>
+                        <a href="https://github.com/haikubits" target="_blank" class="block py-2 px-3 text-gray-400 rounded hover:text-white md:p-0 transition-colors flex items-center gap-2">
+                            <i data-lucide="github" class="w-5 h-5"></i> GitHub
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow pt-24 pb-12 px-4 relative overflow-hidden">
+        <!-- Background Decor -->
+        <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-600/20 blur-[120px] rounded-full -z-10 pointer-events-none"></div>
+
+        <div class="max-w-7xl mx-auto">
+            
+            <!-- Hero Section -->
+            <div class="text-center mb-16 animate-fade-in">
+                <h1 class="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-4">
+                    Applications Portfolio
+                </h1>
+                <p class="text-lg text-slate-400 max-w-2xl mx-auto">
+                    A collection of web tools, prototypes, and creative experiments. <br/>
+                    Explore the live previews below.
+                </p>
+            </div>
+
+            <!-- Grid Container -->
+            <div id="app-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Cards will be injected here by JavaScript -->
+            </div>
+
+        </div>
     </main>
-  </body>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-white/5 py-8 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-slate-500 text-sm">
+                &copy; <span id="year"></span> Haikubits Selfhosting. All rights reserved.
+            </p>
+        </div>
+    </footer>
+
+    <!-- JS Logic -->
+    <script>
+        // Data Source
+        const apps = [
+            {
+                title: "Merge PDFs",
+                url: "https://haikubits.github.io/selfhosting/mergepdf/",
+                description: "A secure client-side tool to combine multiple PDF documents into a single file instantly.",
+                tags: ["Utility", "PDF"]
+            },
+            {
+                title: "DOJO Showdown",
+                url: "https://haikubits.github.io/selfhosting/dojosd/",
+                description: "An interactive scoring or bracket management tool for competitions.",
+                tags: ["Game", "Tool"]
+            },
+            {
+                title: "Moodboard",
+                url: "https://haikubits.github.io/selfhosting/mdb/",
+                description: "Visual organization tool for collecting inspiration, color palettes, and images.",
+                tags: ["Design", "Creative"]
+            },
+            {
+                title: "Collage Studio",
+                url: "https://haikubits.github.io/selfhosting/collager/",
+                description: "Create stunning photo collages with customizable layouts and drag-and-drop ease.",
+                tags: ["Image", "Editor"]
+            },
+            {
+                title: "Frame Studio",
+                url: "https://haikubits.github.io/selfhosting/framestudio/",
+                description: "Add decorative frames and borders to your digital assets and photos.",
+                tags: ["Design", "Editor"]
+            }
+        ];
+
+        const gridContainer = document.getElementById('app-grid');
+
+        // Render Cards
+        apps.forEach((app, index) => {
+            // Create delay for stagger animation
+            const delay = index * 100;
+            
+            const cardHTML = `
+                <div class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl transition-all duration-300 card-hover animate-slide-up flex flex-col" style="animation-delay: ${delay}ms">
+                    
+                    <!-- Browser Window Header -->
+                    <div class="bg-slate-800 px-4 py-2 flex items-center space-x-2 border-b border-slate-700">
+                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                        <div class="ml-4 flex-1 bg-slate-900/50 rounded text-xs text-slate-500 py-1 px-3 truncate font-mono">
+                            ${new URL(app.url).hostname}/...
+                        </div>
+                    </div>
+
+                    <!-- Iframe Preview Window -->
+                    <div class="relative h-64 w-full bg-slate-800 group-hover:border-b-blue-500/50 transition-colors border-b border-transparent">
+                        <div class="iframe-container">
+                            <iframe 
+                                src="${app.url}" 
+                                class="iframe-scaler grayscale-[30%] group-hover:grayscale-0 transition-all duration-500" 
+                                loading="lazy"
+                                scrolling="no"
+                                title="${app.title} Preview">
+                            </iframe>
+                        </div>
+                        
+                        <!-- Overlay to prevent mouse trapping & add hover effect -->
+                        <div class="absolute inset-0 bg-slate-900/10 group-hover:bg-transparent transition-all duration-300"></div>
+                        
+                        <!-- Floating Action Button (Visible on hover) -->
+                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-slate-900/40 backdrop-blur-[2px]">
+                            <a href="${app.url}" target="_blank" rel="noopener noreferrer" class="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-full shadow-lg flex items-center gap-2">
+                                Launch App <i data-lucide="external-link" class="w-4 h-4"></i>
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Content Body -->
+                    <div class="p-6 flex flex-col flex-grow">
+                        <div class="flex items-center justify-between mb-3">
+                            <h2 class="text-xl font-bold text-slate-100 group-hover:text-blue-400 transition-colors">${app.title}</h2>
+                        </div>
+                        
+                        <p class="text-slate-400 text-sm leading-relaxed mb-4 flex-grow">
+                            ${app.description}
+                        </p>
+
+                        <div class="flex flex-wrap gap-2 mt-auto pt-4 border-t border-slate-800">
+                            ${app.tags.map(tag => `<span class="text-xs font-medium px-2.5 py-0.5 rounded bg-slate-800 text-blue-300 border border-slate-700">${tag}</span>`).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            gridContainer.insertAdjacentHTML('beforeend', cardHTML);
+        });
+
+        // Initialize Icons
+        lucide.createIcons();
+        
+        // Set Year
+        document.getElementById('year').textContent = new Date().getFullYear();
+    </script>
+</body>
 </html>
