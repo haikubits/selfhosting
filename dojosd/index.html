@@ -268,10 +268,13 @@ class Fighter extends Phaser.Physics.Arcade.Sprite {
         this.textureBase = textureKey.replace('_idle', '');
         
         // Attack Hitbox (invisible sprite attached to player)
+        // BUG FIX: Set allowGravity to false to prevent it from falling out of sync
         this.attackHitbox = scene.physics.add.sprite(x, y, null);
         this.attackHitbox.setVisible(false);
-        this.attackHitbox.setSize(60, 60); // Larger hitbox for better feel
+        this.attackHitbox.setSize(60, 60);
         this.attackHitbox.body.enable = false;
+        this.attackHitbox.body.allowGravity = false; // CRITICAL FIX
+        this.attackHitbox.body.immovable = true;     // CRITICAL FIX
     }
 
     update(cursors, target) {
@@ -338,8 +341,10 @@ class Fighter extends Phaser.Physics.Arcade.Sprite {
         }
 
         // Keep hitbox attached
+        // BUG FIX: Also reset velocity to ensure it never drifts
         const offset = this.flipX ? -40 : 40;
         this.attackHitbox.setPosition(this.x + offset, this.y);
+        this.attackHitbox.body.velocity.set(0, 0); 
     }
 
     attack() {
@@ -351,13 +356,15 @@ class Fighter extends Phaser.Physics.Arcade.Sprite {
 
         // Enable Hitbox faster (50ms instead of 100ms) for responsiveness
         this.scene.time.delayedCall(50, () => {
-            this.attackHitbox.body.enable = true;
+            if (this.scene) this.attackHitbox.body.enable = true;
         });
 
         // End Attack
         this.scene.time.delayedCall(300, () => {
-            this.isAttacking = false;
-            this.attackHitbox.body.enable = false;
+            if (this.scene) {
+                this.isAttacking = false;
+                this.attackHitbox.body.enable = false;
+            }
         });
     }
 
@@ -376,8 +383,10 @@ class Fighter extends Phaser.Physics.Arcade.Sprite {
         
         // Recover
         this.scene.time.delayedCall(500, () => {
-            this.isHurt = false;
-            this.clearTint();
+            if (this.scene) {
+                this.isHurt = false;
+                this.clearTint();
+            }
         });
     }
 }
@@ -531,34 +540,4 @@ class MainScene extends Phaser.Scene {
     }
 
     endGame(msg) {
-        this.gameOver = true;
-        this.physics.pause();
-        this.player.setTint(0x555555);
-        this.enemy.setTint(0x555555);
-        this.winText.setText(msg);
-        this.winText.setVisible(true);
-        this.add.text(400, 300, 'Press R to Restart', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
-    }
-}
-
-// Initialize Game
-const gameConfig = {
-    type: Phaser.AUTO,
-    width: CONFIG.width,
-    height: CONFIG.height,
-    parent: 'game-container',
-    physics: {
-        default: 'arcade',
-        arcade: {
-            gravity: { y: CONFIG.gravity },
-            debug: false
-        }
-    },
-    scene: MainScene
-};
-
-const game = new Phaser.Game(gameConfig);
-
-</script>
-</body>
-</html>
+        this.gameOver
