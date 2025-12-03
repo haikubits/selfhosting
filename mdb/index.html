@@ -1,1 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Moodboard Zero</title>
+    <meta name="description" content="Zero-backend moodboard. Search, drag, drop, and share via URL.">
+    <style>
+        :root {
+            --bg: #1a1a1a;
+            --surface: #2a2a2a;
+            --text: #e0e0e0;
+            --text-muted: #a0a0a0;
+            --accent: #7c4dff;
+            --accent-hover: #651fff;
+            --danger: #ff5252;
+            --border: #444;
+            --radius: 8px;
+            --shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
 
+        * { box-sizing: border-box; }
+        
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* App-like feel */
+        }
+
+        /* --- Header --- */
+        header {
+            padding: 1rem;
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 10;
+        }
+
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        h1 { margin: 0; font-size: 1.2rem; font-weight: 700; letter-spacing: -0.5px; }
+
+        .query-container {
+            flex: 1;
+            display: flex;
+            gap: 0.5rem;
+            max-width: 600px;
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            background: var(--bg);
+            color: var(--text);
+            font-size: 1rem;
+        }
+        input[type="text"]:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border-radius: var(--radius);
+            border: none;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+        .btn:hover { background: var(--accent-hover); }
+        .btn-secondary { background: var(--border); color: var(--text); }
+        .btn-secondary:hover { background: #555; }
+        .btn-icon { padding: 0.5rem; }
+
+        /* --- Controls & Chips --- */
+        .controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: center;
+            font-size: 0.9rem;
+        }
+
+        .presets { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 2px; }
+        .chip {
+            padding: 0.25rem 0.75rem;
+            background: #333;
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            cursor: pointer;
+            white-space: nowrap;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+        .chip:hover { background: var(--accent); border-color: var(--accent); }
+        
+        .search-links a { margin-right: 0.5rem; color: var(--accent); text-decoration: none; font-size: 0.85rem;}
+        .search-links a:hover { text-decoration: underline; }
+
+        /* --- Main Board --- */
+        main {
+            flex: 1;
+            padding: 1rem;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            pointer-events: none;
+        }
+        .empty-state h2 { margin-bottom: 0.5rem; color: var(--text); }
+        .empty-state p { line-height: 1.6; }
+        .tip { font-size: 0.9em; background: #333; padding: 0.5rem; border-radius: 4px; margin-top: 1rem; }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-auto-rows: 10px; /* Masonry-ish base */
+            gap: 1rem;
+            padding-bottom: 4rem;
+        }
+
+        /* --- Tile --- */
+        .tile {
+            position: relative;
+            border-radius: var(--radius);
+            overflow: hidden;
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            cursor: grab;
+            transition: transform 0.2s, box-shadow 0.2s;
+            /* Grid row span logic handled in JS */
+        }
+        .tile:hover { transform: translateY(-2px); box-shadow: 0 8px 12px rgba(0,0,0,0.4); z-index: 2; }
+        .tile:active { cursor: grabbing; }
+        .tile.dragging { opacity: 0.4; border: 2px dashed var(--accent); }
+
+        .tile img {
+            width: 100%;
+            height: auto;
+            display: block;
+            pointer-events: none; /* Prevent browser native img drag */
+        }
+
+        .tile-overlay {
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.9));
+            padding: 2rem 0.5rem 0.5rem;
+            opacity: 0;
+            transition: opacity 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+        .tile:hover .tile-overlay { opacity: 1; }
+
+        .tile-domain { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .tile-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem; }
+        
+        .icon-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: white;
+            border-radius: 4px;
+            width: 24px; height: 24px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer;
+        }
+        .icon-btn:hover { background: rgba(255,255,255,0.3); }
+        .btn-del:hover { background: var(--danger); }
+
+        /* --- Footer --- */
+        footer {
+            padding: 0.5rem 1rem;
+            background: var(--surface);
+            border-top: 1px solid var(--border);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* --- Utility & Notification --- */
+        .toast {
+            position: fixed;
+            bottom: 3rem;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--accent);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 100;
+        }
+        .toast.show { opacity: 1; }
+
+        @media (max-width: 600px) {
+            .controls-row { flex-direction: column; align-items: flex-start; }
+            .search-links { font-size: 0.8rem; }
+            #grid { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="top-bar">
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+            <h1>Moodboard</h1>
+            <span style="font-size:0.8rem; background:var(--accent); padding:2px 6px; border-radius:4px;">Zero</span>
+        </div>
+        <div class="query-container">
+            <input type="text" id="queryInput" placeholder="Enter a vibe (e.g., 'Cyberpunk City')..." aria-label="Search Query">
+        </div>
+        <div style="display:flex; gap:0.5rem;">
+            <button id="shareBtn" class="btn" title="Copy Link to Clipboard">Share 🔗</button>
+            <button id="exportMenuBtn" class="btn btn-secondary" title="Export Options">Export ⬇</button>
+        </div>
+    </div>
+
+    <div class="controls-row">
+        <div class="presets" id="presets">
+            <!-- Chips injected by JS -->
+        </div>
+        <div class="search-links">
+            <span style="color:var(--text-muted); margin-right:0.5rem;">Open Search:</span>
+            <a href="#" target="_blank" rel="noopener noreferrer" id="linkGoogle">Google Images</a>
+            <a href="#" target="_blank" rel="noopener noreferrer" id="linkPinterest">Pinterest</a>
+            <a href="#" target="_blank" rel="noopener noreferrer" id="linkWiki">Wiki Commons</a>
+        </div>
+    </div>
+</header>
+
+<main id="dropZone">
+    <div id="grid"></div>
+    <div id="emptyState" class="empty-state">
+        <h2>Your board is empty</h2>
+        <p>1. Type a vibe above & click "Open Search".<br>
+           2. <strong>Right Click</strong> an image & choose <strong>"Copy Image"</strong>.<br>
+           3. Come back here and press <strong>Ctrl + V</strong> (Paste).</p>
+        <div class="tip">💡 Tip: Don't copy the website URL. Copy the Image itself.</div>
+    </div>
+</main>
+
+<footer>
+    <span>Images are linked, not hosted. Privacy first.</span>
+    <span>v1.1 • Improved Paste</span>
+</footer>
+
+<div id="toast" class="toast">Link Copied!</div>
+
+<!-- Hidden Export Controls (shown via simple JS prompt/logic for cleanliness) -->
+<canvas id="exportCanvas" style="display:none;"></canvas>
+
+<script>
+    /**
+     * STATE MANAGEMENT
+     */
+    const state = {
+        q: "", // query
+        t: []  // tiles: [{u: url, h: heightAspect}]
+    };
+
+    const PRESETS = ["Cozy Cabin", "Cyberpunk Neon", "Minimalist Beige", "90s Vaporwave", "Dark Academia", "Industrial Loft"];
+
+    // DOM Elements
+    const queryInput = document.getElementById('queryInput');
+    const grid = document.getElementById('grid');
+    const emptyState = document.getElementById('emptyState');
+    const dropZone = document.getElementById('dropZone');
+    const linkGoogle = document.getElementById('linkGoogle');
+    const linkPinterest = document.getElementById('linkPinterest');
+    const linkWiki = document.getElementById('linkWiki');
+
+    /**
+     * INITIALIZATION
+     */
+    function init() {
+        // Load Presets
+        const presetsContainer = document.getElementById('presets');
+        PRESETS.forEach(p => {
+            const chip = document.createElement('div');
+            chip.className = 'chip';
+            chip.textContent = p;
+            chip.onclick = () => {
+                queryInput.value = p;
+                updateSearchLinks();
+                saveState(); // just to update URL q param
+            };
+            presetsContainer.appendChild(chip);
+        });
+
+        // Load State
+        loadState();
+        
+        // Event Listeners
+        queryInput.addEventListener('input', () => {
+            state.q = queryInput.value;
+            updateSearchLinks();
+            saveState(); // Update URL for sharing current query
+        });
+
+        // Paste Handler (Window level)
+        window.addEventListener('paste', handlePaste);
+
+        // Drag & Drop (Container level)
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.boxShadow = 'inset 0 0 0 2px var(--accent)'; });
+        dropZone.addEventListener('dragleave', () => { dropZone.style.boxShadow = 'none'; });
+        dropZone.addEventListener('drop', handleFileDrop);
+
+        // Share & Export
+        document.getElementById('shareBtn').addEventListener('click', shareBoard);
+        document.getElementById('exportMenuBtn').addEventListener('click', handleExport);
+
+        updateSearchLinks();
+    }
+
+    /**
+     * LOGIC: STATE & SERIALIZATION
+     */
+    function saveState() {
+        state.q = queryInput.value;
+        // Simple serialization: JSON -> String
+        const json = JSON.stringify(state);
+        // Base64 encode (handle unicode)
+        const hash = btoa(encodeURIComponent(json));
+        
+        // Update URL without reload
+        history.replaceState(null, null, '#b=' + hash);
+        
+        // Mirror to local storage
+        localStorage.setItem('mb_zero_state', json);
+        
+        toggleEmptyState();
+    }
+
+    function loadState() {
+        const hash = location.hash;
+        let dataStr = null;
+
+        if (hash.startsWith('#b=')) {
+            try {
+                const b64 = hash.substring(3);
+                dataStr = decodeURIComponent(atob(b64));
+            } catch (e) { console.error("URL parse error", e); }
+        } else {
+            // Fallback to local storage
+            dataStr = localStorage.getItem('mb_zero_state');
+        }
+
+        if (dataStr) {
+            try {
+                const parsed = JSON.parse(dataStr);
+                state.q = parsed.q || "";
+                state.t = parsed.t || [];
+                queryInput.value = state.q;
+            } catch (e) { console.error("JSON parse error", e); }
+        }
+
+        renderGrid();
+    }
+
+    function toggleEmptyState() {
+        if (state.t.length > 0) {
+            emptyState.style.display = 'none';
+        } else {
+            emptyState.style.display = 'flex';
+        }
+    }
+
+    function updateSearchLinks() {
+        const q = queryInput.value.trim() || "aesthetic";
+        const enc = encodeURIComponent(q);
+        linkGoogle.href = `https://www.google.com/search?q=${enc}&tbm=isch`;
+        linkPinterest.href = `https://www.pinterest.com/search/pins/?q=${enc}`;
+        linkWiki.href = `https://commons.wikimedia.org/w/index.php?search=${enc}&title=Special:Search&go=Go&ns0=1&ns6=1&ns12=1&ns14=1&ns100=1&ns106=1`;
+    }
+
+    /**
+     * LOGIC: IMAGES & GRID
+     */
+    function addImage(url) {
+        // Validate URL roughly
+        if(!url) return;
+
+        // Smart Error Check: Is this a search page?
+        if (url.includes('google.com/search') || url.includes('pinterest.com/pin/') || url.includes('pinterest.com/search')) {
+            showToast("⚠️ That looks like a page link. Right-click the IMAGE and choose 'Copy Image'.", true);
+            return;
+        }
+
+        // Create temp image to get aspect ratio for masonry layout
+        const img = new Image();
+        img.onload = function() {
+            // We store a rough aspect ratio to help CSS Grid
+            // 1 = square, >1 = tall, <1 = wide. 
+            // We'll actually just let CSS handle it, but storing the URL is key.
+            state.t.unshift({ u: url });
+            if(state.t.length > 30) state.t.pop(); // Cap at 30
+            renderGrid();
+            saveState();
+        };
+        img.onerror = function() {
+            showToast("Failed to load image. Link might be blocked or invalid.", true);
+        };
+        img.src = url;
+    }
+
+    function renderGrid() {
+        grid.innerHTML = '';
+        toggleEmptyState();
+
+        state.t.forEach((tileData, index) => {
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.draggable = true;
+            tile.dataset.index = index;
+
+            // Image
+            const img = document.createElement('img');
+            img.src = tileData.u;
+            img.loading = "lazy";
+            img.crossOrigin = "anonymous"; // Try for CORS, fallback handled by browser
+            
+            // Overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'tile-overlay';
+            
+            // Domain parsing
+            let domain = "Link";
+            if(tileData.u.startsWith('data:')) domain = "Pasted";
+            else try { domain = new URL(tileData.u).hostname.replace('www.', ''); } catch(e){}
+
+            const info = document.createElement('div');
+            info.className = 'tile-domain';
+            info.textContent = domain;
+
+            const actions = document.createElement('div');
+            actions.className = 'tile-actions';
+
+            // Open Link Button
+            const openBtn = document.createElement('button');
+            openBtn.className = 'icon-btn';
+            openBtn.innerHTML = '↗';
+            openBtn.title = "Open Image Source";
+            openBtn.onclick = (e) => { 
+                e.stopPropagation(); 
+                if(!tileData.u.startsWith('data:')) window.open(tileData.u, '_blank'); 
+            };
+
+            // Delete Button
+            const delBtn = document.createElement('button');
+            delBtn.className = 'icon-btn btn-del';
+            delBtn.innerHTML = '×';
+            delBtn.title = "Remove";
+            delBtn.onclick = (e) => {
+                e.stopPropagation(); // prevent drag
+                deleteTile(index);
+            };
+
+            actions.appendChild(openBtn);
+            actions.appendChild(delBtn);
+            overlay.appendChild(info);
+            overlay.appendChild(actions);
+
+            tile.appendChild(img);
+            tile.appendChild(overlay);
+
+            // Drag Events
+            addDragHandlers(tile);
+
+            grid.appendChild(tile);
+            
+            // Masonry hack: wait for load to set row span
+            img.onload = () => adjustGridItem(tile, img);
+        });
+    }
+
+    function adjustGridItem(tile, img) {
+        // Simple masonry calculation based on 10px row height
+        const rowHeight = 10;
+        const rowGap = 16; // 1rem
+        // Determine height based on width of grid column (approx)
+        const rowSpan = Math.ceil((img.height * (tile.clientWidth / img.width) + rowGap) / (rowHeight + rowGap));
+        tile.style.gridRowEnd = "span " + (rowSpan + 2); // +2 for overlay space
+    }
+
+    function deleteTile(index) {
+        state.t.splice(index, 1);
+        renderGrid();
+        saveState();
+    }
+
+    /**
+     * LOGIC: INPUT HANDLERS (Improved)
+     */
+    function handlePaste(e) {
+        const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+        let blob = null;
+
+        // 1. Try to find an image file in the clipboard (Right click > Copy Image)
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf("image") === 0) {
+                blob = items[i].getAsFile();
+                break;
+            }
+        }
+
+        if (blob) {
+            e.preventDefault();
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                addImage(event.target.result); // Adds as Base64 Data URL
+                showToast("Image pasted from clipboard!");
+            };
+            reader.readAsDataURL(blob);
+            return;
+        }
+
+        // 2. Fallback to text URL (Right click > Copy Image Address)
+        const text = (e.clipboardData || window.clipboardData).getData('text');
+        if (text && text.startsWith('http')) {
+            e.preventDefault();
+            const urls = text.split(/\s+/).filter(u => u.startsWith('http'));
+            urls.forEach(u => addImage(u));
+            showToast("Image link added!");
+        }
+    }
+
+    function handleFileDrop(e) {
+        e.preventDefault();
+        dropZone.style.boxShadow = 'none';
+        
+        // Handle URL text drag
+        const text = e.dataTransfer.getData('text/plain');
+        if (text && text.startsWith('http')) {
+            addImage(text);
+            return;
+        }
+
+        // Handle HTML drag (from other browser tabs)
+        const html = e.dataTransfer.getData('text/html');
+        if (html) {
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, "text/html");
+            const img = doc.querySelector('img');
+            if (img && img.src) {
+                addImage(img.src);
+                return;
+            }
+        }
+    }
+
+    /**
+     * LOGIC: DRAG & DROP REORDERING
+     */
+    let dragSrcEl = null;
+
+    function addDragHandlers(tile) {
+        tile.addEventListener('dragstart', function(e) {
+            dragSrcEl = this;
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/html', this.innerHTML);
+            this.classList.add('dragging');
+        });
+
+        tile.addEventListener('dragend', function() {
+            this.classList.remove('dragging');
+            dragSrcEl = null;
+        });
+
+        tile.addEventListener('dragover', function(e) {
+            if (e.preventDefault) e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            return false;
+        });
+
+        tile.addEventListener('drop', function(e) {
+            if (e.stopPropagation) e.stopPropagation();
+            if (dragSrcEl !== this) {
+                // Get indices
+                const fromIndex = parseInt(dragSrcEl.dataset.index);
+                const toIndex = parseInt(this.dataset.index);
+                
+                // Swap in state array
+                const item = state.t[fromIndex];
+                state.t.splice(fromIndex, 1);
+                state.t.splice(toIndex, 0, item);
+
+                // Re-render
+                renderGrid();
+                saveState();
+            }
+            return false;
+        });
+    }
+
+    /**
+     * LOGIC: SHARE & EXPORT
+     */
+    function showToast(msg, isError = false) {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.style.backgroundColor = isError ? 'var(--danger)' : 'var(--accent)';
+        t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    function shareBoard() {
+        saveState(); // Ensure URL is fresh
+        navigator.clipboard.writeText(window.location.href).then(() => {
+            showToast("Board URL copied to clipboard!");
+        }).catch(err => {
+            prompt("Copy this link:", window.location.href);
+        });
+    }
+
+    async function handleExport() {
+        const choice = prompt("Type 'html' for editable file or 'png' for image.\n(Note: PNG might fail if images block access).", "html");
+        
+        if (choice === 'html') {
+            downloadHTML();
+        } else if (choice === 'png') {
+            await downloadPNG();
+        }
+    }
+
+    function downloadHTML() {
+        const htmlContent = document.documentElement.outerHTML;
+        const blob = new Blob([htmlContent], {type: 'text/html'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `moodboard-${Date.now()}.html`;
+        a.click();
+    }
+
+    async function downloadPNG() {
+        showToast("Generating PNG... Wait.");
+        // We use a simplified canvas approach
+        // Note: Real DOM-to-Image is complex in 1 file without libs (html2canvas).
+        // We will just draw the images we have to a canvas grid.
+        
+        const canvas = document.getElementById('exportCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Setup Canvas size (Arbitrary fixed width grid)
+        const colWidth = 300;
+        const cols = 3;
+        const gap = 20;
+        const totalW = (colWidth * cols) + (gap * (cols+1));
+        
+        // Calculate total height (approximate)
+        let colHeights = [gap, gap, gap]; // Track Y position for 3 columns
+        
+        // 1. Pre-load all images to calculate height
+        const loadedImages = await Promise.all(state.t.map(t => {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.crossOrigin = "anonymous";
+                img.onload = () => resolve({img, valid: true});
+                img.onerror = () => resolve({img, valid: false}); // Skip broken/CORS blocked
+                img.src = t.u;
+            });
+        }));
+
+        // 2. Measure Height
+        loadedImages.forEach(item => {
+            if(!item.valid) return;
+            // Find shortest column
+            let colIndex = colHeights.indexOf(Math.min(...colHeights));
+            const aspect = item.img.height / item.img.width;
+            const h = colWidth * aspect;
+            colHeights[colIndex] += h + gap;
+        });
+
+        const totalH = Math.max(...colHeights) + 50; // + footer space
+
+        // 3. Resize Canvas
+        canvas.width = totalW;
+        canvas.height = totalH;
+
+        // 4. Fill Background
+        ctx.fillStyle = "#1a1a1a";
+        ctx.fillRect(0,0, totalW, totalH);
+
+        // 5. Draw Images
+        colHeights = [gap, gap, gap]; // Reset
+        let tainted = false;
+
+        loadedImages.forEach(item => {
+            if(!item.valid) return;
+            let colIndex = colHeights.indexOf(Math.min(...colHeights));
+            const aspect = item.img.height / item.img.width;
+            const h = colWidth * aspect;
+            const x = gap + (colIndex * (colWidth + gap));
+            const y = colHeights[colIndex];
+
+            try {
+                ctx.drawImage(item.img, x, y, colWidth, h);
+            } catch(e) {
+                tainted = true;
+                // Draw placeholder
+                ctx.fillStyle = "#333";
+                ctx.fillRect(x,y,colWidth,h);
+                ctx.fillStyle = "#fff";
+                ctx.font = "20px Arial";
+                ctx.fillText("CORS Blocked", x+10, y+30);
+            }
+            
+            colHeights[colIndex] += h + gap;
+        });
+
+        // 6. Footer
+        ctx.fillStyle = "#fff";
+        ctx.font = "24px sans-serif";
+        ctx.fillText(`Moodboard: ${state.q}`, gap, totalH - 20);
+
+        // 7. Download
+        try {
+            const dataURL = canvas.toDataURL("image/png");
+            const a = document.createElement('a');
+            a.href = dataURL;
+            a.download = `moodboard-${Date.now()}.png`;
+            a.click();
+            if(tainted) showToast("Exported, but some images were blocked by CORS.");
+            else showToast("PNG Downloaded!");
+        } catch(e) {
+            alert("Cannot export PNG because one or more external images blocked access (CORS). Try the 'HTML' export instead to save your board.");
+        }
+    }
+
+    // Run
+    init();
+
+</script>
+</body>
+</html>
