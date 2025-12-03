@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dojo Showdown: Panda vs Tiger</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+        }
+        #game-container {
+            box-shadow: 0 0 50px rgba(0,0,0,0.8);
+            border: 4px solid #333;
+            border-radius: 4px;
+            position: relative;
+        }
+        .controls-overlay {
+            position: absolute;
+            bottom: 10px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px black;
+            opacity: 0.7;
+            font-size: 14px;
+        }
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+        }
+    </style>
+    <!-- Phaser 3 Framework -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js"></script>
+</head>
+<body>
+
+<div id="game-container">
+    <div class="loading" id="loading-text">Summoning the Dragon Warrior...</div>
+</div>
+<div class="controls-overlay">
+    P1: Arrows to Move • Z to Punch • X to Kick | R to Restart
+</div>
+
+<script>
+/**
+ * AUDIO SYNTHESIZER
+ * Generates retro-arcade style sound effects using Web Audio API
+ * so we don't need external mp3 files.
+ */
+class GameAudio {
+    constructor() {
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    playTone(freq, type, duration, vol = 0.1) {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + duration);
+    }
+
+    playPunch() {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        
+        // Noise buffer for impact
+        const bufferSize = this.ctx.sampleRate * 0.1; 
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const gain = this.ctx.createGain();
+        
+        // Bandpass filter to make it sound like a "thud"
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.value = 1000;
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        
+        gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+        noise.start();
+        
+        // Add a low thud oscillator
+        this.playTone(150, 'square', 0.1, 0.1);
+    }
+
+    playWhiff() {
+        // Whoosh sound
+        this.playTone(400, 'sine', 0.1, 0.05);
+    }
+
+    playJump() {
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(300, this.ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + 0.2);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.2);
+    }
+}
+
+const audio = new GameAudio();
+
+/**
+ * GAME CONSTANTS
+ */
+const CONFIG = {
+    width: 800,
+    height: 450,
+    gravity: 1200,
+    speed: 300,
+    jump: -750
+};
+
+/**
+ * TEXTURE GENERATOR
+ * Draws sprites programmatically to HTML Canvas so no external images are needed.
+ */
+class TextureGenerator {
+    static createTextures(scene) {
+        // 1. Background Gradient
+        const bgParams = { width: 800, height: 450 };
+        const bgCanvas = scene.make.graphics(bgParams);
+        bgCanvas.fillGradientStyle(0x87CEEB, 0x87CEEB, 0xF4A460, 0xF4A460, 1);
+        bgCanvas.fillRect(0, 0, 800, 450);
+        
+        // Mountains
+        bgCanvas.fillStyle(0x556B2F, 1);
+        bgCanvas.beginPath();
+        bgCanvas.moveTo(0, 450);
+        bgCanvas.lineTo(150, 200);
+        bgCanvas.lineTo(300, 450);
+        bgCanvas.lineTo(500, 150);
+        bgCanvas.lineTo(800, 450);
+        bgCanvas.fill();
+        bgCanvas.generateTexture('sky', 800, 450);
+
+        // 2. Floor
+        const floor = scene.make.graphics({ x: 0, y: 0, add: false });
+        floor.fillStyle(0x3d3d3d, 1); // Dark stone
+        floor.fillRect(0, 0, 800, 64);
+        floor.fillStyle(0x555555, 1); // Highlights
+        for(let i=0; i<800; i+=40) floor.fillRect(i, 0, 38, 64); 
+        floor.generateTexture('floor', 800, 64);
+
+        // 3. Panda Sprite (Hero)
+        const panda = scene.make.graphics({ x: 0, y: 0, add: false });
+        // Body
+        panda.fillStyle(0xffffff, 1);
+        panda.fillCircle(32, 45, 25); // Belly
+        panda.fillCircle(32, 25, 18); // Head
+        // Black patches
+        panda.fillStyle(0x111111, 1);
+        panda.fillCircle(22, 20, 6); // Eye L
+        panda.fillCircle(42, 20, 6); // Eye R
+        panda.fillCircle(14, 10, 8); // Ear L
+        panda.fillCircle(50, 10, 8); // Ear R
+        panda.fillEllipse(32, 35, 10, 6); // Nose
+        // Limbs
+        panda.fillCircle(10, 40, 10); // Arm L
+        panda.fillCircle(54, 40, 10); // Arm R
+        panda.fillCircle(15, 70, 12); // Leg L
+        panda.fillCircle(49, 70, 12); // Leg R
+        // Headband
+        panda.fillStyle(0xff0000, 1);
+        panda.fillRect(14, 12, 36, 6);
+        panda.generateTexture('panda_idle', 64, 80);
+
+        // Panda Attack
+        panda.clear();
+        panda.fillStyle(0xffffff, 1);
+        panda.fillCircle(32, 45, 25);
+        panda.fillCircle(38, 28, 18); // Head forward
+        panda.fillStyle(0x111111, 1);
+        panda.fillCircle(15, 70, 12);
+        panda.fillCircle(55, 65, 12); // Leg kicked out
+        panda.fillCircle(60, 40, 12); // Fist punched out
+        panda.generateTexture('panda_attack', 70, 80);
+
+        // 4. Tiger Sprite (Enemy)
+        const tiger = scene.make.graphics({ x: 0, y: 0, add: false });
+        tiger.fillStyle(0xffa500, 1); // Orange
+        tiger.fillCircle(32, 45, 22); // Body
+        tiger.fillCircle(32, 22, 16); // Head
+        // Stripes
+        tiger.fillStyle(0x000000, 1);
+        tiger.beginPath(); tiger.moveTo(25, 10); tiger.lineTo(39, 10); tiger.lineTo(32, 25); tiger.fill(); // Head stripe
+        tiger.fillRect(15, 40, 10, 4); // Body stripe L
+        tiger.fillRect(39, 45, 10, 4); // Body stripe R
+        // Eyes
+        tiger.fillStyle(0xffffff, 1); tiger.fillCircle(26, 20, 4); tiger.fillCircle(38, 20, 4);
+        tiger.fillStyle(0x000000, 1); tiger.fillCircle(26, 20, 2); tiger.fillCircle(38, 20, 2);
+        // Limbs
+        tiger.fillStyle(0xffa500, 1);
+        tiger.fillCircle(15, 70, 11);
+        tiger.fillCircle(49, 70, 11);
+        tiger.generateTexture('tiger_idle', 64, 80);
+
+        // Tiger Attack
+        tiger.clear();
+        tiger.fillStyle(0xffa500, 1);
+        tiger.fillCircle(32, 45, 22);
+        tiger.fillCircle(25, 22, 16); 
+        tiger.fillStyle(0x000000, 1);
+        tiger.fillRect(15, 40, 10, 4);
+        tiger.fillStyle(0xffa500, 1);
+        tiger.fillCircle(60, 40, 12); // Hand out
+        tiger.generateTexture('tiger_attack', 70, 80);
+
+        // 5. Particle
+        const p = scene.make.graphics();
+        p.fillStyle(0xffffff, 1);
+        p.fillCircle(4,4,4);
+        p.generateTexture('particle', 8, 8);
+    }
+}
+
+/**
+ * ENTITY: FIGHTER
+ * Base class for both player and AI
+ */
+class Fighter extends Phaser.Physics.Arcade.Sprite {
+    constructor(scene, x, y, textureKey, isPlayer) {
+        super(scene, x, y, textureKey);
+        scene.add.existing(this);
+        scene.physics.add.existing(this);
+
+        this.setCollideWorldBounds(true);
+        this.setDragX(1000); // Friction
+        this.setBodySize(40, 70);
+        this.setOffset(12, 5);
+
+        this.isPlayer = isPlayer;
+        this.hp = 100;
+        this.isAttacking = false;
+        this.isHurt = false;
+        this.textureBase = textureKey.replace('_idle', '');
+        
+        // Attack Hitbox (invisible sprite attached to player)
+        this.attackHitbox = scene.physics.add.sprite(x, y, null);
+        this.attackHitbox.setVisible(false);
+        this.attackHitbox.setSize(60, 60); // Larger hitbox for better feel
+        this.attackHitbox.body.enable = false;
+    }
+
+    update(cursors, target) {
+        if (this.isHurt) return;
+
+        // Ground Logic
+        const onGround = this.body.touching.down;
+
+        // PLAYER CONTROL
+        if (this.isPlayer) {
+            if (!this.isAttacking) {
+                if (cursors.left.isDown) {
+                    this.setVelocityX(-CONFIG.speed);
+                    this.setFlipX(true);
+                } else if (cursors.right.isDown) {
+                    this.setVelocityX(CONFIG.speed);
+                    this.setFlipX(false);
+                } else {
+                    this.setVelocityX(0);
+                }
+
+                if (cursors.up.isDown && onGround) {
+                    this.setVelocityY(CONFIG.jump);
+                    audio.playJump();
+                }
+
+                if (Phaser.Input.Keyboard.JustDown(this.scene.keyZ) || Phaser.Input.Keyboard.JustDown(this.scene.keyX)) {
+                    this.attack();
+                }
+            }
+        } 
+        // AI CONTROL
+        else {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, target.x, target.y);
+            
+            // Face player
+            this.setFlipX(target.x < this.x);
+
+            if (!this.isAttacking && !this.isHurt) {
+                if (dist > 70) {
+                    // Move towards player
+                    if (this.x < target.x) this.setVelocityX(CONFIG.speed * 0.6);
+                    else this.setVelocityX(-CONFIG.speed * 0.6);
+                } else {
+                    // Attack range
+                    this.setVelocityX(0);
+                    if (Math.random() < 0.02) this.attack();
+                }
+                
+                // Jump occasionally
+                if (onGround && Math.random() < 0.005) {
+                     this.setVelocityY(CONFIG.jump);
+                }
+            }
+        }
+
+        // Texture Swap: Only update if changed to prevent Physics Body reset glitch
+        const desiredTexture = this.isAttacking ? `${this.textureBase}_attack` : `${this.textureBase}_idle`;
+        if (this.texture.key !== desiredTexture) {
+            this.setTexture(desiredTexture);
+            // CRITICAL: Restore body size after texture swap or it defaults to texture size
+            this.setBodySize(40, 70); 
+            this.setOffset(12, 5); 
+        }
+
+        // Keep hitbox attached
+        const offset = this.flipX ? -40 : 40;
+        this.attackHitbox.setPosition(this.x + offset, this.y);
+    }
+
+    attack() {
+        if (this.isAttacking || this.isHurt) return;
+        
+        this.isAttacking = true;
+        this.setVelocityX(0);
+        audio.playWhiff();
+
+        // Enable Hitbox faster (50ms instead of 100ms) for responsiveness
+        this.scene.time.delayedCall(50, () => {
+            this.attackHitbox.body.enable = true;
+        });
+
+        // End Attack
+        this.scene.time.delayedCall(300, () => {
+            this.isAttacking = false;
+            this.attackHitbox.body.enable = false;
+        });
+    }
+
+    takeDamage(amount, sourceX) {
+        if (this.isHurt) return;
+        this.hp = Math.max(0, this.hp - amount);
+        this.isHurt = true;
+        this.setTint(0xff0000);
+        
+        // Knockback
+        const dir = this.x < sourceX ? -1 : 1;
+        this.setVelocity(dir * 400, -300);
+
+        // Flash & Shake
+        this.scene.cameras.main.shake(100, 0.01);
+        
+        // Recover
+        this.scene.time.delayedCall(500, () => {
+            this.isHurt = false;
+            this.clearTint();
+        });
+    }
+}
+
+/**
+ * MAIN SCENE
+ * Handles the game loop, collisions, and UI.
+ */
+class MainScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MainScene' });
+    }
+
+    preload() {
+        // Generate textures (since we aren't loading images)
+        document.getElementById('loading-text').style.display = 'none';
+        TextureGenerator.createTextures(this);
+    }
+
+    create() {
+        // Input Listener to ensure Audio Context is resumed
+        this.input.on('pointerdown', () => {
+            if (audio.ctx.state === 'suspended') audio.ctx.resume();
+        });
+
+        // Background
+        this.add.image(400, 225, 'sky');
+
+        // Platforms (Floor)
+        this.platforms = this.physics.add.staticGroup();
+        const floor = this.platforms.create(400, 450, 'floor');
+        floor.setScale(1).refreshBody();
+
+        // Inputs
+        this.cursors = this.input.keyboard.createCursorKeys();
+        this.keyZ = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+        this.keyX = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+        this.keyR = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
+
+        // Fighters
+        this.player = new Fighter(this, 200, 300, 'panda_idle', true);
+        this.enemy = new Fighter(this, 600, 300, 'tiger_idle', false);
+        this.enemy.setFlipX(true); // Face left initially
+
+        // Collisions
+        this.physics.add.collider(this.player, this.platforms);
+        this.physics.add.collider(this.enemy, this.platforms);
+
+        // Particles
+        this.emitter = this.add.particles(0, 0, 'particle', {
+            speed: 100,
+            scale: { start: 1, end: 0 },
+            lifespan: 300,
+            blendMode: 'ADD',
+            emitting: false
+        });
+
+        // UI - Health Bars
+        this.createUI();
+
+        // Game Over flag
+        this.gameOver = false;
+        this.winText = this.add.text(400, 225, '', {
+            fontSize: '64px', fill: '#fff', stroke: '#000', strokeThickness: 6
+        }).setOrigin(0.5).setVisible(false);
+    }
+
+    createUI() {
+        // P1 Health Bar
+        this.add.text(20, 20, 'PANDA', { fontSize: '20px', fill: '#fff', fontStyle: 'bold' });
+        this.p1HealthBg = this.add.rectangle(170, 30, 200, 20, 0x333333);
+        this.p1HealthBar = this.add.rectangle(170, 30, 200, 20, 0x00ff00);
+
+        // Enemy Health Bar
+        this.add.text(720, 20, 'TIGER', { fontSize: '20px', fill: '#fff', fontStyle: 'bold' }).setOrigin(1, 0);
+        this.enemyHealthBg = this.add.rectangle(630, 30, 200, 20, 0x333333);
+        this.enemyHealthBar = this.add.rectangle(630, 30, 200, 20, 0xff0000);
+    }
+
+    updateUI() {
+        // Scale bars based on HP
+        const p1Pct = this.player.hp / 100;
+        this.p1HealthBar.width = 200 * p1Pct;
+        
+        const enPct = this.enemy.hp / 100;
+        this.enemyHealthBar.width = 200 * enPct;
+
+        // Color change for low health
+        this.p1HealthBar.fillColor = p1Pct < 0.3 ? 0xff0000 : 0x00ff00;
+    }
+
+    checkAttacks() {
+        // Player hitting Enemy
+        if (this.player.attackHitbox.body.enable) {
+            this.physics.overlap(this.player.attackHitbox, this.enemy, () => {
+                if (!this.enemy.isHurt) {
+                    this.enemy.takeDamage(10, this.player.x);
+                    this.createHitEffect(this.enemy.x, this.enemy.y);
+                    audio.playPunch();
+                    this.player.attackHitbox.body.enable = false; // Prevent multi-hit per frame
+                }
+            });
+        }
+
+        // Enemy hitting Player
+        if (this.enemy.attackHitbox.body.enable) {
+            this.physics.overlap(this.enemy.attackHitbox, this.player, () => {
+                if (!this.player.isHurt) {
+                    this.player.takeDamage(8, this.enemy.x);
+                    this.createHitEffect(this.player.x, this.player.y);
+                    audio.playPunch();
+                    this.enemy.attackHitbox.body.enable = false;
+                }
+            });
+        }
+    }
+
+    createHitEffect(x, y) {
+        // Sparks
+        this.emitter.setPosition(x, y);
+        this.emitter.explode(10);
+        
+        // White flash circle
+        const circle = this.add.circle(x, y, 30, 0xffffff, 1);
+        this.tweens.add({
+            targets: circle,
+            scale: 2,
+            alpha: 0,
+            duration: 100,
+            onComplete: () => circle.destroy()
+        });
+    }
+
+    update() {
+        if (this.gameOver) {
+            if (Phaser.Input.Keyboard.JustDown(this.keyR)) {
+                this.scene.restart();
+            }
+            return;
+        }
+
+        this.player.update(this.cursors, this.enemy);
+        this.enemy.update(null, this.player);
+
+        this.checkAttacks();
+        this.updateUI();
+
+        // Check Win/Loss
+        if (this.player.hp <= 0) this.endGame('TIGER WINS!');
+        if (this.enemy.hp <= 0) this.endGame('PANDA WINS!');
+    }
+
+    endGame(msg) {
+        this.gameOver = true;
+        this.physics.pause();
+        this.player.setTint(0x555555);
+        this.enemy.setTint(0x555555);
+        this.winText.setText(msg);
+        this.winText.setVisible(true);
+        this.add.text(400, 300, 'Press R to Restart', { fontSize: '24px', fill: '#fff' }).setOrigin(0.5);
+    }
+}
+
+// Initialize Game
+const gameConfig = {
+    type: Phaser.AUTO,
+    width: CONFIG.width,
+    height: CONFIG.height,
+    parent: 'game-container',
+    physics: {
+        default: 'arcade',
+        arcade: {
+            gravity: { y: CONFIG.gravity },
+            debug: false
+        }
+    },
+    scene: MainScene
+};
+
+const game = new Phaser.Game(gameConfig);
+
+</script>
+</body>
+</html>
