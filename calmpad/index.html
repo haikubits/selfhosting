@@ -1,608 +1,682 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { 
-  Plus, Search, Settings, Download, Upload, 
-  Trash2, Copy, History, Sidebar, Type, 
-  Moon, Sun, Coffee, Eye, EyeOff, FileText, 
-  ChevronLeft, ChevronRight, Save, RotateCcw
-} from 'lucide-react';
-
-/**
- * UTILITIES & CONSTANTS
- */
-const ID = () => '_' + Math.random().toString(36).substr(2, 9);
-
-const THEMES = {
-  light: {
-    bg: 'bg-white',
-    text: 'text-stone-800',
-    sidebar: 'bg-stone-50 border-r border-stone-200',
-    itemActive: 'bg-white shadow-sm border border-stone-200',
-    itemHover: 'hover:bg-stone-100',
-    accent: 'text-stone-900',
-    muted: 'text-stone-400',
-    input: 'bg-transparent',
-    border: 'border-stone-200'
-  },
-  sepia: {
-    bg: 'bg-[#F4ECD8]',
-    text: 'text-[#433422]',
-    sidebar: 'bg-[#EAE0C9] border-r border-[#D3C4A5]',
-    itemActive: 'bg-[#F4ECD8] shadow-sm border border-[#D3C4A5]',
-    itemHover: 'hover:bg-[#E4D9C0]',
-    accent: 'text-[#5C4B37]',
-    muted: 'text-[#9C8B74]',
-    input: 'bg-transparent',
-    border: 'border-[#D3C4A5]'
-  },
-  dim: {
-    bg: 'bg-slate-800',
-    text: 'text-slate-300',
-    sidebar: 'bg-slate-900 border-r border-slate-700',
-    itemActive: 'bg-slate-800 border border-slate-600',
-    itemHover: 'hover:bg-slate-800',
-    accent: 'text-slate-100',
-    muted: 'text-slate-500',
-    input: 'bg-slate-900',
-    border: 'border-slate-700'
-  },
-  dark: {
-    bg: 'bg-black',
-    text: 'text-neutral-400',
-    sidebar: 'bg-neutral-900 border-r border-neutral-800',
-    itemActive: 'bg-black border border-neutral-700',
-    itemHover: 'hover:bg-neutral-800',
-    accent: 'text-neutral-200',
-    muted: 'text-neutral-600',
-    input: 'bg-neutral-900',
-    border: 'border-neutral-800'
-  }
-};
-
-const DEBOUNCE_SAVE_MS = 1000;
-const MAX_HISTORY_LENGTH = 10;
-
-/**
- * SIMPLE MARKDOWN PARSER (For Preview Mode)
- */
-const SimpleMarkdown = ({ content, themeClass }) => {
-  if (!content) return <div className="opacity-50 italic">Empty note...</div>;
-
-  const lines = content.split('\n');
-  return (
-    <div className={`prose max-w-none ${themeClass === 'dark' || themeClass === 'dim' ? 'prose-invert' : ''}`}>
-      {lines.map((line, i) => {
-        // Headers
-        if (line.startsWith('# ')) return <h1 key={i} className="text-3xl font-bold mb-4">{line.slice(2)}</h1>;
-        if (line.startsWith('## ')) return <h2 key={i} className="text-2xl font-bold mb-3 mt-6">{line.slice(3)}</h2>;
-        if (line.startsWith('### ')) return <h3 key={i} className="text-xl font-bold mb-2 mt-4">{line.slice(4)}</h3>;
-        // Blockquotes
-        if (line.startsWith('> ')) return <blockquote key={i} className="pl-4 border-l-4 border-current italic my-2">{line.slice(2)}</blockquote>;
-        // List items
-        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>;
-        // Horizontal Rule
-        if (line === '---' || line === '***') return <hr key={i} className="my-6 border-current opacity-30"/>;
-        
-        // Paragraphs (Simple bold/italic regex replacement for display)
-        const __html = line
-          .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
-          .replace(/\*(.*?)\*/g, '<i>$1</i>')
-          .replace(/`(.*?)`/g, '<code class="bg-gray-500 bg-opacity-20 rounded px-1 text-sm">$1</code>');
-        
-        return <p key={i} className="mb-2 min-h-[1rem]" dangerouslySetInnerHTML={{ __html: __html || '&nbsp;' }} />;
-      })}
-    </div>
-  );
-};
-
-export default function App() {
-  // -- STATE --
-  const [notes, setNotes] = useState([]);
-  const [activeNoteId, setActiveNoteId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Preferences
-  const [theme, setTheme] = useState('light');
-  const [font, setFont] = useState('serif'); // 'serif' | 'sans'
-  const [showSidebar, setShowSidebar] = useState(true);
-  const [focusMode, setFocusMode] = useState(false); // If true, UI fades
-  const [isPreview, setIsPreview] = useState(false);
-  
-  // UI States
-  const [isTyping, setIsTyping] = useState(false);
-  const [showHistoryModal, setShowHistoryModal] = useState(false);
-  const [dragOver, setDragOver] = useState(false);
-
-  // Refs
-  const editorRef = useRef(null);
-  const typingTimeoutRef = useRef(null);
-  const saveTimeoutRef = useRef(null);
-
-  // -- LOAD / SAVE LOGIC --
-
-  useEffect(() => {
-    const savedData = localStorage.getItem('calm_notepad_data');
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        setNotes(parsed.notes || []);
-        setActiveNoteId(parsed.activeNoteId || null);
-        setTheme(parsed.preferences?.theme || 'light');
-        setFont(parsed.preferences?.font || 'serif');
-      } catch (e) {
-        console.error("Failed to load data", e);
-      }
-    } else {
-      // Welcome Note
-      const welcomeId = ID();
-      const welcomeNote = {
-        id: welcomeId,
-        title: 'Welcome to Calm Notepad',
-        content: `# Welcome\n\nThis is a minimalist, distraction-free writing environment.\n\n- **Zero Backend**: Everything is saved in your browser.\n- **Focus Mode**: Toggle the eye icon to focus solely on text.\n- **Themes**: Switch between Light, Sepia, Dim, and Dark.\n- **Markdown**: We support basic markdown previewing.\n\nStart typing to create your own thoughts...`,
-        tags: ['welcome'],
-        updatedAt: Date.now(),
-        versions: []
-      };
-      setNotes([welcomeNote]);
-      setActiveNoteId(welcomeId);
-    }
-  }, []);
-
-  // Auto-save effect
-  useEffect(() => {
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calm Notepad</title>
     
-    saveTimeoutRef.current = setTimeout(() => {
-      const dataToSave = {
-        notes,
-        activeNoteId,
-        preferences: { theme, font }
-      };
-      localStorage.setItem('calm_notepad_data', JSON.stringify(dataToSave));
-    }, DEBOUNCE_SAVE_MS);
-
-    return () => clearTimeout(saveTimeoutRef.current);
-  }, [notes, activeNoteId, theme, font]);
-
-  // -- HELPERS --
-
-  const getActiveNote = () => notes.find(n => n.id === activeNoteId);
-
-  const updateNote = (id, updates) => {
-    setNotes(prev => prev.map(note => {
-      if (note.id !== id) return note;
-      
-      const updatedNote = { ...note, ...updates, updatedAt: Date.now() };
-
-      // Version History Logic (Snapshot every 5 mins or if significantly changed)
-      // For this demo, we push a snapshot if the last one is > 5 mins old
-      const lastVersionTime = note.versions.length > 0 ? note.versions[note.versions.length - 1].time : 0;
-      const now = Date.now();
-      
-      if (now - lastVersionTime > 300000 && note.content !== updatedNote.content) {
-        const newVersions = [...note.versions, { content: note.content, time: now }];
-        if (newVersions.length > MAX_HISTORY_LENGTH) newVersions.shift();
-        updatedNote.versions = newVersions;
-      }
-      return updatedNote;
-    }));
-  };
-
-  const createNote = () => {
-    const newNote = {
-      id: ID(),
-      title: '',
-      content: '',
-      tags: [],
-      updatedAt: Date.now(),
-      versions: []
-    };
-    setNotes([newNote, ...notes]);
-    setActiveNoteId(newNote.id);
-    if (window.innerWidth < 768) setShowSidebar(false);
-    // Focus editor after create
-    setTimeout(() => editorRef.current?.focus(), 100);
-  };
-
-  const deleteNote = (id) => {
-    if (confirm('Are you sure you want to delete this note?')) {
-      const newNotes = notes.filter(n => n.id !== id);
-      setNotes(newNotes);
-      if (activeNoteId === id) {
-        setActiveNoteId(newNotes.length > 0 ? newNotes[0].id : null);
-      }
-    }
-  };
-
-  const restoreVersion = (noteId, versionContent) => {
-    updateNote(noteId, { content: versionContent });
-    setShowHistoryModal(false);
-  };
-
-  // -- IMPORT / EXPORT --
-
-  const exportAll = () => {
-    const data = JSON.stringify({ notes, preferences: { theme, font } }, null, 2);
-    const blob = new Blob([data], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `calm-notepad-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-  };
-
-  const downloadCurrentNote = () => {
-    const note = getActiveNote();
-    if (!note) return;
-    const blob = new Blob([note.content], { type: 'text/markdown' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${note.title || 'Untitled'}.md`;
-    a.click();
-  };
-
-  const handleFileUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        // Try parsing as JSON backup
-        const json = JSON.parse(event.target.result);
-        if (json.notes && Array.isArray(json.notes)) {
-          if (confirm('Importing backup will merge with existing notes. Continue?')) {
-            // Merge logic: ensure unique IDs
-            const currentIds = new Set(notes.map(n => n.id));
-            const newNotes = json.notes.filter(n => !currentIds.has(n.id));
-            setNotes([...newNotes, ...notes]);
-          }
-          return;
+    <!-- 1. Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 2. Configure Tailwind for specific custom colors if needed -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        serif: ['Merriweather', 'serif'],
+                    }
+                }
+            }
         }
-      } catch (err) {
-        // Not JSON, treat as text/markdown import
-        const newNote = {
-          id: ID(),
-          title: file.name.replace(/\.(txt|md)$/i, ''),
-          content: event.target.result,
-          tags: ['imported'],
-          updatedAt: Date.now(),
-          versions: []
+    </script>
+
+    <!-- 3. Load Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Merriweather:ital,wght@0,300;0,400;0,700;1,300;1,400&display=swap" rel="stylesheet">
+
+    <!-- 4. Babel for parsing JSX in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- 5. Import Map to allow 'import' statements in the browser -->
+    <script type="importmap">
+    {
+        "imports": {
+            "react": "https://esm.sh/react@18.2.0",
+            "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+            "lucide-react": "https://esm.sh/lucide-react@0.263.1"
+        }
+    }
+    </script>
+
+    <style>
+        /* Custom Scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(0,0,0,0.2);
+        }
+        .dark ::-webkit-scrollbar-thumb {
+            background: rgba(255,255,255,0.1);
+        }
+        .dark ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        
+        /* Hide scrollbar when not hovering sidebar (optional polish) */
+        .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+            visibility: visible;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- MAIN REACT APPLICATION -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect, useRef, useCallback } from 'react';
+        import { createRoot } from 'react-dom/client';
+        import { 
+            Plus, Search, Settings, Download, Upload, 
+            Trash2, Copy, History, Sidebar, Type, 
+            Moon, Sun, Coffee, Eye, EyeOff, FileText, 
+            ChevronLeft, ChevronRight, Save, RotateCcw
+        } from 'lucide-react';
+
+        /**
+         * UTILITIES & CONSTANTS
+         */
+        const ID = () => '_' + Math.random().toString(36).substr(2, 9);
+
+        const THEMES = {
+            light: {
+                bg: 'bg-white',
+                text: 'text-stone-800',
+                sidebar: 'bg-stone-50 border-r border-stone-200',
+                itemActive: 'bg-white shadow-sm border border-stone-200',
+                itemHover: 'hover:bg-stone-100',
+                accent: 'text-stone-900',
+                muted: 'text-stone-400',
+                input: 'bg-transparent',
+                border: 'border-stone-200'
+            },
+            sepia: {
+                bg: 'bg-[#F4ECD8]',
+                text: 'text-[#433422]',
+                sidebar: 'bg-[#EAE0C9] border-r border-[#D3C4A5]',
+                itemActive: 'bg-[#F4ECD8] shadow-sm border border-[#D3C4A5]',
+                itemHover: 'hover:bg-[#E4D9C0]',
+                accent: 'text-[#5C4B37]',
+                muted: 'text-[#9C8B74]',
+                input: 'bg-transparent',
+                border: 'border-[#D3C4A5]'
+            },
+            dim: {
+                bg: 'bg-slate-800',
+                text: 'text-slate-300',
+                sidebar: 'bg-slate-900 border-r border-slate-700',
+                itemActive: 'bg-slate-800 border border-slate-600',
+                itemHover: 'hover:bg-slate-800',
+                accent: 'text-slate-100',
+                muted: 'text-slate-500',
+                input: 'bg-slate-900',
+                border: 'border-slate-700'
+            },
+            dark: {
+                bg: 'bg-black',
+                text: 'text-neutral-400',
+                sidebar: 'bg-neutral-900 border-r border-neutral-800',
+                itemActive: 'bg-black border border-neutral-700',
+                itemHover: 'hover:bg-neutral-800',
+                accent: 'text-neutral-200',
+                muted: 'text-neutral-600',
+                input: 'bg-neutral-900',
+                border: 'border-neutral-800'
+            }
         };
-        setNotes([newNote, ...notes]);
-        setActiveNoteId(newNote.id);
-      }
-    };
-    reader.readAsText(file);
-  };
 
-  // -- KEYBOARD SHORTCUTS --
+        const DEBOUNCE_SAVE_MS = 1000;
+        const MAX_HISTORY_LENGTH = 10;
 
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        document.getElementById('search-input')?.focus();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
-        e.preventDefault();
-        createNote();
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-        e.preventDefault();
-        // Manual save trigger (aesthetic mostly, as we auto-save)
-        const btn = document.getElementById('save-indicator');
-        if (btn) btn.classList.add('animate-pulse');
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [notes]);
+        /**
+         * SIMPLE MARKDOWN PARSER (For Preview Mode)
+         */
+        const SimpleMarkdown = ({ content, themeClass }) => {
+            if (!content) return <div className="opacity-50 italic">Empty note...</div>;
 
-  // -- HANDLERS --
-
-  const handleEditorChange = (e) => {
-    const val = e.target.value;
-    const note = getActiveNote();
-    if (note) {
-      // Smart punctuation (simplistic)
-      // In a full app we might replace straight quotes with curly quotes here
-      
-      // Update title based on first line if untitled
-      const lines = val.split('\n');
-      const firstLine = lines[0].replace(/^#+\s*/, '').substring(0, 40);
-      
-      updateNote(activeNoteId, { 
-        content: val, 
-        title: firstLine || 'Untitled' 
-      });
-    }
-    
-    // Typing detector for UI fade
-    setIsTyping(true);
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1500);
-  };
-
-  const filteredNotes = notes
-    .filter(n => {
-      const q = searchQuery.toLowerCase();
-      return (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q);
-    })
-    .sort((a, b) => b.updatedAt - a.updatedAt);
-
-  const activeNote = getActiveNote();
-  const themeStyles = THEMES[theme];
-
-  // Stats
-  const wordCount = activeNote ? activeNote.content.split(/\s+/).filter(w => w.length > 0).length : 0;
-  const charCount = activeNote ? activeNote.content.length : 0;
-
-  // -- RENDER --
-
-  return (
-    <div 
-      className={`flex h-screen w-full transition-colors duration-300 overflow-hidden ${themeStyles.bg} ${themeStyles.text} ${font === 'serif' ? 'font-serif' : 'font-sans'}`}
-      onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-           // Reuse file upload logic for drag and drop
-           const dummyEvent = { target: { files: e.dataTransfer.files } };
-           handleFileUpload(dummyEvent);
-        }
-      }}
-    >
-      {/* DRAG OVERLAY */}
-      {dragOver && (
-        <div className="absolute inset-0 z-50 bg-blue-500 bg-opacity-20 flex items-center justify-center backdrop-blur-sm border-4 border-blue-500 border-dashed m-4 rounded-xl">
-          <div className="bg-white p-6 rounded-lg shadow-xl text-center">
-            <Upload size={48} className="mx-auto mb-2 text-blue-500" />
-            <h3 className="text-xl font-bold text-gray-800">Drop text file to import</h3>
-          </div>
-        </div>
-      )}
-
-      {/* SIDEBAR */}
-      <div 
-        className={`${themeStyles.sidebar} flex flex-col transition-all duration-300 ease-in-out
-        ${showSidebar ? 'w-80 translate-x-0' : 'w-0 -translate-x-full opacity-0'} 
-        ${focusMode && isTyping ? 'opacity-20 hover:opacity-100' : 'opacity-100'}
-        absolute md:relative z-20 h-full shadow-xl md:shadow-none`}
-      >
-        <div className="p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h1 className={`font-bold tracking-tight ${themeStyles.accent}`}>Calm Notes</h1>
-            <div className="flex gap-2">
-              <button onClick={createNote} className={`p-2 rounded-full hover:bg-black/5 transition-colors`} aria-label="New Note">
-                <Plus size={18} />
-              </button>
-              <button 
-                 onClick={() => document.getElementById('backup-upload').click()} 
-                 className={`p-2 rounded-full hover:bg-black/5 transition-colors`} 
-                 aria-label="Import"
-                 title="Import"
-              >
-                <Upload size={18} />
-                <input id="backup-upload" type="file" className="hidden" onChange={handleFileUpload} accept=".json,.txt,.md"/>
-              </button>
-            </div>
-          </div>
-
-          <div className={`flex items-center px-3 py-2 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
-            <Search size={14} className={themeStyles.muted} />
-            <input 
-              id="search-input"
-              type="text" 
-              placeholder="Search (Cmd+K)" 
-              className={`ml-2 w-full bg-transparent outline-none text-sm placeholder-opacity-50 ${themeStyles.muted}`}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-2 pb-2">
-          {filteredNotes.length === 0 ? (
-            <div className={`p-8 text-center text-sm ${themeStyles.muted}`}>No notes found</div>
-          ) : (
-            filteredNotes.map(note => (
-              <div 
-                key={note.id}
-                onClick={() => { setActiveNoteId(note.id); if (window.innerWidth < 768) setShowSidebar(false); }}
-                className={`group relative p-3 mb-1 rounded-lg cursor-pointer transition-all duration-200 
-                  ${activeNoteId === note.id ? themeStyles.itemActive : `bg-transparent ${themeStyles.itemHover}`}`}
-              >
-                <h3 className={`font-medium text-sm truncate pr-6 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>
-                  {note.title || 'Untitled Note'}
-                </h3>
-                <p className={`text-xs truncate mt-1 opacity-70`}>
-                  {note.content.substring(0, 50).replace(/[\n#]/g, ' ') || 'Empty'}
-                </p>
-                <div className={`text-[10px] mt-2 opacity-40`}>
-                  {new Date(note.updatedAt).toLocaleDateString()}
+            const lines = content.split('\n');
+            return (
+                <div className={`prose max-w-none ${themeClass === 'dark' || themeClass === 'dim' ? 'prose-invert' : ''}`}>
+                    {lines.map((line, i) => {
+                        // Headers
+                        if (line.startsWith('# ')) return <h1 key={i} className="text-3xl font-bold mb-4">{line.slice(2)}</h1>;
+                        if (line.startsWith('## ')) return <h2 key={i} className="text-2xl font-bold mb-3 mt-6">{line.slice(3)}</h2>;
+                        if (line.startsWith('### ')) return <h3 key={i} className="text-xl font-bold mb-2 mt-4">{line.slice(4)}</h3>;
+                        // Blockquotes
+                        if (line.startsWith('> ')) return <blockquote key={i} className="pl-4 border-l-4 border-current italic my-2">{line.slice(2)}</blockquote>;
+                        // List items
+                        if (line.startsWith('- ') || line.startsWith('* ')) return <li key={i} className="ml-4 list-disc">{line.slice(2)}</li>;
+                        // Horizontal Rule
+                        if (line === '---' || line === '***') return <hr key={i} className="my-6 border-current opacity-30"/>;
+                        
+                        // Paragraphs (Simple bold/italic regex replacement for display)
+                        const __html = line
+                            .replace(/\*\*(.*?)\*\*/g, '<b>$1</b>')
+                            .replace(/\*(.*?)\*/g, '<i>$1</i>')
+                            .replace(/`(.*?)`/g, '<code class="bg-gray-500 bg-opacity-20 rounded px-1 text-sm">$1</code>');
+                        
+                        return <p key={i} className="mb-2 min-h-[1rem]" dangerouslySetInnerHTML={{ __html: __html || '&nbsp;' }} />;
+                    })}
                 </div>
+            );
+        };
 
-                <button 
-                  onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
-                  className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
-                >
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className={`p-4 border-t ${themeStyles.border} text-xs flex justify-between items-center opacity-70`}>
-          <button onClick={exportAll} className="hover:underline flex items-center gap-1">
-            <Download size={12} /> Backup All
-          </button>
-          <span>{notes.length} Notes</span>
-        </div>
-      </div>
-
-      {/* MAIN EDITOR AREA */}
-      <div className={`flex-1 flex flex-col h-full relative transition-all duration-500`}>
-        
-        {/* TOP BAR */}
-        <div 
-          className={`h-14 flex items-center justify-between px-4 md:px-8 border-b ${themeStyles.border} transition-opacity duration-500
-          ${focusMode && isTyping ? 'opacity-0' : 'opacity-100'}`}
-        >
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setShowSidebar(!showSidebar)}
-              className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
-            >
-              <Sidebar size={18} />
-            </button>
-            <span id="save-indicator" className="text-[10px] uppercase tracking-wider opacity-30 flex items-center gap-1">
-               <Save size={10} /> Saved
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1 md:gap-2">
-            {/* Theme Toggles */}
-            <div className="flex bg-black/5 rounded-lg p-1 mr-2">
-               <button onClick={() => setTheme('light')} className={`p-1.5 rounded ${theme === 'light' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}><Sun size={14}/></button>
-               <button onClick={() => setTheme('sepia')} className={`p-1.5 rounded ${theme === 'sepia' ? 'bg-[#F4ECD8] shadow-sm text-[#5C4B37]' : 'text-gray-400'}`}><Coffee size={14}/></button>
-               <button onClick={() => setTheme('dim')} className={`p-1.5 rounded ${theme === 'dim' ? 'bg-slate-700 shadow-sm text-white' : 'text-gray-400'}`}><Moon size={14}/></button>
-               <button onClick={() => setTheme('dark')} className={`p-1.5 rounded ${theme === 'dark' ? 'bg-black shadow-sm border border-gray-700 text-white' : 'text-gray-400'}`}><Moon size={14} fill="currentColor" /></button>
-            </div>
-
-            {/* Font Toggle */}
-            <button 
-              onClick={() => setFont(font === 'serif' ? 'sans' : 'serif')}
-              className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
-              title="Toggle Font"
-            >
-              <Type size={18} />
-            </button>
-
-            {/* Markdown Preview Toggle */}
-            <button 
-              onClick={() => setIsPreview(!isPreview)}
-              className={`p-2 rounded-md hover:bg-black/5 transition-colors ${isPreview ? themeStyles.accent : themeStyles.muted}`}
-              title="Markdown Preview"
-            >
-              {isPreview ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
+        function App() {
+            // -- STATE --
+            const [notes, setNotes] = useState([]);
+            const [activeNoteId, setActiveNoteId] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
             
-            {/* History */}
-            <button 
-              onClick={() => setShowHistoryModal(true)}
-              className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
-              title="Version History"
-            >
-              <History size={18} />
-            </button>
+            // Preferences
+            const [theme, setTheme] = useState('light');
+            const [font, setFont] = useState('serif'); // 'serif' | 'sans'
+            const [showSidebar, setShowSidebar] = useState(true);
+            const [focusMode, setFocusMode] = useState(false); // If true, UI fades
+            const [isPreview, setIsPreview] = useState(false);
+            
+            // UI States
+            const [isTyping, setIsTyping] = useState(false);
+            const [showHistoryModal, setShowHistoryModal] = useState(false);
+            const [dragOver, setDragOver] = useState(false);
 
-            {/* Focus Toggle */}
-            <button 
-              onClick={() => setFocusMode(!focusMode)}
-              className={`hidden md:block p-2 rounded-md hover:bg-black/5 transition-colors ${focusMode ? 'text-blue-500' : themeStyles.muted}`}
-              title="Focus Mode (Fade UI)"
-            >
-              <div className={`w-2 h-2 rounded-full ${focusMode ? 'bg-blue-500' : 'bg-gray-300'}`} />
-            </button>
+            // Refs
+            const editorRef = useRef(null);
+            const typingTimeoutRef = useRef(null);
+            const saveTimeoutRef = useRef(null);
 
-            {/* Export Single */}
-            <button 
-              onClick={downloadCurrentNote}
-              className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
-              title="Download Note"
-            >
-              <Download size={18} />
-            </button>
-          </div>
-        </div>
+            // -- LOAD / SAVE LOGIC --
 
-        {/* EDITOR CANVAS */}
-        <div className="flex-1 overflow-y-auto relative scroll-smooth">
-          {activeNote ? (
-            <div className="max-w-3xl mx-auto px-6 md:px-12 py-12 min-h-full">
-              {/* Title Input (Visual only, mapped to content first line usually, but kept separate for clarity here) */}
-               {/* Note: In this implementation, we allow editing raw content directly. 
-                 The title in sidebar is derived. We don't force a separate title field 
-                 to keep the "Notepad" feel.
-               */}
+            useEffect(() => {
+                const savedData = localStorage.getItem('calm_notepad_data');
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        setNotes(parsed.notes || []);
+                        setActiveNoteId(parsed.activeNoteId || null);
+                        setTheme(parsed.preferences?.theme || 'light');
+                        setFont(parsed.preferences?.font || 'serif');
+                    } catch (e) {
+                        console.error("Failed to load data", e);
+                    }
+                } else {
+                    // Welcome Note
+                    const welcomeId = ID();
+                    const welcomeNote = {
+                        id: welcomeId,
+                        title: 'Welcome to Calm Notepad',
+                        content: `# Welcome\n\nThis is a minimalist, distraction-free writing environment.\n\n- **Zero Backend**: Everything is saved in your browser.\n- **Focus Mode**: Toggle the eye icon to focus solely on text.\n- **Themes**: Switch between Light, Sepia, Dim, and Dark.\n- **Markdown**: We support basic markdown previewing.\n\nStart typing to create your own thoughts...`,
+                        tags: ['welcome'],
+                        updatedAt: Date.now(),
+                        versions: []
+                    };
+                    setNotes([welcomeNote]);
+                    setActiveNoteId(welcomeId);
+                }
+            }, []);
 
-              {isPreview ? (
-                <SimpleMarkdown content={activeNote.content} themeClass={theme} />
-              ) : (
-                <textarea
-                  ref={editorRef}
-                  value={activeNote.content}
-                  onChange={handleEditorChange}
-                  placeholder="Start writing..."
-                  className={`w-full h-full min-h-[60vh] resize-none outline-none bg-transparent leading-relaxed text-lg md:text-xl selection:bg-blue-200 selection:text-blue-900 ${theme === 'dark' || theme === 'dim' ? 'selection:bg-blue-900 selection:text-blue-100' : ''}`}
-                  spellCheck={false}
-                  autoFocus
-                />
-              )}
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full opacity-40">
-              <FileText size={64} strokeWidth={1} />
-              <p className="mt-4">Select a note or create a new one</p>
-              <button onClick={createNote} className="mt-4 px-4 py-2 border rounded hover:bg-black/5">Create Note</button>
-            </div>
-          )}
-        </div>
+            // Auto-save effect
+            useEffect(() => {
+                if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+                
+                saveTimeoutRef.current = setTimeout(() => {
+                    const dataToSave = {
+                        notes,
+                        activeNoteId,
+                        preferences: { theme, font }
+                    };
+                    localStorage.setItem('calm_notepad_data', JSON.stringify(dataToSave));
+                }, DEBOUNCE_SAVE_MS);
 
-        {/* BOTTOM STATS BAR */}
-        <div 
-          className={`h-8 flex items-center justify-between px-4 text-[10px] md:text-xs select-none transition-opacity duration-500
-          ${themeStyles.bg} border-t ${themeStyles.border} ${themeStyles.muted}
-          ${focusMode && isTyping ? 'opacity-0' : 'opacity-100'}`}
-        >
-          <div className="flex gap-4">
-             <span>{wordCount} words</span>
-             <span>{charCount} chars</span>
-          </div>
-          <div className="flex gap-4">
-             <span>{activeNote ? new Date(activeNote.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
-             <span className="hidden md:inline">Markdown Supported</span>
-          </div>
-        </div>
+                return () => clearTimeout(saveTimeoutRef.current);
+            }, [notes, activeNoteId, theme, font]);
 
-        {/* HISTORY MODAL */}
-        {showHistoryModal && activeNote && (
-          <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-             <div className={`${themeStyles.bg} ${themeStyles.text} w-full max-w-lg rounded-xl shadow-2xl overflow-hidden border ${themeStyles.border} flex flex-col max-h-[80vh]`}>
-                <div className={`p-4 border-b ${themeStyles.border} flex justify-between items-center`}>
-                  <h3 className="font-bold">Version History</h3>
-                  <button onClick={() => setShowHistoryModal(false)} className="hover:opacity-70">&times;</button>
+            // -- HELPERS --
+
+            const getActiveNote = () => notes.find(n => n.id === activeNoteId);
+
+            const updateNote = (id, updates) => {
+                setNotes(prev => prev.map(note => {
+                    if (note.id !== id) return note;
+                    
+                    const updatedNote = { ...note, ...updates, updatedAt: Date.now() };
+
+                    // Version History Logic (Snapshot every 5 mins or if significantly changed)
+                    const lastVersionTime = note.versions.length > 0 ? note.versions[note.versions.length - 1].time : 0;
+                    const now = Date.now();
+                    
+                    // Push snapshot if > 5 mins since last edit or manual save logic could go here
+                    if (now - lastVersionTime > 300000 && note.content !== updatedNote.content) {
+                        const newVersions = [...note.versions, { content: note.content, time: now }];
+                        if (newVersions.length > MAX_HISTORY_LENGTH) newVersions.shift();
+                        updatedNote.versions = newVersions;
+                    }
+                    return updatedNote;
+                }));
+            };
+
+            const createNote = () => {
+                const newNote = {
+                    id: ID(),
+                    title: '',
+                    content: '',
+                    tags: [],
+                    updatedAt: Date.now(),
+                    versions: []
+                };
+                setNotes([newNote, ...notes]);
+                setActiveNoteId(newNote.id);
+                if (window.innerWidth < 768) setShowSidebar(false);
+                // Focus editor after create
+                setTimeout(() => editorRef.current?.focus(), 100);
+            };
+
+            const deleteNote = (id) => {
+                if (confirm('Are you sure you want to delete this note?')) {
+                    const newNotes = notes.filter(n => n.id !== id);
+                    setNotes(newNotes);
+                    if (activeNoteId === id) {
+                        setActiveNoteId(newNotes.length > 0 ? newNotes[0].id : null);
+                    }
+                }
+            };
+
+            const restoreVersion = (noteId, versionContent) => {
+                updateNote(noteId, { content: versionContent });
+                setShowHistoryModal(false);
+            };
+
+            // -- IMPORT / EXPORT --
+
+            const exportAll = () => {
+                const data = JSON.stringify({ notes, preferences: { theme, font } }, null, 2);
+                const blob = new Blob([data], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `calm-notepad-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                a.click();
+            };
+
+            const downloadCurrentNote = () => {
+                const note = getActiveNote();
+                if (!note) return;
+                const blob = new Blob([note.content], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${note.title || 'Untitled'}.md`;
+                a.click();
+            };
+
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        // Try parsing as JSON backup
+                        const json = JSON.parse(event.target.result);
+                        if (json.notes && Array.isArray(json.notes)) {
+                            if (confirm('Importing backup will merge with existing notes. Continue?')) {
+                                // Merge logic: ensure unique IDs
+                                const currentIds = new Set(notes.map(n => n.id));
+                                const newNotes = json.notes.filter(n => !currentIds.has(n.id));
+                                setNotes([...newNotes, ...notes]);
+                            }
+                            return;
+                        }
+                    } catch (err) {
+                        // Not JSON, treat as text/markdown import
+                        const newNote = {
+                            id: ID(),
+                            title: file.name.replace(/\.(txt|md)$/i, ''),
+                            content: event.target.result,
+                            tags: ['imported'],
+                            updatedAt: Date.now(),
+                            versions: []
+                        };
+                        setNotes([newNote, ...notes]);
+                        setActiveNoteId(newNote.id);
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            // -- KEYBOARD SHORTCUTS --
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                        e.preventDefault();
+                        document.getElementById('search-input')?.focus();
+                    }
+                    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+                        e.preventDefault();
+                        createNote();
+                    }
+                    if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+                        e.preventDefault();
+                        // Manual save trigger (aesthetic mostly, as we auto-save)
+                        const btn = document.getElementById('save-indicator');
+                        if (btn) btn.classList.add('animate-pulse');
+                    }
+                };
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [notes]);
+
+            // -- HANDLERS --
+
+            const handleEditorChange = (e) => {
+                const val = e.target.value;
+                const note = getActiveNote();
+                if (note) {
+                    // Update title based on first line if untitled
+                    const lines = val.split('\n');
+                    const firstLine = lines[0].replace(/^#+\s*/, '').substring(0, 40);
+                    
+                    updateNote(activeNoteId, { 
+                        content: val, 
+                        title: firstLine || 'Untitled' 
+                    });
+                }
+                
+                // Typing detector for UI fade
+                setIsTyping(true);
+                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1500);
+            };
+
+            const filteredNotes = notes
+                .filter(n => {
+                    const q = searchQuery.toLowerCase();
+                    return (n.title || '').toLowerCase().includes(q) || (n.content || '').toLowerCase().includes(q);
+                })
+                .sort((a, b) => b.updatedAt - a.updatedAt);
+
+            const activeNote = getActiveNote();
+            const themeStyles = THEMES[theme];
+
+            // Stats
+            const wordCount = activeNote ? activeNote.content.split(/\s+/).filter(w => w.length > 0).length : 0;
+            const charCount = activeNote ? activeNote.content.length : 0;
+
+            // -- RENDER --
+
+            return (
+                <div 
+                    className={`flex h-screen w-full transition-colors duration-300 overflow-hidden ${themeStyles.bg} ${themeStyles.text} ${font === 'serif' ? 'font-serif' : 'font-sans'}`}
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        setDragOver(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                             // Reuse file upload logic for drag and drop
+                             const dummyEvent = { target: { files: e.dataTransfer.files } };
+                             handleFileUpload(dummyEvent);
+                        }
+                    }}
+                >
+                    {/* DRAG OVERLAY */}
+                    {dragOver && (
+                        <div className="absolute inset-0 z-50 bg-blue-500 bg-opacity-20 flex items-center justify-center backdrop-blur-sm border-4 border-blue-500 border-dashed m-4 rounded-xl">
+                            <div className="bg-white p-6 rounded-lg shadow-xl text-center">
+                                <Upload size={48} className="mx-auto mb-2 text-blue-500" />
+                                <h3 className="text-xl font-bold text-gray-800">Drop text file to import</h3>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SIDEBAR */}
+                    <div 
+                        className={`${themeStyles.sidebar} flex flex-col transition-all duration-300 ease-in-out sidebar-scroll
+                        ${showSidebar ? 'w-80 translate-x-0' : 'w-0 -translate-x-full opacity-0'} 
+                        ${focusMode && isTyping ? 'opacity-20 hover:opacity-100' : 'opacity-100'}
+                        absolute md:relative z-20 h-full shadow-xl md:shadow-none`}
+                    >
+                        <div className="p-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h1 className={`font-bold tracking-tight ${themeStyles.accent}`}>Calm Notes</h1>
+                                <div className="flex gap-2">
+                                    <button onClick={createNote} className={`p-2 rounded-full hover:bg-black/5 transition-colors`} aria-label="New Note">
+                                        <Plus size={18} />
+                                    </button>
+                                    <button 
+                                        onClick={() => document.getElementById('backup-upload').click()} 
+                                        className={`p-2 rounded-full hover:bg-black/5 transition-colors`} 
+                                        aria-label="Import"
+                                        title="Import"
+                                    >
+                                        <Upload size={18} />
+                                        <input id="backup-upload" type="file" className="hidden" onChange={handleFileUpload} accept=".json,.txt,.md"/>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className={`flex items-center px-3 py-2 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
+                                <Search size={14} className={themeStyles.muted} />
+                                <input 
+                                    id="search-input"
+                                    type="text" 
+                                    placeholder="Search (Cmd+K)" 
+                                    className={`ml-2 w-full bg-transparent outline-none text-sm placeholder-opacity-50 ${themeStyles.muted}`}
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-2 pb-2">
+                            {filteredNotes.length === 0 ? (
+                                <div className={`p-8 text-center text-sm ${themeStyles.muted}`}>No notes found</div>
+                            ) : (
+                                filteredNotes.map(note => (
+                                    <div 
+                                        key={note.id}
+                                        onClick={() => { setActiveNoteId(note.id); if (window.innerWidth < 768) setShowSidebar(false); }}
+                                        className={`group relative p-3 mb-1 rounded-lg cursor-pointer transition-all duration-200 
+                                            ${activeNoteId === note.id ? themeStyles.itemActive : `bg-transparent ${themeStyles.itemHover}`}`}
+                                    >
+                                        <h3 className={`font-medium text-sm truncate pr-6 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>
+                                            {note.title || 'Untitled Note'}
+                                        </h3>
+                                        <p className={`text-xs truncate mt-1 opacity-70`}>
+                                            {note.content.substring(0, 50).replace(/[\n#]/g, ' ') || 'Empty'}
+                                        </p>
+                                        <div className={`text-[10px] mt-2 opacity-40`}>
+                                            {new Date(note.updatedAt).toLocaleDateString()}
+                                        </div>
+
+                                        <button 
+                                            onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+                                            className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity"
+                                        >
+                                            <Trash2 size={12} />
+                                        </button>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className={`p-4 border-t ${themeStyles.border} text-xs flex justify-between items-center opacity-70`}>
+                            <button onClick={exportAll} className="hover:underline flex items-center gap-1">
+                                <Download size={12} /> Backup All
+                            </button>
+                            <span>{notes.length} Notes</span>
+                        </div>
+                    </div>
+
+                    {/* MAIN EDITOR AREA */}
+                    <div className={`flex-1 flex flex-col h-full relative transition-all duration-500`}>
+                        
+                        {/* TOP BAR */}
+                        <div 
+                            className={`h-14 flex items-center justify-between px-4 md:px-8 border-b ${themeStyles.border} transition-opacity duration-500
+                            ${focusMode && isTyping ? 'opacity-0' : 'opacity-100'}`}
+                        >
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setShowSidebar(!showSidebar)}
+                                    className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
+                                >
+                                    <Sidebar size={18} />
+                                </button>
+                                <span id="save-indicator" className="text-[10px] uppercase tracking-wider opacity-30 flex items-center gap-1">
+                                    <Save size={10} /> Saved
+                                </span>
+                            </div>
+
+                            <div className="flex items-center gap-1 md:gap-2">
+                                {/* Theme Toggles */}
+                                <div className="flex bg-black/5 rounded-lg p-1 mr-2">
+                                    <button onClick={() => setTheme('light')} className={`p-1.5 rounded ${theme === 'light' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}><Sun size={14}/></button>
+                                    <button onClick={() => setTheme('sepia')} className={`p-1.5 rounded ${theme === 'sepia' ? 'bg-[#F4ECD8] shadow-sm text-[#5C4B37]' : 'text-gray-400'}`}><Coffee size={14}/></button>
+                                    <button onClick={() => setTheme('dim')} className={`p-1.5 rounded ${theme === 'dim' ? 'bg-slate-700 shadow-sm text-white' : 'text-gray-400'}`}><Moon size={14}/></button>
+                                    <button onClick={() => setTheme('dark')} className={`p-1.5 rounded ${theme === 'dark' ? 'bg-black shadow-sm border border-gray-700 text-white' : 'text-gray-400'}`}><Moon size={14} fill="currentColor" /></button>
+                                </div>
+
+                                {/* Font Toggle */}
+                                <button 
+                                    onClick={() => setFont(font === 'serif' ? 'sans' : 'serif')}
+                                    className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
+                                    title="Toggle Font"
+                                >
+                                    <Type size={18} />
+                                </button>
+
+                                {/* Markdown Preview Toggle */}
+                                <button 
+                                    onClick={() => setIsPreview(!isPreview)}
+                                    className={`p-2 rounded-md hover:bg-black/5 transition-colors ${isPreview ? themeStyles.accent : themeStyles.muted}`}
+                                    title="Markdown Preview"
+                                >
+                                    {isPreview ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
+                                
+                                {/* History */}
+                                <button 
+                                    onClick={() => setShowHistoryModal(true)}
+                                    className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
+                                    title="Version History"
+                                >
+                                    <History size={18} />
+                                </button>
+
+                                {/* Focus Toggle */}
+                                <button 
+                                    onClick={() => setFocusMode(!focusMode)}
+                                    className={`hidden md:block p-2 rounded-md hover:bg-black/5 transition-colors ${focusMode ? 'text-blue-500' : themeStyles.muted}`}
+                                    title="Focus Mode (Fade UI)"
+                                >
+                                    <div className={`w-2 h-2 rounded-full ${focusMode ? 'bg-blue-500' : 'bg-gray-300'}`} />
+                                </button>
+
+                                {/* Export Single */}
+                                <button 
+                                    onClick={downloadCurrentNote}
+                                    className={`p-2 rounded-md hover:bg-black/5 transition-colors ${themeStyles.muted}`}
+                                    title="Download Note"
+                                >
+                                    <Download size={18} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* EDITOR CANVAS */}
+                        <div className="flex-1 overflow-y-auto relative scroll-smooth">
+                            {activeNote ? (
+                                <div className="max-w-3xl mx-auto px-6 md:px-12 py-12 min-h-full">
+                                    {isPreview ? (
+                                        <SimpleMarkdown content={activeNote.content} themeClass={theme} />
+                                    ) : (
+                                        <textarea
+                                            ref={editorRef}
+                                            value={activeNote.content}
+                                            onChange={handleEditorChange}
+                                            placeholder="Start writing..."
+                                            className={`w-full h-full min-h-[60vh] resize-none outline-none bg-transparent leading-relaxed text-lg md:text-xl selection:bg-blue-200 selection:text-blue-900 ${theme === 'dark' || theme === 'dim' ? 'selection:bg-blue-900 selection:text-blue-100' : ''}`}
+                                            spellCheck={false}
+                                            autoFocus
+                                        />
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center h-full opacity-40">
+                                    <FileText size={64} strokeWidth={1} />
+                                    <p className="mt-4">Select a note or create a new one</p>
+                                    <button onClick={createNote} className="mt-4 px-4 py-2 border rounded hover:bg-black/5">Create Note</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* BOTTOM STATS BAR */}
+                        <div 
+                            className={`h-8 flex items-center justify-between px-4 text-[10px] md:text-xs select-none transition-opacity duration-500
+                            ${themeStyles.bg} border-t ${themeStyles.border} ${themeStyles.muted}
+                            ${focusMode && isTyping ? 'opacity-0' : 'opacity-100'}`}
+                        >
+                            <div className="flex gap-4">
+                                <span>{wordCount} words</span>
+                                <span>{charCount} chars</span>
+                            </div>
+                            <div className="flex gap-4">
+                                <span>{activeNote ? new Date(activeNote.updatedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                                <span className="hidden md:inline">Markdown Supported</span>
+                            </div>
+                        </div>
+
+                        {/* HISTORY MODAL */}
+                        {showHistoryModal && activeNote && (
+                            <div className="absolute inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+                                <div className={`${themeStyles.bg} ${themeStyles.text} w-full max-w-lg rounded-xl shadow-2xl overflow-hidden border ${themeStyles.border} flex flex-col max-h-[80vh]`}>
+                                    <div className={`p-4 border-b ${themeStyles.border} flex justify-between items-center`}>
+                                        <h3 className="font-bold">Version History</h3>
+                                        <button onClick={() => setShowHistoryModal(false)} className="hover:opacity-70">&times;</button>
+                                    </div>
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                        {activeNote.versions && activeNote.versions.length > 0 ? (
+                                            [...activeNote.versions].reverse().map((ver, idx) => (
+                                                <div key={idx} className={`p-3 rounded border ${themeStyles.border} flex justify-between items-center`}>
+                                                    <div className="overflow-hidden">
+                                                        <div className="text-xs opacity-50">{new Date(ver.time).toLocaleString()}</div>
+                                                        <div className="text-sm truncate opacity-80 w-48">{ver.content.substring(0, 30)}...</div>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => restoreVersion(activeNote.id, ver.content)}
+                                                        className="flex items-center gap-1 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
+                                                    >
+                                                        <RotateCcw size={10} /> Restore
+                                                    </button>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center opacity-50 py-8">No history snapshots yet.</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                    </div>
                 </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {activeNote.versions && activeNote.versions.length > 0 ? (
-                    [...activeNote.versions].reverse().map((ver, idx) => (
-                      <div key={idx} className={`p-3 rounded border ${themeStyles.border} flex justify-between items-center`}>
-                         <div className="overflow-hidden">
-                           <div className="text-xs opacity-50">{new Date(ver.time).toLocaleString()}</div>
-                           <div className="text-sm truncate opacity-80 w-48">{ver.content.substring(0, 30)}...</div>
-                         </div>
-                         <button 
-                           onClick={() => restoreVersion(activeNote.id, ver.content)}
-                           className="flex items-center gap-1 text-xs bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-                         >
-                           <RotateCcw size={10} /> Restore
-                         </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center opacity-50 py-8">No history snapshots yet.</div>
-                  )}
-                </div>
-             </div>
-          </div>
-        )}
+            );
+        }
 
-      </div>
-    </div>
-  );
-}
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
 
