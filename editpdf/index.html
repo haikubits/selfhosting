@@ -81,6 +81,9 @@
             <button id="btn-cursor" class="tool-btn active p-2 rounded hover:bg-white transition" title="Select/Move">
                 <i class="ph ph-cursor text-lg"></i>
             </button>
+            <button id="btn-whiteout" class="tool-btn p-2 rounded hover:bg-white transition" title="Whiteout (Cover Text)">
+                <i class="ph ph-eraser text-lg"></i>
+            </button>
             <button id="btn-draw" class="tool-btn p-2 rounded hover:bg-white transition" title="Draw/Sign">
                 <i class="ph ph-pen-nib text-lg"></i>
             </button>
@@ -132,11 +135,11 @@
             pageNum: 1,
             totalPages: 0,
             scale: 1.5,           // Viewport scale
-            tool: 'cursor',       // cursor, draw, text
+            tool: 'cursor',       // cursor, draw, text, whiteout
             isDrawing: false,
             
             // Store edits per page to persist when switching pages
-            // Structure: { [pageIndex]: { paths: [], texts: [] } }
+            // Structure: { [pageIndex]: { paths: [], texts: [], rects: [] } }
             edits: {} 
         };
 
@@ -157,6 +160,7 @@
                 cursor: document.getElementById('btn-cursor'),
                 draw: document.getElementById('btn-draw'),
                 text: document.getElementById('btn-text'),
+                whiteout: document.getElementById('btn-whiteout'),
                 undo: document.getElementById('btn-undo')
             },
             nav: {
@@ -180,6 +184,8 @@
             state.currentPdfBytes = arrayBuffer;
             
             // Load into PDF-Lib (for editing/saving later)
+            // PDFLib.load copies data, so it shouldn't detach the buffer,
+            // but we'll be careful with PDF.js later.
             state.pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
             state.totalPages = state.pdfDoc.getPageCount();
             
@@ -187,7 +193,7 @@
             state.pageNum = 1;
             state.edits = {};
             for(let i=1; i<=state.totalPages; i++) {
-                state.edits[i] = { paths: [], texts: [] };
+                state.edits[i] = { paths: [], texts: [], rects: [] };
             }
 
             // Update UI
@@ -207,8 +213,8 @@
         async function renderPage() {
             if (!state.currentPdfBytes) return;
 
-            // Load document into PDF.js for rendering
-            const loadingTask = pdfjsLib.getDocument({ data: state.currentPdfBytes });
+            // FIX: Use slice(0) to clone the buffer. PDF.js worker can detach the buffer.
+            const loadingTask = pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) });
             const pdf = await loadingTask.promise;
             const page = await pdf.getPage(state.pageNum);
 
@@ -241,6 +247,7 @@
 
         const ctx = elements.interactionCanvas.getContext('2d');
         let currentPath = [];
+        let currentRect = null; // { x, y, w, h }
 
         // Tool Switching
         Object.keys(elements.tools).forEach(key => {
@@ -260,6 +267,8 @@
             // Cursor Update
             if (toolName === 'draw') {
                 elements.interactionCanvas.style.cursor = 'crosshair';
+            } else if (toolName === 'whiteout') {
+                elements.interactionCanvas.style.cursor = 'crosshair';
             } else if (toolName === 'text') {
                 elements.interactionCanvas.style.cursor = 'text';
             } else {
@@ -268,10 +277,10 @@
         }
 
         // Drawing Events
-        elements.interactionCanvas.addEventListener('mousedown', startDrawing);
-        elements.interactionCanvas.addEventListener('mousemove', draw);
-        elements.interactionCanvas.addEventListener('mouseup', stopDrawing);
-        elements.interactionCanvas.addEventListener('mouseout', stopDrawing);
+        elements.interactionCanvas.addEventListener('mousedown', startInteraction);
+        elements.interactionCanvas.addEventListener('mousemove', moveInteraction);
+        elements.interactionCanvas.addEventListener('mouseup', stopInteraction);
+        elements.interactionCanvas.addEventListener('mouseout', stopInteraction);
         
         // Touch support
         elements.interactionCanvas.addEventListener('touchstart', (e) => {
@@ -306,10 +315,11 @@
             };
         }
 
-        function startDrawing(e) {
+        function startInteraction(e) {
+            const coords = getCanvasCoordinates(e);
+            state.isDrawing = true;
+
             if (state.tool === 'draw') {
-                state.isDrawing = true;
-                const coords = getCanvasCoordinates(e);
                 currentPath = [{ x: coords.x, y: coords.y }];
                 ctx.beginPath();
                 ctx.moveTo(coords.x, coords.y);
@@ -317,31 +327,64 @@
                 ctx.lineWidth = 2;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-            } else if (state.tool === 'text') {
-                const coords = getCanvasCoordinates(e);
+            } 
+            else if (state.tool === 'whiteout') {
+                currentRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
+            }
+            else if (state.tool === 'text') {
                 createTextInput(coords.x, coords.y);
-                setTool('cursor'); // Switch back to cursor after placing text
+                setTool('cursor'); 
+                state.isDrawing = false; // Immediate action
             }
         }
 
-        function draw(e) {
-            if (!state.isDrawing || state.tool !== 'draw') return;
+        function moveInteraction(e) {
+            if (!state.isDrawing) return;
             const coords = getCanvasCoordinates(e);
-            currentPath.push({ x: coords.x, y: coords.y });
-            
-            ctx.lineTo(coords.x, coords.y);
-            ctx.stroke();
+
+            if (state.tool === 'draw') {
+                currentPath.push({ x: coords.x, y: coords.y });
+                ctx.lineTo(coords.x, coords.y);
+                ctx.stroke();
+            } 
+            else if (state.tool === 'whiteout' && currentRect) {
+                currentRect.w = coords.x - currentRect.x;
+                currentRect.h = coords.y - currentRect.y;
+                
+                // Redraw layer to show rectangle preview
+                redrawInteractionLayer();
+                
+                // Draw current rect preview
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 1;
+                ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
+                ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
+            }
         }
 
-        function stopDrawing() {
-            if (state.isDrawing && state.tool === 'draw') {
-                state.isDrawing = false;
+        function stopInteraction() {
+            if (!state.isDrawing) return;
+            state.isDrawing = false;
+
+            if (state.tool === 'draw') {
                 ctx.closePath();
-                // Save path to state
                 if (currentPath.length > 1) {
                     state.edits[state.pageNum].paths.push([...currentPath]);
                 }
                 currentPath = [];
+            } 
+            else if (state.tool === 'whiteout' && currentRect) {
+                // Normalize rect (handle negative width/height)
+                if (currentRect.w < 0) { currentRect.x += currentRect.w; currentRect.w = Math.abs(currentRect.w); }
+                if (currentRect.h < 0) { currentRect.y += currentRect.h; currentRect.h = Math.abs(currentRect.h); }
+                
+                if (currentRect.w > 2 && currentRect.h > 2) {
+                    state.edits[state.pageNum].rects.push({...currentRect});
+                }
+                currentRect = null;
+                redrawInteractionLayer();
+                restoreTextElements();
             }
         }
 
@@ -354,28 +397,23 @@
             input.style.top = `${y}px`;
             input.innerText = initialText;
             
-            // Auto-focus
             setTimeout(() => input.focus(), 0);
 
-            // Commit on blur
             input.addEventListener('blur', () => {
                 const text = input.innerText.trim();
                 if (text) {
                     state.edits[state.pageNum].texts.push({
                         text: text,
                         x: x,
-                        y: y + 16, // Adjust for font baseline roughly
+                        y: y + 16, 
                         fontSize: 16
                     });
-                    redrawInteractionLayer(); // Will render text on canvas (optional) or we keep it DOM
-                    // Actually, let's keep it DOM for visual editing, but for this simple version
-                    // we will re-render everything to canvas to simulate "burning" it in
                 }
-                elements.textLayer.innerHTML = ''; // Clear inputs
-                restoreTextElements(); // Re-render as non-editable or editable elements
+                elements.textLayer.innerHTML = '';
+                redrawInteractionLayer();
+                restoreTextElements();
             });
 
-            // Commit on Enter
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -387,10 +425,6 @@
         }
 
         function restoreTextElements() {
-            // For this simple version, we will just render the text onto the interaction canvas
-            // instead of keeping DOM elements, to make it easier to visualize what will be saved.
-            // If you wanted editable text later, you'd keep them as DOM elements.
-            
             const texts = state.edits[state.pageNum].texts;
             ctx.font = '16px sans-serif';
             ctx.fillStyle = '#000';
@@ -405,15 +439,21 @@
             // Clear canvas
             ctx.clearRect(0, 0, elements.interactionCanvas.width, elements.interactionCanvas.height);
             
-            // Draw all paths for current page
-            const paths = state.edits[state.pageNum].paths;
-            
+            const pageEdits = state.edits[state.pageNum];
+
+            // 1. Draw Whiteouts first (so they cover PDF content)
+            ctx.fillStyle = '#ffffff';
+            pageEdits.rects.forEach(r => {
+                ctx.fillRect(r.x, r.y, r.w, r.h);
+            });
+
+            // 2. Draw Paths
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.strokeStyle = '#000';
 
-            paths.forEach(path => {
+            pageEdits.paths.forEach(path => {
                 if(path.length < 2) return;
                 ctx.beginPath();
                 ctx.moveTo(path[0].x, path[0].y);
@@ -427,11 +467,14 @@
         // Undo Functionality
         elements.tools.undo.addEventListener('click', () => {
             const pageEdits = state.edits[state.pageNum];
-            // Simplistic undo: remove last added item (either text or path, whichever was last added? 
-            // tracking "history" is complex, let's just undo the last path if paths exist, else last text)
             
+            // Determine which array has the latest edit? 
+            // Simple undo: Check all arrays and remove the very last added item across types?
+            // For simplicity in this demo: we check one by one.
             if (pageEdits.paths.length > 0) {
                 pageEdits.paths.pop();
+            } else if (pageEdits.rects.length > 0) {
+                pageEdits.rects.pop();
             } else if (pageEdits.texts.length > 0) {
                 pageEdits.texts.pop();
             }
@@ -460,42 +503,44 @@
             if (!state.pdfDoc) return;
 
             const pages = state.pdfDoc.getPages();
-            const { width, height } = pages[0].getSize(); // Assuming consistent size for simplicity, or check per page
-
-            // PDF-Lib uses points (1/72 inch). PDF.js uses scale.
-            // We need to map Canvas pixels back to PDF points.
             
             // Loop through all tracked pages
             for (let i = 1; i <= state.totalPages; i++) {
                 const pageEdits = state.edits[i];
-                if (pageEdits.paths.length === 0 && pageEdits.texts.length === 0) continue;
+                if (pageEdits.paths.length === 0 && pageEdits.texts.length === 0 && pageEdits.rects.length === 0) continue;
 
                 const page = pages[i-1];
                 const pageHeight = page.getHeight();
                 
-                // Calculate scale factor between canvas and PDF
-                // Canvas width / PDF width (in points) = scale
-                // We rendered at state.scale (1.5) usually, but best to calc dynamically
-                // based on the viewport we used.
-                // Re-calculating viewport to get exact dimensions used during render
-                const renderViewport = await pdfjsLib.getDocument({ data: state.currentPdfBytes })
+                // FIX: Use slice(0) again to avoid "Detached ArrayBuffer" error
+                const renderViewport = await pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) })
                                            .promise.then(doc => doc.getPage(i))
                                            .then(p => p.getViewport({ scale: state.scale }));
                 
                 const scaleX = page.getWidth() / renderViewport.width;
                 const scaleY = page.getHeight() / renderViewport.height;
 
-                // Draw Paths
+                // 1. Draw Whiteouts
+                pageEdits.rects.forEach(r => {
+                    const x = r.x * scaleX;
+                    const y = pageHeight - ((r.y + r.h) * scaleY); // PDF y is bottom-up
+                    const w = r.w * scaleX;
+                    const h = r.h * scaleY;
+
+                    page.drawRectangle({
+                        x, y, width: w, height: h,
+                        color: PDFLib.rgb(1, 1, 1), // White
+                    });
+                });
+
+                // 2. Draw Paths
                 pageEdits.paths.forEach(path => {
                     const svgPath = path.map(p => {
-                        // Flip Y axis (PDF starts bottom-left, Canvas starts top-left)
-                        // And scale down
                         const x = p.x * scaleX;
                         const y = pageHeight - (p.y * scaleY); 
                         return { x, y };
                     });
 
-                    // Draw line by line
                     for(let k=0; k<svgPath.length-1; k++) {
                         page.drawLine({
                             start: svgPath[k],
@@ -506,18 +551,15 @@
                     }
                 });
 
-                // Draw Text
+                // 3. Draw Text
                 pageEdits.texts.forEach(textItem => {
                     const x = textItem.x * scaleX;
-                    // Adjust Y for text baseline. 
-                    // Canvas y is top-down to baseline. PDF-Lib y is bottom-up to baseline.
-                    // Roughly: pageHeight - (canvasY * scaleY)
                     const y = pageHeight - (textItem.y * scaleY);
                     
                     page.drawText(textItem.text, {
                         x: x,
                         y: y,
-                        size: 12, // Fixed size for simplicity
+                        size: 12, 
                         color: PDFLib.rgb(0, 0, 0),
                     });
                 });
