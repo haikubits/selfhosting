@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Developer Portfolio | Apps Showcase</title>
+    <title>The Digital Workshop | Experiments</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -97,45 +97,58 @@
 
     <!-- Header / Navbar -->
     <nav class="fixed w-full z-50 top-0 start-0 border-b border-white/10 bg-slate-950/80 backdrop-blur-md">
-        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between mx-auto p-4">
-            <a href="#" class="flex items-center space-x-3 rtl:space-x-reverse">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between mx-auto p-4 gap-4">
+            
+            <!-- Logo -->
+            <a href="#" class="flex items-center space-x-3 rtl:space-x-reverse flex-shrink-0">
                 <div class="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg">
                     <i data-lucide="code-2"></i>
                 </div>
-                <span class="self-center text-2xl font-bold whitespace-nowrap text-white">DevHub</span>
+                <span class="self-center text-2xl font-bold whitespace-nowrap text-white hidden sm:block">DevHub</span>
             </a>
-            <div class="hidden w-full md:block md:w-auto" id="navbar-default">
-                <ul class="font-medium flex flex-col p-4 md:p-0 mt-4 border border-gray-100 rounded-lg md:flex-row md:space-x-8 rtl:space-x-reverse md:mt-0 md:border-0">
-                    <li>
-                        <a href="https://github.com/haikubits" target="_blank" class="block py-2 px-3 text-gray-400 rounded hover:text-white md:p-0 transition-colors flex items-center gap-2">
-                            <i data-lucide="github" class="w-5 h-5"></i> GitHub
-                        </a>
-                    </li>
-                </ul>
+
+            <!-- Search Bar -->
+            <div class="flex-grow max-w-md mx-auto order-last md:order-none w-full md:w-auto">
+                <div class="relative">
+                    <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                        <i data-lucide="search" class="w-4 h-4 text-slate-400"></i>
+                    </div>
+                    <input type="text" id="search-input" class="block w-full p-2.5 ps-10 text-sm text-white border border-slate-700 rounded-lg bg-slate-900/50 focus:ring-blue-500 focus:border-blue-500 placeholder-slate-400 focus:bg-slate-900 transition-colors" placeholder="Search apps by name, tag..." autocomplete="off">
+                </div>
+            </div>
+
+            <!-- Navigation Links -->
+            <div class="flex items-center space-x-6">
+                <a href="https://www.linkedin.com/in/ajay-sharma-76502729" target="_blank" class="text-gray-400 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium">
+                    <i data-lucide="contact" class="w-4 h-4"></i> <span class="hidden sm:inline">Contact</span>
+                </a>
+                <a href="https://github.com/haikubits/selfhosting" target="_blank" class="bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 text-sm font-medium border border-slate-700">
+                    <i data-lucide="github" class="w-4 h-4"></i> GitHub
+                </a>
             </div>
         </div>
     </nav>
 
     <!-- Main Content -->
-    <main class="flex-grow pt-24 pb-12 px-4 relative overflow-hidden">
+    <main class="flex-grow pt-28 md:pt-24 pb-12 px-4 relative overflow-hidden">
         <!-- Background Decor -->
         <div class="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-blue-600/20 blur-[120px] rounded-full -z-10 pointer-events-none"></div>
 
         <div class="max-w-7xl mx-auto">
             
             <!-- Hero Section -->
-            <div class="text-center mb-16 animate-fade-in">
+            <div class="text-center mb-12 animate-fade-in">
                 <h1 class="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400 mb-4">
-                    Applications Portfolio
+                    The Digital Workshop
                 </h1>
                 <p class="text-lg text-slate-400 max-w-2xl mx-auto">
-                    A collection of web tools, prototypes, and creative experiments. <br/>
+                    A curated collection of web tools, prototypes, and creative experiments. <br/>
                     Explore the live previews below.
                 </p>
             </div>
 
             <!-- Grid Container -->
-            <div id="app-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div id="app-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 min-h-[300px]">
                 <!-- Cards will be injected here by JavaScript -->
             </div>
 
@@ -146,7 +159,7 @@
     <footer class="bg-slate-900 border-t border-white/5 py-8 mt-auto">
         <div class="max-w-7xl mx-auto px-4 text-center">
             <p class="text-slate-500 text-sm">
-                &copy; <span id="year"></span> Haikubits Selfhosting. All rights reserved.
+                &copy; <span id="year"></span> Ajay Sharma. All rights reserved.
             </p>
         </div>
     </footer>
@@ -154,7 +167,6 @@
     <!-- JS Logic -->
     <script>
         // Data Source
-        // To add a new app, simply add a new object to this array
         const apps = [
             {
                 title: "Merge PDFs",
@@ -201,69 +213,106 @@
         ];
 
         const gridContainer = document.getElementById('app-grid');
+        const searchInput = document.getElementById('search-input');
 
-        // Render Cards
-        apps.forEach((app, index) => {
-            // Create delay for stagger animation
-            const delay = index * 100;
+        // Function to render apps
+        function renderApps(list) {
+            gridContainer.innerHTML = '';
+
+            if (list.length === 0) {
+                gridContainer.innerHTML = `
+                    <div class="col-span-full flex flex-col items-center justify-center text-slate-500 py-12">
+                        <i data-lucide="search-x" class="w-12 h-12 mb-4 opacity-50"></i>
+                        <p class="text-lg">No apps found matching your search.</p>
+                        <button onclick="clearSearch()" class="mt-4 text-blue-400 hover:text-blue-300 underline">Clear search</button>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            list.forEach((app, index) => {
+                const delay = index * 50; // Reduced delay for smoother re-renders
+                
+                const cardHTML = `
+                    <div class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl transition-all duration-300 card-hover animate-slide-up flex flex-col" style="animation-delay: ${delay}ms">
+                        
+                        <!-- Browser Window Header -->
+                        <div class="bg-slate-800 px-4 py-2 flex items-center space-x-2 border-b border-slate-700">
+                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
+                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
+                            <div class="ml-4 flex-1 bg-slate-900/50 rounded text-xs text-slate-500 py-1 px-3 truncate font-mono">
+                                ${new URL(app.url).hostname}/...
+                            </div>
+                        </div>
+
+                        <!-- Iframe Preview Window -->
+                        <div class="relative h-64 w-full bg-slate-800 group-hover:border-b-blue-500/50 transition-colors border-b border-transparent">
+                            <div class="iframe-container">
+                                <iframe 
+                                    src="${app.url}" 
+                                    class="iframe-scaler grayscale-[30%] group-hover:grayscale-0 transition-all duration-500" 
+                                    loading="lazy"
+                                    scrolling="no"
+                                    title="${app.title} Preview">
+                                </iframe>
+                            </div>
+                            
+                            <!-- Overlay -->
+                            <div class="absolute inset-0 bg-slate-900/10 group-hover:bg-transparent transition-all duration-300"></div>
+                            
+                            <!-- Floating Action Button -->
+                            <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-slate-900/40 backdrop-blur-[2px]">
+                                <a href="${app.url}" target="_blank" rel="noopener noreferrer" class="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-full shadow-lg flex items-center gap-2">
+                                    Launch App <i data-lucide="external-link" class="w-4 h-4"></i>
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Content Body -->
+                        <div class="p-6 flex flex-col flex-grow">
+                            <div class="flex items-center justify-between mb-3">
+                                <h2 class="text-xl font-bold text-slate-100 group-hover:text-blue-400 transition-colors">${app.title}</h2>
+                            </div>
+                            
+                            <p class="text-slate-400 text-sm leading-relaxed mb-4 flex-grow">
+                                ${app.description}
+                            </p>
+
+                            <div class="flex flex-wrap gap-2 mt-auto pt-4 border-t border-slate-800">
+                                ${app.tags.map(tag => `<span class="text-xs font-medium px-2.5 py-0.5 rounded bg-slate-800 text-blue-300 border border-slate-700">${tag}</span>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                gridContainer.insertAdjacentHTML('beforeend', cardHTML);
+            });
             
-            const cardHTML = `
-                <div class="group bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl transition-all duration-300 card-hover animate-slide-up flex flex-col" style="animation-delay: ${delay}ms">
-                    
-                    <!-- Browser Window Header -->
-                    <div class="bg-slate-800 px-4 py-2 flex items-center space-x-2 border-b border-slate-700">
-                        <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                        <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                        <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                        <div class="ml-4 flex-1 bg-slate-900/50 rounded text-xs text-slate-500 py-1 px-3 truncate font-mono">
-                            ${new URL(app.url).hostname}/...
-                        </div>
-                    </div>
+            // Re-initialize icons for newly added elements
+            lucide.createIcons();
+        }
 
-                    <!-- Iframe Preview Window -->
-                    <div class="relative h-64 w-full bg-slate-800 group-hover:border-b-blue-500/50 transition-colors border-b border-transparent">
-                        <div class="iframe-container">
-                            <iframe 
-                                src="${app.url}" 
-                                class="iframe-scaler grayscale-[30%] group-hover:grayscale-0 transition-all duration-500" 
-                                loading="lazy"
-                                scrolling="no"
-                                title="${app.title} Preview">
-                            </iframe>
-                        </div>
-                        
-                        <!-- Overlay to prevent mouse trapping & add hover effect -->
-                        <div class="absolute inset-0 bg-slate-900/10 group-hover:bg-transparent transition-all duration-300"></div>
-                        
-                        <!-- Floating Action Button (Visible on hover) -->
-                        <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-slate-900/40 backdrop-blur-[2px]">
-                            <a href="${app.url}" target="_blank" rel="noopener noreferrer" class="transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 px-6 rounded-full shadow-lg flex items-center gap-2">
-                                Launch App <i data-lucide="external-link" class="w-4 h-4"></i>
-                            </a>
-                        </div>
-                    </div>
+        // Search Logic
+        function filterApps() {
+            const term = searchInput.value.toLowerCase();
+            const filtered = apps.filter(app => 
+                app.title.toLowerCase().includes(term) || 
+                app.description.toLowerCase().includes(term) ||
+                app.tags.some(tag => tag.toLowerCase().includes(term))
+            );
+            renderApps(filtered);
+        }
 
-                    <!-- Content Body -->
-                    <div class="p-6 flex flex-col flex-grow">
-                        <div class="flex items-center justify-between mb-3">
-                            <h2 class="text-xl font-bold text-slate-100 group-hover:text-blue-400 transition-colors">${app.title}</h2>
-                        </div>
-                        
-                        <p class="text-slate-400 text-sm leading-relaxed mb-4 flex-grow">
-                            ${app.description}
-                        </p>
+        function clearSearch() {
+            searchInput.value = '';
+            renderApps(apps);
+        }
 
-                        <div class="flex flex-wrap gap-2 mt-auto pt-4 border-t border-slate-800">
-                            ${app.tags.map(tag => `<span class="text-xs font-medium px-2.5 py-0.5 rounded bg-slate-800 text-blue-300 border border-slate-700">${tag}</span>`).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-            gridContainer.insertAdjacentHTML('beforeend', cardHTML);
-        });
+        searchInput.addEventListener('input', filterApps);
 
-        // Initialize Icons
-        lucide.createIcons();
+        // Initial Render
+        renderApps(apps);
         
         // Set Year
         document.getElementById('year').textContent = new Date().getFullYear();
