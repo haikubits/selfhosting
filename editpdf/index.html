@@ -20,31 +20,44 @@
 
     <style>
         body {
-            background-color: #f3f4f6;
-            touch-action: none; /* Prevent scrolling while drawing */
+            background-color: #e5e7eb; /* Darker background for contrast */
+            touch-action: none; 
         }
-        #canvas-container {
+        /* The main scrollable area */
+        #workspace {
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        
+        /* Page Wrapper */
+        .page-container {
             position: relative;
+            background-color: white;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            margin: 0 auto;
+            margin-bottom: 24px; /* Gap between pages */
         }
+
         canvas {
             display: block;
         }
-        #interaction-layer {
+
+        /* Layers per page */
+        .interaction-layer {
             position: absolute;
             top: 0;
             left: 0;
             cursor: crosshair;
             z-index: 10;
         }
-        #text-layer {
+        .text-layer {
             position: absolute;
             inset: 0;
             overflow: hidden;
-            z-index: 20; /* Above interaction layer */
-            pointer-events: none; /* Let clicks pass through to canvas... */
+            z-index: 20; 
+            pointer-events: none; 
         }
+
+        /* Text Elements */
         .text-element {
             position: absolute;
             font-family: sans-serif;
@@ -52,15 +65,15 @@
             color: black;
             padding: 4px;
             border: 1px dashed transparent;
-            cursor: move; /* Indicate draggable */
-            pointer-events: auto; /* ...except for the text elements themselves */
+            cursor: move; 
+            pointer-events: auto; 
             min-width: 20px;
             min-height: 20px;
             white-space: pre-wrap;
             line-height: 1;
         }
         .text-element:hover {
-            border-color: #3b82f6; /* Blue dashed border on hover */
+            border-color: #3b82f6; 
             background-color: rgba(255, 255, 255, 0.5);
         }
         .text-element:focus {
@@ -69,14 +82,16 @@
             background-color: white;
             cursor: text;
         }
+
         .tool-btn.active {
             background-color: #dbeafe;
             color: #2563eb;
             border-color: #2563eb;
         }
-        /* Disable interaction in preview mode */
-        .preview-mode #interaction-layer,
-        .preview-mode #text-layer {
+        
+        /* Preview Mode Styles */
+        .preview-mode .interaction-layer,
+        .preview-mode .text-layer {
             display: none;
         }
         .disabled-area {
@@ -127,11 +142,7 @@
 
         <!-- Actions -->
         <div class="flex items-center gap-3">
-            <div id="page-controls" class="hidden flex items-center gap-2 text-sm text-gray-600 mr-4">
-                <button id="prev-page" class="hover:text-gray-900 p-1"><i class="ph ph-caret-left-bold"></i></button>
-                <span>Page <span id="curr-page-num">0</span> of <span id="total-pages">0</span></span>
-                <button id="next-page" class="hover:text-gray-900 p-1"><i class="ph ph-caret-right-bold"></i></button>
-            </div>
+            <span id="page-count" class="hidden text-sm text-gray-500 mr-2"></span>
             
             <button id="btn-preview" disabled class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 opacity-50 cursor-not-allowed">
                 <i class="ph ph-eye"></i>
@@ -145,56 +156,55 @@
         </div>
     </header>
 
-    <!-- Main Workspace -->
-    <main class="flex-1 overflow-auto bg-gray-100 relative flex justify-center p-8" id="workspace">
+    <!-- Main Workspace (Scrollable) -->
+    <main class="flex-1 bg-gray-200 relative p-8 text-center" id="workspace">
+        
         <!-- Placeholder Empty State -->
         <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
             <i class="ph ph-file-arrow-up text-6xl mb-4 text-gray-300"></i>
             <p class="text-lg">Upload a PDF to start editing</p>
         </div>
 
-        <!-- Canvas Container -->
-        <div id="canvas-container" class="hidden bg-white">
-            <canvas id="pdf-render"></canvas>
-            <canvas id="interaction-layer"></canvas>
-            <div id="text-layer"></div>
+        <!-- Pages Container -->
+        <div id="pages-container" class="hidden flex flex-col items-center pb-20">
+            <!-- Pages will be injected here -->
         </div>
+
     </main>
 
     <script>
         // --- State Management ---
         const state = {
-            currentPdfBytes: null, // Raw bytes of original file
-            previewPdfBytes: null, // Raw bytes of "burnt" file for preview
+            currentPdfBytes: null, 
+            previewPdfBytes: null, 
             
-            pageNum: 1,
             totalPages: 0,
-            scale: 1.5,           // Viewport scale
-            tool: 'cursor',       // cursor, draw, text, whiteout
+            scale: 1.5,           
+            tool: 'cursor',       
             isDrawing: false,
-            isPreview: false,     // Toggles preview mode
+            isPreview: false,
+            
+            // Interaction State
+            activePage: 0, // 1-based index of the page currently being interacted with
             
             // Store edits per page
             // Structure: { [pageIndex]: { paths: [], texts: [{id, x, y, text}], rects: [] } }
             edits: {} 
         };
 
-        let activeDragId = null; // ID of the text currently being dragged
+        let activeDragId = null; 
         let dragOffset = { x: 0, y: 0 };
+        let draggedPageNum = 0; // Track which page the dragged element belongs to
 
         // --- DOM Elements ---
         const elements = {
             fileInput: document.getElementById('file-upload'),
             uploadLabel: document.getElementById('upload-label'),
-            canvasContainer: document.getElementById('canvas-container'),
-            pdfCanvas: document.getElementById('pdf-render'),
-            interactionCanvas: document.getElementById('interaction-layer'),
-            textLayer: document.getElementById('text-layer'),
+            workspace: document.getElementById('workspace'),
+            pagesContainer: document.getElementById('pages-container'),
             emptyState: document.getElementById('empty-state'),
             toolsPanel: document.getElementById('tools-panel'),
-            pageControls: document.getElementById('page-controls'),
-            currPageNum: document.getElementById('curr-page-num'),
-            totalPages: document.getElementById('total-pages'),
+            pageCountLabel: document.getElementById('page-count'),
             btnDownload: document.getElementById('btn-download'),
             btnPreview: document.getElementById('btn-preview'),
             tools: {
@@ -203,10 +213,6 @@
                 text: document.getElementById('btn-text'),
                 whiteout: document.getElementById('btn-whiteout'),
                 undo: document.getElementById('btn-undo')
-            },
-            nav: {
-                prev: document.getElementById('prev-page'),
-                next: document.getElementById('next-page')
             }
         };
 
@@ -224,12 +230,10 @@
             const arrayBuffer = await file.arrayBuffer();
             state.currentPdfBytes = arrayBuffer;
             
-            // Load into PDF-Lib to check pages (we won't use this doc for editing directly anymore)
             const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
             state.totalPages = pdfDoc.getPageCount();
             
             // Reset state
-            state.pageNum = 1;
             state.isPreview = false;
             state.previewPdfBytes = null;
             state.edits = {};
@@ -239,9 +243,10 @@
 
             // Update UI
             elements.emptyState.classList.add('hidden');
-            elements.canvasContainer.classList.remove('hidden');
+            elements.pagesContainer.classList.remove('hidden');
             elements.toolsPanel.classList.remove('hidden');
-            elements.pageControls.classList.remove('hidden');
+            elements.pageCountLabel.classList.remove('hidden');
+            elements.pageCountLabel.textContent = `${state.totalPages} Page${state.totalPages > 1 ? 's' : ''}`;
             
             elements.btnDownload.disabled = false;
             elements.btnDownload.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -250,19 +255,13 @@
             elements.btnPreview.classList.remove('opacity-50', 'cursor-not-allowed');
             updatePreviewUI();
 
-            elements.totalPages.textContent = state.totalPages;
-
-            renderPage();
+            renderAllPages();
         });
 
-        // --- Core PDF Generation Logic (Used by Download & Preview) ---
+        // --- Core PDF Generation Logic ---
         
         async function generateModifiedPdf() {
-            // ALWAYS load a fresh copy of the original bytes. 
-            // This prevents "stacking" edits if the user previews/downloads multiple times.
             const pdfDoc = await PDFLib.PDFDocument.load(state.currentPdfBytes.slice(0));
-            
-            // We need a PDF.js instance of the original to calculate scales
             const pdfJsDoc = await pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) }).promise;
             const pages = pdfDoc.getPages();
             
@@ -273,7 +272,6 @@
                 const page = pages[i-1];
                 const pageHeight = page.getHeight();
                 
-                // Get the viewport for this specific page to calculate accurate scales
                 const renderViewport = await pdfJsDoc.getPage(i).then(p => p.getViewport({ scale: state.scale }));
                 
                 const scaleX = page.getWidth() / renderViewport.width;
@@ -327,49 +325,69 @@
             return await pdfDoc.save();
         }
 
-        // --- Rendering Logic ---
+        // --- Rendering Logic (Multi-Page) ---
 
-        async function renderPage() {
-            // Decide which source to use
-            let bytesToRender = state.currentPdfBytes;
+        async function renderAllPages() {
+            elements.pagesContainer.innerHTML = ''; // Clear existing
             
-            if (state.isPreview && state.previewPdfBytes) {
-                bytesToRender = state.previewPdfBytes;
-                elements.canvasContainer.classList.add('preview-mode');
-            } else {
-                elements.canvasContainer.classList.remove('preview-mode');
-            }
+            // Decide source
+            let bytesToRender = state.isPreview && state.previewPdfBytes 
+                ? state.previewPdfBytes 
+                : state.currentPdfBytes;
 
             if (!bytesToRender) return;
 
+            // Load Doc
             const loadingTask = pdfjsLib.getDocument({ data: bytesToRender.slice(0) });
             const pdf = await loadingTask.promise;
-            const page = await pdf.getPage(state.pageNum);
 
-            const viewport = page.getViewport({ scale: state.scale });
+            // Loop through pages
+            for (let pageNum = 1; pageNum <= state.totalPages; pageNum++) {
+                
+                // Create Container
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'page-container';
+                pageDiv.dataset.page = pageNum;
+                if (state.isPreview) pageDiv.classList.add('preview-mode');
 
-            // Set dimensions
-            elements.pdfCanvas.height = viewport.height;
-            elements.pdfCanvas.width = viewport.width;
-            elements.interactionCanvas.height = viewport.height;
-            elements.interactionCanvas.width = viewport.width;
-            elements.canvasContainer.style.width = `${viewport.width}px`;
-            elements.canvasContainer.style.height = `${viewport.height}px`;
+                // Create Elements
+                const pdfCanvas = document.createElement('canvas');
+                pdfCanvas.className = 'pdf-render';
+                
+                const interactCanvas = document.createElement('canvas');
+                interactCanvas.className = 'interaction-layer';
+                
+                const textDiv = document.createElement('div');
+                textDiv.className = 'text-layer';
+                textDiv.dataset.page = pageNum;
 
-            // Render PDF
-            const renderContext = {
-                canvasContext: elements.pdfCanvas.getContext('2d'),
-                viewport: viewport
-            };
-            await page.render(renderContext).promise;
+                pageDiv.appendChild(pdfCanvas);
+                pageDiv.appendChild(interactCanvas);
+                pageDiv.appendChild(textDiv);
+                elements.pagesContainer.appendChild(pageDiv);
 
-            // UI Updates
-            elements.currPageNum.textContent = state.pageNum;
+                // Render PDF to Canvas
+                const page = await pdf.getPage(pageNum);
+                const viewport = page.getViewport({ scale: state.scale });
 
-            // Only draw overlays if we are NOT in preview mode
-            if (!state.isPreview) {
-                redrawInteractionLayer();
-                renderTextLayer();
+                pdfCanvas.height = viewport.height;
+                pdfCanvas.width = viewport.width;
+                interactCanvas.height = viewport.height;
+                interactCanvas.width = viewport.width;
+                pageDiv.style.width = `${viewport.width}px`;
+                pageDiv.style.height = `${viewport.height}px`;
+
+                const renderContext = {
+                    canvasContext: pdfCanvas.getContext('2d'),
+                    viewport: viewport
+                };
+                await page.render(renderContext).promise;
+
+                // Restore Edits (If not preview)
+                if (!state.isPreview) {
+                    redrawInteractionLayer(pageNum, interactCanvas);
+                    renderTextLayer(pageNum, textDiv);
+                }
             }
         }
 
@@ -377,20 +395,16 @@
         
         elements.btnPreview.addEventListener('click', async () => {
             if (state.isPreview) {
-                // Exit Preview
                 state.isPreview = false;
                 state.previewPdfBytes = null;
                 updatePreviewUI();
-                renderPage();
+                renderAllPages();
             } else {
-                // Enter Preview
-                // 1. Generate the PDF in memory
                 const modifiedBytes = await generateModifiedPdf();
                 state.previewPdfBytes = modifiedBytes;
                 state.isPreview = true;
-                
                 updatePreviewUI();
-                renderPage();
+                renderAllPages();
             }
         });
 
@@ -403,29 +417,26 @@
                 btn.innerHTML = `<i class="ph ph-pencil-simple"></i><span>Edit</span>`;
                 btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
                 btn.classList.remove('bg-gray-800', 'hover:bg-gray-900');
-                
                 tools.classList.add('disabled-area');
                 upload.classList.add('disabled-area');
             } else {
                 btn.innerHTML = `<i class="ph ph-eye"></i><span>Preview</span>`;
                 btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
                 btn.classList.add('bg-gray-800', 'hover:bg-gray-900');
-                
                 tools.classList.remove('disabled-area');
                 upload.classList.remove('disabled-area');
             }
         }
 
-        // --- Interaction Layer (Drawing & Whiteout) ---
+        // --- Event Delegation for Interaction ---
 
-        const ctx = elements.interactionCanvas.getContext('2d');
         let currentPath = [];
         let currentRect = null; 
 
         Object.keys(elements.tools).forEach(key => {
             if (key === 'undo') return;
             elements.tools[key].addEventListener('click', () => {
-                if (state.isPreview) return; // Guard
+                if (state.isPreview) return; 
                 setTool(key);
             });
         });
@@ -434,107 +445,136 @@
             state.tool = toolName;
             document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
             elements.tools[toolName].classList.add('active');
-
-            if (toolName === 'draw' || toolName === 'whiteout') {
-                elements.interactionCanvas.style.cursor = 'crosshair';
-            } else if (toolName === 'text') {
-                elements.interactionCanvas.style.cursor = 'text';
-            } else {
-                elements.interactionCanvas.style.cursor = 'default';
-            }
+            
+            // Cursor is handled dynamically via CSS classes or JS based on target
+            // We set a global class on workspace to hint cursor?
+            // Actually, we'll just let the specific events handle cursor styles or set inline
         }
 
-        // --- Canvas Events ---
-        elements.interactionCanvas.addEventListener('mousedown', startInteraction);
-        elements.interactionCanvas.addEventListener('mousemove', moveInteraction);
-        elements.interactionCanvas.addEventListener('mouseup', stopInteraction);
-        elements.interactionCanvas.addEventListener('mouseout', stopInteraction);
+        // --- Global Mouse Events (Delegated) ---
         
-        // Touch support
-        elements.interactionCanvas.addEventListener('touchstart', (e) => {
+        // We attach listeners to the Container to capture events on ANY page
+        elements.pagesContainer.addEventListener('mousedown', handleMouseDown);
+        elements.pagesContainer.addEventListener('mousemove', handleMouseMove);
+        elements.pagesContainer.addEventListener('mouseup', handleMouseUp);
+        elements.pagesContainer.addEventListener('mouseout', handleMouseUp);
+
+        // Map touch to mouse
+        elements.pagesContainer.addEventListener('touchstart', (e) => {
             if(state.isPreview) return;
-            e.preventDefault();
+            if(e.target.classList.contains('interaction-layer')) e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
-            elements.interactionCanvas.dispatchEvent(mouseEvent);
+            const mouseEvent = new MouseEvent('mousedown', { 
+                clientX: touch.clientX, clientY: touch.clientY, bubbles: true, cancelable: true 
+            });
+            e.target.dispatchEvent(mouseEvent);
         });
-        elements.interactionCanvas.addEventListener('touchmove', (e) => {
-            if(state.isPreview) return;
-            e.preventDefault();
-            const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
-            elements.interactionCanvas.dispatchEvent(mouseEvent);
-        });
-        elements.interactionCanvas.addEventListener('touchend', (e) => {
+        elements.pagesContainer.addEventListener('touchmove', (e) => {
              if(state.isPreview) return;
-             const mouseEvent = new MouseEvent('mouseup', {});
-             elements.interactionCanvas.dispatchEvent(mouseEvent);
+             if(e.target.classList.contains('interaction-layer')) e.preventDefault();
+             const touch = e.touches[0];
+             const mouseEvent = new MouseEvent('mousemove', { 
+                 clientX: touch.clientX, clientY: touch.clientY, bubbles: true, cancelable: true 
+             });
+             e.target.dispatchEvent(mouseEvent);
+        });
+        elements.pagesContainer.addEventListener('touchend', (e) => {
+             if(state.isPreview) return;
+             const mouseEvent = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
+             e.target.dispatchEvent(mouseEvent);
         });
 
-        function getCanvasCoordinates(event) {
-            const rect = elements.interactionCanvas.getBoundingClientRect();
+
+        function getLocalCoordinates(event, element) {
+            const rect = element.getBoundingClientRect();
             return {
                 x: event.clientX - rect.left,
                 y: event.clientY - rect.top
             };
         }
 
-        function startInteraction(e) {
+        function handleMouseDown(e) {
             if (state.isPreview) return;
-            const coords = getCanvasCoordinates(e);
+
+            // Identify Target
+            const target = e.target;
             
-            if (state.tool === 'text') {
-                const newId = Date.now().toString(); 
-                state.edits[state.pageNum].texts.push({
-                    id: newId,
-                    x: coords.x,
-                    y: coords.y - 12, 
-                    text: 'Type here...',
-                });
-                renderTextLayer();
+            // 1. Check if clicking on Interaction Layer (Drawing/Whiteout/Placing Text)
+            if (target.classList.contains('interaction-layer')) {
+                const pageContainer = target.closest('.page-container');
+                const pageNum = parseInt(pageContainer.dataset.page);
+                state.activePage = pageNum;
                 
-                setTimeout(() => {
-                    const el = document.getElementById(`text-${newId}`);
-                    if (el) {
-                        el.focus();
-                        document.execCommand('selectAll', false, null);
+                const coords = getLocalCoordinates(e, target);
+                const ctx = target.getContext('2d');
+
+                // TEXT TOOL
+                if (state.tool === 'text') {
+                    const newId = Date.now().toString(); 
+                    state.edits[pageNum].texts.push({
+                        id: newId,
+                        x: coords.x,
+                        y: coords.y - 12, 
+                        text: 'Type here...',
+                    });
+                    
+                    const textDiv = pageContainer.querySelector('.text-layer');
+                    renderTextLayer(pageNum, textDiv);
+                    
+                    setTimeout(() => {
+                        const el = document.getElementById(`text-${newId}`);
+                        if (el) {
+                            el.focus();
+                            document.execCommand('selectAll', false, null);
+                        }
+                    }, 10);
+                    
+                    setTool('cursor'); 
+                    return;
+                }
+
+                // DRAW / WHITEOUT
+                if (state.tool === 'draw' || state.tool === 'whiteout') {
+                    state.isDrawing = true;
+                    if (state.tool === 'draw') {
+                        currentPath = [{ x: coords.x, y: coords.y }];
+                        ctx.beginPath();
+                        ctx.moveTo(coords.x, coords.y);
+                        ctx.strokeStyle = '#000';
+                        ctx.lineWidth = 2;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                    } else {
+                        currentRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
                     }
-                }, 10);
-                
-                setTool('cursor'); 
-                return;
-            }
-
-            state.isDrawing = true;
-
-            if (state.tool === 'draw') {
-                currentPath = [{ x: coords.x, y: coords.y }];
-                ctx.beginPath();
-                ctx.moveTo(coords.x, coords.y);
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 2;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-            } 
-            else if (state.tool === 'whiteout') {
-                currentRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
+                }
             }
         }
 
-        function moveInteraction(e) {
-            if (!state.isDrawing || state.isPreview) return;
-            const coords = getCanvasCoordinates(e);
+        function handleMouseMove(e) {
+            if (!state.isDrawing || state.isPreview || state.activePage === 0) return;
+
+            const target = e.target;
+            // Ensure we are dragging on the same page we started
+            if (!target.classList.contains('interaction-layer')) return;
+            const pageContainer = target.closest('.page-container');
+            const pageNum = parseInt(pageContainer.dataset.page);
+            
+            if (pageNum !== state.activePage) return; // Ignore if moved to another page
+
+            const coords = getLocalCoordinates(e, target);
+            const ctx = target.getContext('2d');
 
             if (state.tool === 'draw') {
                 currentPath.push({ x: coords.x, y: coords.y });
                 ctx.lineTo(coords.x, coords.y);
                 ctx.stroke();
-            } 
-            else if (state.tool === 'whiteout' && currentRect) {
+            } else if (state.tool === 'whiteout' && currentRect) {
                 currentRect.w = coords.x - currentRect.x;
                 currentRect.h = coords.y - currentRect.y;
-                redrawInteractionLayer(); 
+                redrawInteractionLayer(pageNum, target);
                 
+                // Preview rect
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 1;
@@ -543,37 +583,42 @@
             }
         }
 
-        function stopInteraction() {
+        function handleMouseUp(e) {
             if (!state.isDrawing) return;
             state.isDrawing = false;
+            
+            const pageNum = state.activePage;
+            // Find canvas
+            const pageDiv = document.querySelector(`.page-container[data-page="${pageNum}"]`);
+            if (!pageDiv) return;
+            const canvas = pageDiv.querySelector('.interaction-layer');
+            const ctx = canvas.getContext('2d');
 
             if (state.tool === 'draw') {
                 ctx.closePath();
                 if (currentPath.length > 1) {
-                    state.edits[state.pageNum].paths.push([...currentPath]);
+                    state.edits[pageNum].paths.push([...currentPath]);
                 }
                 currentPath = [];
-            } 
-            else if (state.tool === 'whiteout' && currentRect) {
+            } else if (state.tool === 'whiteout' && currentRect) {
                 if (currentRect.w < 0) { currentRect.x += currentRect.w; currentRect.w = Math.abs(currentRect.w); }
                 if (currentRect.h < 0) { currentRect.y += currentRect.h; currentRect.h = Math.abs(currentRect.h); }
                 
                 if (currentRect.w > 2 && currentRect.h > 2) {
-                    state.edits[state.pageNum].rects.push({...currentRect});
+                    state.edits[pageNum].rects.push({...currentRect});
                 }
                 currentRect = null;
-                redrawInteractionLayer();
+                redrawInteractionLayer(pageNum, canvas);
             }
         }
 
         // --- Text Layer Management ---
 
-        function renderTextLayer() {
-            elements.textLayer.innerHTML = '';
-            // Don't render editable text if in preview mode
+        function renderTextLayer(pageNum, container) {
+            container.innerHTML = '';
             if (state.isPreview) return;
 
-            const texts = state.edits[state.pageNum].texts;
+            const texts = state.edits[pageNum].texts;
 
             texts.forEach(item => {
                 const el = document.createElement('div');
@@ -588,8 +633,11 @@
                     if (state.isPreview) return;
                     if (document.activeElement === el) return; 
                     
+                    e.stopPropagation(); // Don't trigger page mousedown
                     e.preventDefault(); 
                     activeDragId = item.id;
+                    draggedPageNum = pageNum;
+                    
                     const rect = el.getBoundingClientRect();
                     dragOffset = {
                         x: e.clientX - rect.left,
@@ -601,19 +649,24 @@
                     if (state.isPreview) return;
                     item.text = el.innerText;
                     if (item.text.trim() === '') {
-                        const idx = state.edits[state.pageNum].texts.findIndex(t => t.id === item.id);
-                        if (idx > -1) state.edits[state.pageNum].texts.splice(idx, 1);
-                        renderTextLayer();
+                        const idx = state.edits[pageNum].texts.findIndex(t => t.id === item.id);
+                        if (idx > -1) state.edits[pageNum].texts.splice(idx, 1);
+                        renderTextLayer(pageNum, container);
                     }
                 });
                 
-                elements.textLayer.appendChild(el);
+                container.appendChild(el);
             });
         }
 
+        // Global Text Dragging
         document.addEventListener('mousemove', (e) => {
             if (activeDragId && !state.isPreview) {
-                const containerRect = elements.textLayer.getBoundingClientRect();
+                // Find container for the page we are dragging on
+                const pageDiv = document.querySelector(`.page-container[data-page="${draggedPageNum}"]`);
+                const textDiv = pageDiv.querySelector('.text-layer');
+                const containerRect = textDiv.getBoundingClientRect();
+                
                 const x = e.clientX - containerRect.left - dragOffset.x;
                 const y = e.clientY - containerRect.top - dragOffset.y;
                 
@@ -623,7 +676,7 @@
                     el.style.top = `${y}px`;
                 }
 
-                const item = state.edits[state.pageNum].texts.find(t => t.id === activeDragId);
+                const item = state.edits[draggedPageNum].texts.find(t => t.id === activeDragId);
                 if (item) {
                     item.x = x;
                     item.y = y;
@@ -633,14 +686,15 @@
 
         document.addEventListener('mouseup', () => {
             activeDragId = null;
+            draggedPageNum = 0;
         });
 
-        function redrawInteractionLayer() {
-            ctx.clearRect(0, 0, elements.interactionCanvas.width, elements.interactionCanvas.height);
-            // Don't draw overlays in preview mode
+        function redrawInteractionLayer(pageNum, canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (state.isPreview) return;
 
-            const pageEdits = state.edits[state.pageNum];
+            const pageEdits = state.edits[pageNum];
 
             ctx.fillStyle = '#ffffff';
             pageEdits.rects.forEach(r => {
@@ -663,11 +717,14 @@
             });
         }
 
-        // Undo Functionality
+        // Undo Functionality - now undoes last action on the *last active page* or just globally?
+        // Let's make it global: undo last action on activePage
         elements.tools.undo.addEventListener('click', () => {
-            if (state.isPreview) return;
-            const pageEdits = state.edits[state.pageNum];
+            if (state.isPreview || state.activePage === 0) return;
             
+            const pageEdits = state.edits[state.activePage];
+            if (!pageEdits) return; // No edits on this page yet?
+
             if (pageEdits.paths.length > 0) {
                 pageEdits.paths.pop();
             } else if (pageEdits.rects.length > 0) {
@@ -675,23 +732,13 @@
             } else if (pageEdits.texts.length > 0) {
                 pageEdits.texts.pop(); 
             }
-            redrawInteractionLayer();
-            renderTextLayer();
-        });
-
-        // Navigation
-        elements.nav.prev.addEventListener('click', () => {
-            if (state.pageNum > 1) {
-                state.pageNum--;
-                renderPage();
-            }
-        });
-
-        elements.nav.next.addEventListener('click', () => {
-            if (state.pageNum < state.totalPages) {
-                state.pageNum++;
-                renderPage();
-            }
+            
+            const pageDiv = document.querySelector(`.page-container[data-page="${state.activePage}"]`);
+            const canvas = pageDiv.querySelector('.interaction-layer');
+            const textDiv = pageDiv.querySelector('.text-layer');
+            
+            redrawInteractionLayer(state.activePage, canvas);
+            renderTextLayer(state.activePage, textDiv);
         });
 
         // --- Saving / Downloading ---
@@ -699,9 +746,7 @@
         elements.btnDownload.addEventListener('click', async () => {
             if (!state.currentPdfBytes) return;
 
-            // Generate fresh pdf
             const finalPdfBytes = await generateModifiedPdf();
-            
             const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
