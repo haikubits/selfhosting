@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple PDF Editor</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- PDF.js for rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- PDF-Lib for modifying/saving -->
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+
+    <script>
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <style>
+        body {
+            background-color: #f3f4f6;
+            touch-action: none; /* Prevent scrolling while drawing */
+        }
+        #canvas-container {
+            position: relative;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin: 0 auto;
+        }
+        canvas {
+            display: block;
+        }
+        #interaction-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            cursor: crosshair;
+            z-index: 10;
+        }
+        .text-input {
+            position: absolute;
+            background: transparent;
+            border: 1px dashed #3b82f6;
+            outline: none;
+            padding: 4px;
+            font-family: sans-serif;
+            font-size: 16px;
+            color: black;
+            z-index: 20;
+            min-width: 50px;
+        }
+        .tool-btn.active {
+            background-color: #dbeafe;
+            color: #2563eb;
+            border-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Header / Toolbar -->
+    <header class="bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm z-30 shrink-0">
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                <i class="ph ph-file-pdf text-red-500 text-2xl"></i>
+                PDF Editor
+            </h1>
+            <div class="h-6 w-px bg-gray-300 mx-2"></div>
+            
+            <!-- File Upload -->
+            <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-2">
+                <i class="ph ph-upload-simple"></i>
+                Upload PDF
+                <input type="file" id="file-upload" accept="application/pdf" class="hidden">
+            </label>
+        </div>
+
+        <!-- Editor Tools -->
+        <div id="tools-panel" class="hidden flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
+            <button id="btn-cursor" class="tool-btn active p-2 rounded hover:bg-white transition" title="Select/Move">
+                <i class="ph ph-cursor text-lg"></i>
+            </button>
+            <button id="btn-draw" class="tool-btn p-2 rounded hover:bg-white transition" title="Draw/Sign">
+                <i class="ph ph-pen-nib text-lg"></i>
+            </button>
+            <button id="btn-text" class="tool-btn p-2 rounded hover:bg-white transition" title="Add Text">
+                <i class="ph ph-text-t text-lg"></i>
+            </button>
+            <div class="w-px h-6 bg-gray-300 mx-1"></div>
+            <button id="btn-undo" class="p-2 rounded hover:bg-white text-gray-600 transition" title="Undo Last Action">
+                <i class="ph ph-arrow-u-up-left text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center gap-3">
+            <div id="page-controls" class="hidden flex items-center gap-2 text-sm text-gray-600 mr-4">
+                <button id="prev-page" class="hover:text-gray-900 p-1"><i class="ph ph-caret-left-bold"></i></button>
+                <span>Page <span id="curr-page-num">0</span> of <span id="total-pages">0</span></span>
+                <button id="next-page" class="hover:text-gray-900 p-1"><i class="ph ph-caret-right-bold"></i></button>
+            </div>
+            
+            <button id="btn-download" disabled class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 opacity-50 cursor-not-allowed">
+                <i class="ph ph-download-simple"></i>
+                Download PDF
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 overflow-auto bg-gray-100 relative flex justify-center p-8" id="workspace">
+        <!-- Placeholder Empty State -->
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+            <i class="ph ph-file-arrow-up text-6xl mb-4 text-gray-300"></i>
+            <p class="text-lg">Upload a PDF to start editing</p>
+        </div>
+
+        <!-- Canvas Container -->
+        <div id="canvas-container" class="hidden bg-white">
+            <canvas id="pdf-render"></canvas>
+            <canvas id="interaction-layer"></canvas>
+            <div id="text-layer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+        </div>
+    </main>
+
+    <script>
+        // --- State Management ---
+        const state = {
+            pdfDoc: null,         // The loaded PDF-Lib document
+            currentPdfBytes: null, // Raw bytes
+            pageNum: 1,
+            totalPages: 0,
+            scale: 1.5,           // Viewport scale
+            tool: 'cursor',       // cursor, draw, text
+            isDrawing: false,
+            
+            // Store edits per page to persist when switching pages
+            // Structure: { [pageIndex]: { paths: [], texts: [] } }
+            edits: {} 
+        };
+
+        // --- DOM Elements ---
+        const elements = {
+            fileInput: document.getElementById('file-upload'),
+            canvasContainer: document.getElementById('canvas-container'),
+            pdfCanvas: document.getElementById('pdf-render'),
+            interactionCanvas: document.getElementById('interaction-layer'),
+            textLayer: document.getElementById('text-layer'),
+            emptyState: document.getElementById('empty-state'),
+            toolsPanel: document.getElementById('tools-panel'),
+            pageControls: document.getElementById('page-controls'),
+            currPageNum: document.getElementById('curr-page-num'),
+            totalPages: document.getElementById('total-pages'),
+            btnDownload: document.getElementById('btn-download'),
+            tools: {
+                cursor: document.getElementById('btn-cursor'),
+                draw: document.getElementById('btn-draw'),
+                text: document.getElementById('btn-text'),
+                undo: document.getElementById('btn-undo')
+            },
+            nav: {
+                prev: document.getElementById('prev-page'),
+                next: document.getElementById('next-page')
+            }
+        };
+
+        // --- Initialization ---
+
+        elements.fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                alert('Please upload a valid PDF file.');
+                return;
+            }
+
+            const arrayBuffer = await file.arrayBuffer();
+            state.currentPdfBytes = arrayBuffer;
+            
+            // Load into PDF-Lib (for editing/saving later)
+            state.pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+            state.totalPages = state.pdfDoc.getPageCount();
+            
+            // Reset state
+            state.pageNum = 1;
+            state.edits = {};
+            for(let i=1; i<=state.totalPages; i++) {
+                state.edits[i] = { paths: [], texts: [] };
+            }
+
+            // Update UI
+            elements.emptyState.classList.add('hidden');
+            elements.canvasContainer.classList.remove('hidden');
+            elements.toolsPanel.classList.remove('hidden');
+            elements.pageControls.classList.remove('hidden');
+            elements.btnDownload.disabled = false;
+            elements.btnDownload.classList.remove('opacity-50', 'cursor-not-allowed');
+            elements.totalPages.textContent = state.totalPages;
+
+            renderPage();
+        });
+
+        // --- Rendering Logic ---
+
+        async function renderPage() {
+            if (!state.currentPdfBytes) return;
+
+            // Load document into PDF.js for rendering
+            const loadingTask = pdfjsLib.getDocument({ data: state.currentPdfBytes });
+            const pdf = await loadingTask.promise;
+            const page = await pdf.getPage(state.pageNum);
+
+            const viewport = page.getViewport({ scale: state.scale });
+
+            // Set dimensions for both canvases
+            elements.pdfCanvas.height = viewport.height;
+            elements.pdfCanvas.width = viewport.width;
+            elements.interactionCanvas.height = viewport.height;
+            elements.interactionCanvas.width = viewport.width;
+            elements.canvasContainer.style.width = `${viewport.width}px`;
+            elements.canvasContainer.style.height = `${viewport.height}px`;
+
+            // Render PDF to bottom canvas
+            const renderContext = {
+                canvasContext: elements.pdfCanvas.getContext('2d'),
+                viewport: viewport
+            };
+            await page.render(renderContext).promise;
+
+            // Update Page Number UI
+            elements.currPageNum.textContent = state.pageNum;
+
+            // Redraw existing edits for this page
+            redrawInteractionLayer();
+            restoreTextElements();
+        }
+
+        // --- Interaction Layer (Drawing & Text) ---
+
+        const ctx = elements.interactionCanvas.getContext('2d');
+        let currentPath = [];
+
+        // Tool Switching
+        Object.keys(elements.tools).forEach(key => {
+            if (key === 'undo') return;
+            elements.tools[key].addEventListener('click', () => {
+                setTool(key);
+            });
+        });
+
+        function setTool(toolName) {
+            state.tool = toolName;
+            
+            // UI Update
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            elements.tools[toolName].classList.add('active');
+
+            // Cursor Update
+            if (toolName === 'draw') {
+                elements.interactionCanvas.style.cursor = 'crosshair';
+            } else if (toolName === 'text') {
+                elements.interactionCanvas.style.cursor = 'text';
+            } else {
+                elements.interactionCanvas.style.cursor = 'default';
+            }
+        }
+
+        // Drawing Events
+        elements.interactionCanvas.addEventListener('mousedown', startDrawing);
+        elements.interactionCanvas.addEventListener('mousemove', draw);
+        elements.interactionCanvas.addEventListener('mouseup', stopDrawing);
+        elements.interactionCanvas.addEventListener('mouseout', stopDrawing);
+        
+        // Touch support
+        elements.interactionCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            elements.interactionCanvas.dispatchEvent(mouseEvent);
+        });
+        elements.interactionCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            elements.interactionCanvas.dispatchEvent(mouseEvent);
+        });
+        elements.interactionCanvas.addEventListener('touchend', (e) => {
+             const mouseEvent = new MouseEvent('mouseup', {});
+             elements.interactionCanvas.dispatchEvent(mouseEvent);
+        });
+
+
+        function getCanvasCoordinates(event) {
+            const rect = elements.interactionCanvas.getBoundingClientRect();
+            return {
+                x: event.clientX - rect.left,
+                y: event.clientY - rect.top
+            };
+        }
+
+        function startDrawing(e) {
+            if (state.tool === 'draw') {
+                state.isDrawing = true;
+                const coords = getCanvasCoordinates(e);
+                currentPath = [{ x: coords.x, y: coords.y }];
+                ctx.beginPath();
+                ctx.moveTo(coords.x, coords.y);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            } else if (state.tool === 'text') {
+                const coords = getCanvasCoordinates(e);
+                createTextInput(coords.x, coords.y);
+                setTool('cursor'); // Switch back to cursor after placing text
+            }
+        }
+
+        function draw(e) {
+            if (!state.isDrawing || state.tool !== 'draw') return;
+            const coords = getCanvasCoordinates(e);
+            currentPath.push({ x: coords.x, y: coords.y });
+            
+            ctx.lineTo(coords.x, coords.y);
+            ctx.stroke();
+        }
+
+        function stopDrawing() {
+            if (state.isDrawing && state.tool === 'draw') {
+                state.isDrawing = false;
+                ctx.closePath();
+                // Save path to state
+                if (currentPath.length > 1) {
+                    state.edits[state.pageNum].paths.push([...currentPath]);
+                }
+                currentPath = [];
+            }
+        }
+
+        // Text Handling
+        function createTextInput(x, y, initialText = '') {
+            const input = document.createElement('div');
+            input.contentEditable = true;
+            input.className = 'text-input';
+            input.style.left = `${x}px`;
+            input.style.top = `${y}px`;
+            input.innerText = initialText;
+            
+            // Auto-focus
+            setTimeout(() => input.focus(), 0);
+
+            // Commit on blur
+            input.addEventListener('blur', () => {
+                const text = input.innerText.trim();
+                if (text) {
+                    state.edits[state.pageNum].texts.push({
+                        text: text,
+                        x: x,
+                        y: y + 16, // Adjust for font baseline roughly
+                        fontSize: 16
+                    });
+                    redrawInteractionLayer(); // Will render text on canvas (optional) or we keep it DOM
+                    // Actually, let's keep it DOM for visual editing, but for this simple version
+                    // we will re-render everything to canvas to simulate "burning" it in
+                }
+                elements.textLayer.innerHTML = ''; // Clear inputs
+                restoreTextElements(); // Re-render as non-editable or editable elements
+            });
+
+            // Commit on Enter
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    input.blur();
+                }
+            });
+
+            elements.textLayer.appendChild(input);
+        }
+
+        function restoreTextElements() {
+            // For this simple version, we will just render the text onto the interaction canvas
+            // instead of keeping DOM elements, to make it easier to visualize what will be saved.
+            // If you wanted editable text later, you'd keep them as DOM elements.
+            
+            const texts = state.edits[state.pageNum].texts;
+            ctx.font = '16px sans-serif';
+            ctx.fillStyle = '#000';
+            ctx.textBaseline = 'alphabetic';
+            
+            texts.forEach(t => {
+                ctx.fillText(t.text, t.x, t.y);
+            });
+        }
+
+        function redrawInteractionLayer() {
+            // Clear canvas
+            ctx.clearRect(0, 0, elements.interactionCanvas.width, elements.interactionCanvas.height);
+            
+            // Draw all paths for current page
+            const paths = state.edits[state.pageNum].paths;
+            
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = '#000';
+
+            paths.forEach(path => {
+                if(path.length < 2) return;
+                ctx.beginPath();
+                ctx.moveTo(path[0].x, path[0].y);
+                for(let i=1; i<path.length; i++) {
+                    ctx.lineTo(path[i].x, path[i].y);
+                }
+                ctx.stroke();
+            });
+        }
+
+        // Undo Functionality
+        elements.tools.undo.addEventListener('click', () => {
+            const pageEdits = state.edits[state.pageNum];
+            // Simplistic undo: remove last added item (either text or path, whichever was last added? 
+            // tracking "history" is complex, let's just undo the last path if paths exist, else last text)
+            
+            if (pageEdits.paths.length > 0) {
+                pageEdits.paths.pop();
+            } else if (pageEdits.texts.length > 0) {
+                pageEdits.texts.pop();
+            }
+            redrawInteractionLayer();
+            restoreTextElements();
+        });
+
+        // Navigation
+        elements.nav.prev.addEventListener('click', () => {
+            if (state.pageNum > 1) {
+                state.pageNum--;
+                renderPage();
+            }
+        });
+
+        elements.nav.next.addEventListener('click', () => {
+            if (state.pageNum < state.totalPages) {
+                state.pageNum++;
+                renderPage();
+            }
+        });
+
+        // --- Saving / Downloading ---
+
+        elements.btnDownload.addEventListener('click', async () => {
+            if (!state.pdfDoc) return;
+
+            const pages = state.pdfDoc.getPages();
+            const { width, height } = pages[0].getSize(); // Assuming consistent size for simplicity, or check per page
+
+            // PDF-Lib uses points (1/72 inch). PDF.js uses scale.
+            // We need to map Canvas pixels back to PDF points.
+            
+            // Loop through all tracked pages
+            for (let i = 1; i <= state.totalPages; i++) {
+                const pageEdits = state.edits[i];
+                if (pageEdits.paths.length === 0 && pageEdits.texts.length === 0) continue;
+
+                const page = pages[i-1];
+                const pageHeight = page.getHeight();
+                
+                // Calculate scale factor between canvas and PDF
+                // Canvas width / PDF width (in points) = scale
+                // We rendered at state.scale (1.5) usually, but best to calc dynamically
+                // based on the viewport we used.
+                // Re-calculating viewport to get exact dimensions used during render
+                const renderViewport = await pdfjsLib.getDocument({ data: state.currentPdfBytes })
+                                           .promise.then(doc => doc.getPage(i))
+                                           .then(p => p.getViewport({ scale: state.scale }));
+                
+                const scaleX = page.getWidth() / renderViewport.width;
+                const scaleY = page.getHeight() / renderViewport.height;
+
+                // Draw Paths
+                pageEdits.paths.forEach(path => {
+                    const svgPath = path.map(p => {
+                        // Flip Y axis (PDF starts bottom-left, Canvas starts top-left)
+                        // And scale down
+                        const x = p.x * scaleX;
+                        const y = pageHeight - (p.y * scaleY); 
+                        return { x, y };
+                    });
+
+                    // Draw line by line
+                    for(let k=0; k<svgPath.length-1; k++) {
+                        page.drawLine({
+                            start: svgPath[k],
+                            end: svgPath[k+1],
+                            thickness: 2,
+                            color: PDFLib.rgb(0, 0, 0),
+                        });
+                    }
+                });
+
+                // Draw Text
+                pageEdits.texts.forEach(textItem => {
+                    const x = textItem.x * scaleX;
+                    // Adjust Y for text baseline. 
+                    // Canvas y is top-down to baseline. PDF-Lib y is bottom-up to baseline.
+                    // Roughly: pageHeight - (canvasY * scaleY)
+                    const y = pageHeight - (textItem.y * scaleY);
+                    
+                    page.drawText(textItem.text, {
+                        x: x,
+                        y: y,
+                        size: 12, // Fixed size for simplicity
+                        color: PDFLib.rgb(0, 0, 0),
+                    });
+                });
+            }
+
+            // Serialize and Download
+            const pdfBytes = await state.pdfDoc.save();
+            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'edited_document.pdf';
+            link.click();
+        });
+
+    </script>
+</body>
+</html>
