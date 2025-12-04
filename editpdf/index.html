@@ -38,22 +38,51 @@
             cursor: crosshair;
             z-index: 10;
         }
-        .text-input {
+        #text-layer {
             position: absolute;
-            background: transparent;
-            border: 1px dashed #3b82f6;
-            outline: none;
-            padding: 4px;
+            inset: 0;
+            overflow: hidden;
+            z-index: 20; /* Above interaction layer */
+            pointer-events: none; /* Let clicks pass through to canvas... */
+        }
+        .text-element {
+            position: absolute;
             font-family: sans-serif;
             font-size: 16px;
             color: black;
-            z-index: 20;
-            min-width: 50px;
+            padding: 4px;
+            border: 1px dashed transparent;
+            cursor: move; /* Indicate draggable */
+            pointer-events: auto; /* ...except for the text elements themselves */
+            min-width: 20px;
+            min-height: 20px;
+            white-space: pre-wrap;
+            line-height: 1;
+        }
+        .text-element:hover {
+            border-color: #3b82f6; /* Blue dashed border on hover */
+            background-color: rgba(255, 255, 255, 0.5);
+        }
+        .text-element:focus {
+            outline: none;
+            border-color: #2563eb;
+            background-color: white;
+            cursor: text;
         }
         .tool-btn.active {
             background-color: #dbeafe;
             color: #2563eb;
             border-color: #2563eb;
+        }
+        /* Disable interaction in preview mode */
+        .preview-mode #interaction-layer,
+        .preview-mode #text-layer {
+            display: none;
+        }
+        .disabled-area {
+            pointer-events: none;
+            opacity: 0.5;
+            filter: grayscale(1);
         }
     </style>
 </head>
@@ -69,7 +98,7 @@
             <div class="h-6 w-px bg-gray-300 mx-2"></div>
             
             <!-- File Upload -->
-            <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-2">
+            <label id="upload-label" class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-2">
                 <i class="ph ph-upload-simple"></i>
                 Upload PDF
                 <input type="file" id="file-upload" accept="application/pdf" class="hidden">
@@ -104,9 +133,14 @@
                 <button id="next-page" class="hover:text-gray-900 p-1"><i class="ph ph-caret-right-bold"></i></button>
             </div>
             
+            <button id="btn-preview" disabled class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 opacity-50 cursor-not-allowed">
+                <i class="ph ph-eye"></i>
+                <span>Preview</span>
+            </button>
+
             <button id="btn-download" disabled class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 opacity-50 cursor-not-allowed">
                 <i class="ph ph-download-simple"></i>
-                Download PDF
+                Download
             </button>
         </div>
     </header>
@@ -123,29 +157,35 @@
         <div id="canvas-container" class="hidden bg-white">
             <canvas id="pdf-render"></canvas>
             <canvas id="interaction-layer"></canvas>
-            <div id="text-layer" class="absolute inset-0 pointer-events-none overflow-hidden"></div>
+            <div id="text-layer"></div>
         </div>
     </main>
 
     <script>
         // --- State Management ---
         const state = {
-            pdfDoc: null,         // The loaded PDF-Lib document
-            currentPdfBytes: null, // Raw bytes
+            currentPdfBytes: null, // Raw bytes of original file
+            previewPdfBytes: null, // Raw bytes of "burnt" file for preview
+            
             pageNum: 1,
             totalPages: 0,
             scale: 1.5,           // Viewport scale
             tool: 'cursor',       // cursor, draw, text, whiteout
             isDrawing: false,
+            isPreview: false,     // Toggles preview mode
             
-            // Store edits per page to persist when switching pages
-            // Structure: { [pageIndex]: { paths: [], texts: [], rects: [] } }
+            // Store edits per page
+            // Structure: { [pageIndex]: { paths: [], texts: [{id, x, y, text}], rects: [] } }
             edits: {} 
         };
+
+        let activeDragId = null; // ID of the text currently being dragged
+        let dragOffset = { x: 0, y: 0 };
 
         // --- DOM Elements ---
         const elements = {
             fileInput: document.getElementById('file-upload'),
+            uploadLabel: document.getElementById('upload-label'),
             canvasContainer: document.getElementById('canvas-container'),
             pdfCanvas: document.getElementById('pdf-render'),
             interactionCanvas: document.getElementById('interaction-layer'),
@@ -156,6 +196,7 @@
             currPageNum: document.getElementById('curr-page-num'),
             totalPages: document.getElementById('total-pages'),
             btnDownload: document.getElementById('btn-download'),
+            btnPreview: document.getElementById('btn-preview'),
             tools: {
                 cursor: document.getElementById('btn-cursor'),
                 draw: document.getElementById('btn-draw'),
@@ -183,14 +224,14 @@
             const arrayBuffer = await file.arrayBuffer();
             state.currentPdfBytes = arrayBuffer;
             
-            // Load into PDF-Lib (for editing/saving later)
-            // PDFLib.load copies data, so it shouldn't detach the buffer,
-            // but we'll be careful with PDF.js later.
-            state.pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-            state.totalPages = state.pdfDoc.getPageCount();
+            // Load into PDF-Lib to check pages (we won't use this doc for editing directly anymore)
+            const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+            state.totalPages = pdfDoc.getPageCount();
             
             // Reset state
             state.pageNum = 1;
+            state.isPreview = false;
+            state.previewPdfBytes = null;
             state.edits = {};
             for(let i=1; i<=state.totalPages; i++) {
                 state.edits[i] = { paths: [], texts: [], rects: [] };
@@ -201,26 +242,113 @@
             elements.canvasContainer.classList.remove('hidden');
             elements.toolsPanel.classList.remove('hidden');
             elements.pageControls.classList.remove('hidden');
+            
             elements.btnDownload.disabled = false;
             elements.btnDownload.classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            elements.btnPreview.disabled = false;
+            elements.btnPreview.classList.remove('opacity-50', 'cursor-not-allowed');
+            updatePreviewUI();
+
             elements.totalPages.textContent = state.totalPages;
 
             renderPage();
         });
 
+        // --- Core PDF Generation Logic (Used by Download & Preview) ---
+        
+        async function generateModifiedPdf() {
+            // ALWAYS load a fresh copy of the original bytes. 
+            // This prevents "stacking" edits if the user previews/downloads multiple times.
+            const pdfDoc = await PDFLib.PDFDocument.load(state.currentPdfBytes.slice(0));
+            
+            // We need a PDF.js instance of the original to calculate scales
+            const pdfJsDoc = await pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) }).promise;
+            const pages = pdfDoc.getPages();
+            
+            for (let i = 1; i <= state.totalPages; i++) {
+                const pageEdits = state.edits[i];
+                if (pageEdits.paths.length === 0 && pageEdits.texts.length === 0 && pageEdits.rects.length === 0) continue;
+
+                const page = pages[i-1];
+                const pageHeight = page.getHeight();
+                
+                // Get the viewport for this specific page to calculate accurate scales
+                const renderViewport = await pdfJsDoc.getPage(i).then(p => p.getViewport({ scale: state.scale }));
+                
+                const scaleX = page.getWidth() / renderViewport.width;
+                const scaleY = page.getHeight() / renderViewport.height;
+
+                // 1. Burn Whiteouts
+                pageEdits.rects.forEach(r => {
+                    const x = r.x * scaleX;
+                    const y = pageHeight - ((r.y + r.h) * scaleY);
+                    const w = r.w * scaleX;
+                    const h = r.h * scaleY;
+
+                    page.drawRectangle({
+                        x, y, width: w, height: h,
+                        color: PDFLib.rgb(1, 1, 1),
+                    });
+                });
+
+                // 2. Burn Paths
+                pageEdits.paths.forEach(path => {
+                    const svgPath = path.map(p => {
+                        const x = p.x * scaleX;
+                        const y = pageHeight - (p.y * scaleY); 
+                        return { x, y };
+                    });
+
+                    for(let k=0; k<svgPath.length-1; k++) {
+                        page.drawLine({
+                            start: svgPath[k],
+                            end: svgPath[k+1],
+                            thickness: 2,
+                            color: PDFLib.rgb(0, 0, 0),
+                        });
+                    }
+                });
+
+                // 3. Burn Text
+                pageEdits.texts.forEach(textItem => {
+                    const x = textItem.x * scaleX;
+                    const fontSize = 16 * scaleY;
+                    const domY = textItem.y + 20; 
+                    const y = pageHeight - (domY * scaleY);
+                    
+                    page.drawText(textItem.text, {
+                        x: x, y: y, size: fontSize, 
+                        color: PDFLib.rgb(0, 0, 0),
+                    });
+                });
+            }
+
+            return await pdfDoc.save();
+        }
+
         // --- Rendering Logic ---
 
         async function renderPage() {
-            if (!state.currentPdfBytes) return;
+            // Decide which source to use
+            let bytesToRender = state.currentPdfBytes;
+            
+            if (state.isPreview && state.previewPdfBytes) {
+                bytesToRender = state.previewPdfBytes;
+                elements.canvasContainer.classList.add('preview-mode');
+            } else {
+                elements.canvasContainer.classList.remove('preview-mode');
+            }
 
-            // FIX: Use slice(0) to clone the buffer. PDF.js worker can detach the buffer.
-            const loadingTask = pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) });
+            if (!bytesToRender) return;
+
+            const loadingTask = pdfjsLib.getDocument({ data: bytesToRender.slice(0) });
             const pdf = await loadingTask.promise;
             const page = await pdf.getPage(state.pageNum);
 
             const viewport = page.getViewport({ scale: state.scale });
 
-            // Set dimensions for both canvases
+            // Set dimensions
             elements.pdfCanvas.height = viewport.height;
             elements.pdfCanvas.width = viewport.width;
             elements.interactionCanvas.height = viewport.height;
@@ -228,46 +356,86 @@
             elements.canvasContainer.style.width = `${viewport.width}px`;
             elements.canvasContainer.style.height = `${viewport.height}px`;
 
-            // Render PDF to bottom canvas
+            // Render PDF
             const renderContext = {
                 canvasContext: elements.pdfCanvas.getContext('2d'),
                 viewport: viewport
             };
             await page.render(renderContext).promise;
 
-            // Update Page Number UI
+            // UI Updates
             elements.currPageNum.textContent = state.pageNum;
 
-            // Redraw existing edits for this page
-            redrawInteractionLayer();
-            restoreTextElements();
+            // Only draw overlays if we are NOT in preview mode
+            if (!state.isPreview) {
+                redrawInteractionLayer();
+                renderTextLayer();
+            }
         }
 
-        // --- Interaction Layer (Drawing & Text) ---
+        // --- Preview Logic ---
+        
+        elements.btnPreview.addEventListener('click', async () => {
+            if (state.isPreview) {
+                // Exit Preview
+                state.isPreview = false;
+                state.previewPdfBytes = null;
+                updatePreviewUI();
+                renderPage();
+            } else {
+                // Enter Preview
+                // 1. Generate the PDF in memory
+                const modifiedBytes = await generateModifiedPdf();
+                state.previewPdfBytes = modifiedBytes;
+                state.isPreview = true;
+                
+                updatePreviewUI();
+                renderPage();
+            }
+        });
+
+        function updatePreviewUI() {
+            const btn = elements.btnPreview;
+            const tools = elements.toolsPanel;
+            const upload = elements.uploadLabel;
+            
+            if (state.isPreview) {
+                btn.innerHTML = `<i class="ph ph-pencil-simple"></i><span>Edit</span>`;
+                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.remove('bg-gray-800', 'hover:bg-gray-900');
+                
+                tools.classList.add('disabled-area');
+                upload.classList.add('disabled-area');
+            } else {
+                btn.innerHTML = `<i class="ph ph-eye"></i><span>Preview</span>`;
+                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                btn.classList.add('bg-gray-800', 'hover:bg-gray-900');
+                
+                tools.classList.remove('disabled-area');
+                upload.classList.remove('disabled-area');
+            }
+        }
+
+        // --- Interaction Layer (Drawing & Whiteout) ---
 
         const ctx = elements.interactionCanvas.getContext('2d');
         let currentPath = [];
-        let currentRect = null; // { x, y, w, h }
+        let currentRect = null; 
 
-        // Tool Switching
         Object.keys(elements.tools).forEach(key => {
             if (key === 'undo') return;
             elements.tools[key].addEventListener('click', () => {
+                if (state.isPreview) return; // Guard
                 setTool(key);
             });
         });
 
         function setTool(toolName) {
             state.tool = toolName;
-            
-            // UI Update
             document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
             elements.tools[toolName].classList.add('active');
 
-            // Cursor Update
-            if (toolName === 'draw') {
-                elements.interactionCanvas.style.cursor = 'crosshair';
-            } else if (toolName === 'whiteout') {
+            if (toolName === 'draw' || toolName === 'whiteout') {
                 elements.interactionCanvas.style.cursor = 'crosshair';
             } else if (toolName === 'text') {
                 elements.interactionCanvas.style.cursor = 'text';
@@ -276,7 +444,7 @@
             }
         }
 
-        // Drawing Events
+        // --- Canvas Events ---
         elements.interactionCanvas.addEventListener('mousedown', startInteraction);
         elements.interactionCanvas.addEventListener('mousemove', moveInteraction);
         elements.interactionCanvas.addEventListener('mouseup', stopInteraction);
@@ -284,28 +452,24 @@
         
         // Touch support
         elements.interactionCanvas.addEventListener('touchstart', (e) => {
+            if(state.isPreview) return;
             e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
+            const mouseEvent = new MouseEvent('mousedown', { clientX: touch.clientX, clientY: touch.clientY });
             elements.interactionCanvas.dispatchEvent(mouseEvent);
         });
         elements.interactionCanvas.addEventListener('touchmove', (e) => {
+            if(state.isPreview) return;
             e.preventDefault();
             const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousemove', {
-                clientX: touch.clientX,
-                clientY: touch.clientY
-            });
+            const mouseEvent = new MouseEvent('mousemove', { clientX: touch.clientX, clientY: touch.clientY });
             elements.interactionCanvas.dispatchEvent(mouseEvent);
         });
         elements.interactionCanvas.addEventListener('touchend', (e) => {
+             if(state.isPreview) return;
              const mouseEvent = new MouseEvent('mouseup', {});
              elements.interactionCanvas.dispatchEvent(mouseEvent);
         });
-
 
         function getCanvasCoordinates(event) {
             const rect = elements.interactionCanvas.getBoundingClientRect();
@@ -316,7 +480,31 @@
         }
 
         function startInteraction(e) {
+            if (state.isPreview) return;
             const coords = getCanvasCoordinates(e);
+            
+            if (state.tool === 'text') {
+                const newId = Date.now().toString(); 
+                state.edits[state.pageNum].texts.push({
+                    id: newId,
+                    x: coords.x,
+                    y: coords.y - 12, 
+                    text: 'Type here...',
+                });
+                renderTextLayer();
+                
+                setTimeout(() => {
+                    const el = document.getElementById(`text-${newId}`);
+                    if (el) {
+                        el.focus();
+                        document.execCommand('selectAll', false, null);
+                    }
+                }, 10);
+                
+                setTool('cursor'); 
+                return;
+            }
+
             state.isDrawing = true;
 
             if (state.tool === 'draw') {
@@ -331,15 +519,10 @@
             else if (state.tool === 'whiteout') {
                 currentRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
             }
-            else if (state.tool === 'text') {
-                createTextInput(coords.x, coords.y);
-                setTool('cursor'); 
-                state.isDrawing = false; // Immediate action
-            }
         }
 
         function moveInteraction(e) {
-            if (!state.isDrawing) return;
+            if (!state.isDrawing || state.isPreview) return;
             const coords = getCanvasCoordinates(e);
 
             if (state.tool === 'draw') {
@@ -350,11 +533,8 @@
             else if (state.tool === 'whiteout' && currentRect) {
                 currentRect.w = coords.x - currentRect.x;
                 currentRect.h = coords.y - currentRect.y;
+                redrawInteractionLayer(); 
                 
-                // Redraw layer to show rectangle preview
-                redrawInteractionLayer();
-                
-                // Draw current rect preview
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 1;
@@ -375,7 +555,6 @@
                 currentPath = [];
             } 
             else if (state.tool === 'whiteout' && currentRect) {
-                // Normalize rect (handle negative width/height)
                 if (currentRect.w < 0) { currentRect.x += currentRect.w; currentRect.w = Math.abs(currentRect.w); }
                 if (currentRect.h < 0) { currentRect.y += currentRect.h; currentRect.h = Math.abs(currentRect.h); }
                 
@@ -384,70 +563,90 @@
                 }
                 currentRect = null;
                 redrawInteractionLayer();
-                restoreTextElements();
             }
         }
 
-        // Text Handling
-        function createTextInput(x, y, initialText = '') {
-            const input = document.createElement('div');
-            input.contentEditable = true;
-            input.className = 'text-input';
-            input.style.left = `${x}px`;
-            input.style.top = `${y}px`;
-            input.innerText = initialText;
-            
-            setTimeout(() => input.focus(), 0);
+        // --- Text Layer Management ---
 
-            input.addEventListener('blur', () => {
-                const text = input.innerText.trim();
-                if (text) {
-                    state.edits[state.pageNum].texts.push({
-                        text: text,
-                        x: x,
-                        y: y + 16, 
-                        fontSize: 16
-                    });
-                }
-                elements.textLayer.innerHTML = '';
-                redrawInteractionLayer();
-                restoreTextElements();
-            });
+        function renderTextLayer() {
+            elements.textLayer.innerHTML = '';
+            // Don't render editable text if in preview mode
+            if (state.isPreview) return;
 
-            input.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    input.blur();
-                }
-            });
-
-            elements.textLayer.appendChild(input);
-        }
-
-        function restoreTextElements() {
             const texts = state.edits[state.pageNum].texts;
-            ctx.font = '16px sans-serif';
-            ctx.fillStyle = '#000';
-            ctx.textBaseline = 'alphabetic';
-            
-            texts.forEach(t => {
-                ctx.fillText(t.text, t.x, t.y);
+
+            texts.forEach(item => {
+                const el = document.createElement('div');
+                el.id = `text-${item.id}`;
+                el.className = 'text-element';
+                el.contentEditable = true; 
+                el.style.left = `${item.x}px`;
+                el.style.top = `${item.y}px`;
+                el.innerText = item.text;
+
+                el.addEventListener('mousedown', (e) => {
+                    if (state.isPreview) return;
+                    if (document.activeElement === el) return; 
+                    
+                    e.preventDefault(); 
+                    activeDragId = item.id;
+                    const rect = el.getBoundingClientRect();
+                    dragOffset = {
+                        x: e.clientX - rect.left,
+                        y: e.clientY - rect.top
+                    };
+                });
+
+                el.addEventListener('blur', () => {
+                    if (state.isPreview) return;
+                    item.text = el.innerText;
+                    if (item.text.trim() === '') {
+                        const idx = state.edits[state.pageNum].texts.findIndex(t => t.id === item.id);
+                        if (idx > -1) state.edits[state.pageNum].texts.splice(idx, 1);
+                        renderTextLayer();
+                    }
+                });
+                
+                elements.textLayer.appendChild(el);
             });
         }
+
+        document.addEventListener('mousemove', (e) => {
+            if (activeDragId && !state.isPreview) {
+                const containerRect = elements.textLayer.getBoundingClientRect();
+                const x = e.clientX - containerRect.left - dragOffset.x;
+                const y = e.clientY - containerRect.top - dragOffset.y;
+                
+                const el = document.getElementById(`text-${activeDragId}`);
+                if (el) {
+                    el.style.left = `${x}px`;
+                    el.style.top = `${y}px`;
+                }
+
+                const item = state.edits[state.pageNum].texts.find(t => t.id === activeDragId);
+                if (item) {
+                    item.x = x;
+                    item.y = y;
+                }
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            activeDragId = null;
+        });
 
         function redrawInteractionLayer() {
-            // Clear canvas
             ctx.clearRect(0, 0, elements.interactionCanvas.width, elements.interactionCanvas.height);
-            
+            // Don't draw overlays in preview mode
+            if (state.isPreview) return;
+
             const pageEdits = state.edits[state.pageNum];
 
-            // 1. Draw Whiteouts first (so they cover PDF content)
             ctx.fillStyle = '#ffffff';
             pageEdits.rects.forEach(r => {
                 ctx.fillRect(r.x, r.y, r.w, r.h);
             });
 
-            // 2. Draw Paths
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
@@ -466,20 +665,18 @@
 
         // Undo Functionality
         elements.tools.undo.addEventListener('click', () => {
+            if (state.isPreview) return;
             const pageEdits = state.edits[state.pageNum];
             
-            // Determine which array has the latest edit? 
-            // Simple undo: Check all arrays and remove the very last added item across types?
-            // For simplicity in this demo: we check one by one.
             if (pageEdits.paths.length > 0) {
                 pageEdits.paths.pop();
             } else if (pageEdits.rects.length > 0) {
                 pageEdits.rects.pop();
             } else if (pageEdits.texts.length > 0) {
-                pageEdits.texts.pop();
+                pageEdits.texts.pop(); 
             }
             redrawInteractionLayer();
-            restoreTextElements();
+            renderTextLayer();
         });
 
         // Navigation
@@ -500,74 +697,12 @@
         // --- Saving / Downloading ---
 
         elements.btnDownload.addEventListener('click', async () => {
-            if (!state.pdfDoc) return;
+            if (!state.currentPdfBytes) return;
 
-            const pages = state.pdfDoc.getPages();
+            // Generate fresh pdf
+            const finalPdfBytes = await generateModifiedPdf();
             
-            // Loop through all tracked pages
-            for (let i = 1; i <= state.totalPages; i++) {
-                const pageEdits = state.edits[i];
-                if (pageEdits.paths.length === 0 && pageEdits.texts.length === 0 && pageEdits.rects.length === 0) continue;
-
-                const page = pages[i-1];
-                const pageHeight = page.getHeight();
-                
-                // FIX: Use slice(0) again to avoid "Detached ArrayBuffer" error
-                const renderViewport = await pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) })
-                                           .promise.then(doc => doc.getPage(i))
-                                           .then(p => p.getViewport({ scale: state.scale }));
-                
-                const scaleX = page.getWidth() / renderViewport.width;
-                const scaleY = page.getHeight() / renderViewport.height;
-
-                // 1. Draw Whiteouts
-                pageEdits.rects.forEach(r => {
-                    const x = r.x * scaleX;
-                    const y = pageHeight - ((r.y + r.h) * scaleY); // PDF y is bottom-up
-                    const w = r.w * scaleX;
-                    const h = r.h * scaleY;
-
-                    page.drawRectangle({
-                        x, y, width: w, height: h,
-                        color: PDFLib.rgb(1, 1, 1), // White
-                    });
-                });
-
-                // 2. Draw Paths
-                pageEdits.paths.forEach(path => {
-                    const svgPath = path.map(p => {
-                        const x = p.x * scaleX;
-                        const y = pageHeight - (p.y * scaleY); 
-                        return { x, y };
-                    });
-
-                    for(let k=0; k<svgPath.length-1; k++) {
-                        page.drawLine({
-                            start: svgPath[k],
-                            end: svgPath[k+1],
-                            thickness: 2,
-                            color: PDFLib.rgb(0, 0, 0),
-                        });
-                    }
-                });
-
-                // 3. Draw Text
-                pageEdits.texts.forEach(textItem => {
-                    const x = textItem.x * scaleX;
-                    const y = pageHeight - (textItem.y * scaleY);
-                    
-                    page.drawText(textItem.text, {
-                        x: x,
-                        y: y,
-                        size: 12, 
-                        color: PDFLib.rgb(0, 0, 0),
-                    });
-                });
-            }
-
-            // Serialize and Download
-            const pdfBytes = await state.pdfDoc.save();
-            const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+            const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
             link.download = 'edited_document.pdf';
