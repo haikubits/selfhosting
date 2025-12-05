@@ -247,7 +247,8 @@
             const blob = new Blob([workerCode], { type: "text/javascript" });
             const worker = new Worker(URL.createObjectURL(blob), { type: "module" });
 
-            return await CreateWebWorkerMLCEngine(worker, { model: modelId }, {
+            // FIX: Pass modelId directly as the second argument, NOT { model: modelId }
+            return await CreateWebWorkerMLCEngine(worker, modelId, {
                 initProgressCallback: (r) => {
                     const p = r.progress * 100;
                     updateOverlay(true, r.text, p);
