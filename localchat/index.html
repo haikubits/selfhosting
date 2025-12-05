@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>LocalChat WebAI</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2563eb',
+                        secondary: '#475569',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Markdown Parser -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        /* Markdown Styles */
+        .prose pre { background-color: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .prose code { background-color: rgba(100, 116, 139, 0.2); padding: 0.2rem 0.4rem; border-radius: 0.25rem; font-size: 0.875em; }
+        .prose pre code { background-color: transparent; padding: 0; }
+        .prose p { margin-bottom: 0.75rem; line-height: 1.6; }
+        .prose ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+        .prose ol { list-style-type: decimal; padding-left: 1.5rem; margin-bottom: 0.75rem; }
+        
+        .mobile-height { height: 100dvh; }
+    </style>
+</head>
+<body class="bg-gray-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-200 mobile-height flex flex-col overflow-hidden font-sans">
+
+    <!-- App State Overlay -->
+    <div id="overlay" class="fixed inset-0 bg-black/60 z-50 hidden flex items-center justify-center backdrop-blur-sm transition-opacity">
+        <div class="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-2xl max-w-md w-full mx-4 border border-gray-200 dark:border-slate-700">
+            <h3 id="overlay-title" class="text-lg font-bold mb-2">Processing...</h3>
+            <p id="overlay-msg" class="text-sm text-slate-600 dark:text-slate-300 mb-4">Initializing environment.</p>
+            <div class="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700 mb-4 overflow-hidden">
+                <div id="progress-bar" class="bg-blue-600 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+            <button id="overlay-close" class="hidden w-full py-2 px-4 bg-slate-200 hover:bg-slate-300 dark:bg-slate-700 dark:hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">Dismiss</button>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="h-14 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 shrink-0 z-20">
+        <div class="flex items-center gap-2">
+            <i data-lucide="cpu" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i>
+            <h1 class="font-bold text-lg tracking-tight hidden sm:block">LocalChat WebAI</h1>
+            <h1 class="font-bold text-lg tracking-tight sm:hidden">LocalChat</h1>
+            <span id="mode-badge" class="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400 font-mono">Init...</span>
+        </div>
+        
+        <div class="flex items-center gap-1 sm:gap-2">
+            <!-- Desktop Model Select -->
+            <div class="hidden md:flex items-center gap-2 mr-2">
+                <select id="model-select" class="text-sm bg-gray-100 dark:bg-slate-800 border-none rounded-lg py-1.5 px-3 focus:ring-1 focus:ring-blue-500 max-w-[200px] truncate">
+                    <option value="" disabled selected>Select Model...</option>
+                </select>
+                <button id="btn-load-model" class="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1">
+                    Load
+                </button>
+            </div>
+
+            <button id="btn-reset" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="New Chat (Ctrl+N)">
+                <i data-lucide="plus-circle" class="w-5 h-5"></i>
+            </button>
+            <button id="btn-theme" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Toggle Theme (Ctrl+D)">
+                <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
+                <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+            </button>
+            <button id="btn-settings" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg md:hidden transition-colors">
+                <i data-lucide="settings" class="w-5 h-5"></i>
+            </button>
+            <button id="btn-export-ui" class="hidden md:block p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors" title="Export/Import">
+                <i data-lucide="download" class="w-5 h-5"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex overflow-hidden relative">
+        
+        <!-- Chat Area -->
+        <div class="flex-1 flex flex-col relative w-full max-w-4xl mx-auto">
+            
+            <!-- Messages List -->
+            <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-32">
+                
+                <!-- Welcome Screen -->
+                <div class="flex flex-col gap-2 items-center justify-center h-full text-center text-slate-400 p-8" id="welcome-screen">
+                    <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4">
+                        <i data-lucide="message-square" class="w-8 h-8 text-blue-600 dark:text-blue-400"></i>
+                    </div>
+                    <h2 class="text-xl font-bold text-slate-700 dark:text-slate-200">Private, On-Device AI</h2>
+                    <p class="max-w-md text-sm">
+                        Runs 100% locally. No data leaves your device.
+                        <br>Models are saved to your browser cache after first download.
+                    </p>
+                    
+                    <div id="cache-status-msg" class="mt-4 text-xs bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-200 px-3 py-2 rounded border border-yellow-200 dark:border-yellow-800/50">
+                        First load requires downloading model weights (1GB+).
+                    </div>
+
+                    <!-- Mobile Model Loader -->
+                    <div class="mt-6 w-full max-w-xs md:hidden flex flex-col gap-2">
+                        <select id="model-select-mobile" class="w-full text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg py-2 px-3">
+                            <!-- Populated by JS -->
+                        </select>
+                        <button id="btn-load-model-mobile" class="w-full bg-blue-600 text-white font-medium py-2 rounded-lg flex items-center justify-center gap-2">
+                            Load Model
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-gray-50 via-gray-50 to-transparent dark:from-slate-950 dark:via-slate-950 pt-10">
+                <div class="relative max-w-3xl mx-auto shadow-lg rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
+                    <textarea 
+                        id="user-input" 
+                        rows="1" 
+                        class="w-full bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 px-4 py-3.5 pr-12 resize-none focus:outline-none max-h-48 rounded-2xl" 
+                        placeholder="Type a message..."
+                    ></textarea>
+                    <button id="btn-send" class="absolute right-2 bottom-2 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="send-horizontal" class="w-5 h-5"></i>
+                    </button>
+                    <button id="btn-stop" class="hidden absolute right-14 bottom-2 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors" title="Stop Generation">
+                        <i data-lucide="square" class="w-5 h-5 fill-current"></i>
+                    </button>
+                </div>
+                <div class="text-center mt-2 flex justify-center items-center gap-2">
+                    <p class="text-[10px] text-slate-400 dark:text-slate-600">AI can make mistakes.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Drawer -->
+        <div id="settings-drawer" class="absolute inset-y-0 right-0 w-80 bg-white dark:bg-slate-900 shadow-2xl transform translate-x-full transition-transform duration-300 z-30 border-l border-gray-200 dark:border-slate-800 flex flex-col">
+            <div class="p-4 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between">
+                <h2 class="font-bold">Settings</h2>
+                <button id="btn-close-settings" class="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            
+            <div class="p-4 space-y-6 overflow-y-auto flex-1">
+                
+                <!-- Model Cache Manager -->
+                <div>
+                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Stored Models</h3>
+                    <div id="cache-list" class="space-y-2 text-sm">
+                        <p class="text-slate-400 italic">No models downloaded yet.</p>
+                    </div>
+                    <button id="btn-clear-cache" class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                        <i data-lucide="trash" class="w-3 h-3"></i> Delete All Cached Models
+                    </button>
+                </div>
+
+                <hr class="border-gray-100 dark:border-slate-800">
+
+                <!-- Data Management -->
+                <div>
+                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Chats</h3>
+                    <div class="space-y-2">
+                        <button id="btn-export" class="w-full flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors">
+                            <i data-lucide="download" class="w-4 h-4"></i> Export Chat (JSON)
+                        </button>
+                        <label class="w-full flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 dark:bg-slate-800 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors cursor-pointer">
+                            <i data-lucide="upload" class="w-4 h-4"></i> Import Chat
+                            <input type="file" id="file-import" class="hidden" accept=".json">
+                        </label>
+                        <button id="btn-clear-history" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i> Clear Chat History
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div>
+                    <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Runtime Stats</h3>
+                    <div class="bg-gray-100 dark:bg-slate-800 rounded-lg p-3 text-sm space-y-2 font-mono">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Engine:</span>
+                            <span id="stat-engine" class="font-bold">Not Loaded</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Device:</span>
+                            <span id="stat-device">-</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">Speed:</span>
+                            <span id="stat-speed">0 t/s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Logic -->
+    <script type="module">
+        /**
+         * 1. Configuration & Models
+         */
+        const MODELS = {
+            gpu: [
+                { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", name: "Llama 3.2 1B (Fastest)" },
+                { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", name: "Llama 3.2 3B (Balanced)" },
+                { id: "Phi-3-mini-4k-instruct-q4f16_1-MLC", name: "Phi-3 Mini (High Quality)" },
+                { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", name: "Qwen 2.5 1.5B" }
+            ],
+            wasm: [
+                { id: "Xenova/TinyLlama-1.1B-Chat-v1.0", name: "TinyLlama 1.1B (Standard)" },
+                { id: "Xenova/Qwen1.5-0.5B-Chat", name: "Qwen 1.5 0.5B (Fast)" },
+                { id: "Xenova/flan-t5-small", name: "Flan T5 (Minimal)" }
+            ]
+        };
+
+        const STATE = {
+            messages: [],
+            prefs: {
+                theme: 'system',
+                mode: 'detect',
+                modelId: '',
+                downloadedModels: [] // Array of modelIds that have been successfully loaded
+            },
+            runtime: {
+                engine: null,
+                type: null,
+                status: 'idle',
+            }
+        };
+
+        const el = {
+            app: document.documentElement,
+            msgContainer: document.getElementById('chat-container'),
+            welcome: document.getElementById('welcome-screen'),
+            input: document.getElementById('user-input'),
+            btnSend: document.getElementById('btn-send'),
+            btnStop: document.getElementById('btn-stop'),
+            btnReset: document.getElementById('btn-reset'),
+            btnTheme: document.getElementById('btn-theme'),
+            btnSettings: document.getElementById('btn-settings'),
+            btnCloseSettings: document.getElementById('btn-close-settings'),
+            drawer: document.getElementById('settings-drawer'),
+            modelSelect: document.getElementById('model-select'),
+            modelSelectMobile: document.getElementById('model-select-mobile'),
+            btnLoad: document.getElementById('btn-load-model'),
+            btnLoadMobile: document.getElementById('btn-load-model-mobile'),
+            btnExport: document.getElementById('btn-export'),
+            btnExportUi: document.getElementById('btn-export-ui'),
+            fileImport: document.getElementById('file-import'),
+            btnClear: document.getElementById('btn-clear-history'),
+            overlay: document.getElementById('overlay'),
+            overlayTitle: document.getElementById('overlay-title'),
+            overlayMsg: document.getElementById('overlay-msg'),
+            overlayClose: document.getElementById('overlay-close'),
+            progressBar: document.getElementById('progress-bar'),
+            modeBadge: document.getElementById('mode-badge'),
+            statEngine: document.getElementById('stat-engine'),
+            statDevice: document.getElementById('stat-device'),
+            statSpeed: document.getElementById('stat-speed'),
+            cacheStatusMsg: document.getElementById('cache-status-msg'),
+            cacheList: document.getElementById('cache-list'),
+            btnClearCache: document.getElementById('btn-clear-cache'),
+        };
+
+        /**
+         * 2. Initialization & Cache Logic
+         */
+        async function init() {
+            lucide.createIcons();
+            loadState();
+            applyTheme();
+            setupEventListeners();
+            
+            // Auto Detect GPU
+            const hasGPU = !!navigator.gpu;
+            STATE.prefs.mode = hasGPU ? 'gpu' : 'wasm';
+            
+            // Badge UI
+            el.modeBadge.textContent = hasGPU ? 'WebGPU Ready' : 'WASM (CPU)';
+            el.modeBadge.className = hasGPU 
+                ? 'text-xs px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-mono border border-green-200 dark:border-green-800'
+                : 'text-xs px-2 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-mono border border-orange-200 dark:border-orange-800';
+
+            refreshModelLists();
+            renderMessages();
+        }
+
+        function refreshModelLists() {
+            const list = MODELS[STATE.prefs.mode];
+            const populate = (sel) => {
+                sel.innerHTML = `<option value="" disabled selected>Select Model...</option>`;
+                list.forEach(m => {
+                    const isCached = STATE.prefs.downloadedModels.includes(m.id);
+                    const opt = document.createElement('option');
+                    opt.value = m.id;
+                    // Visual indicator for cached models
+                    opt.textContent = isCached ? `✓ ${m.name} (Ready)` : m.name;
+                    if(m.id === STATE.prefs.modelId) opt.selected = true;
+                    sel.appendChild(opt);
+                });
+            };
+            populate(el.modelSelect);
+            populate(el.modelSelectMobile);
+            updateCacheListUI();
+        }
+
+        function updateCacheListUI() {
+            if(STATE.prefs.downloadedModels.length === 0) {
+                el.cacheList.innerHTML = `<p class="text-slate-400 italic">No models downloaded yet.</p>`;
+                return;
+            }
+            el.cacheList.innerHTML = '';
+            STATE.prefs.downloadedModels.forEach(mid => {
+                const name = [...MODELS.gpu, ...MODELS.wasm].find(x => x.id === mid)?.name || mid;
+                const div = document.createElement('div');
+                div.className = "flex items-center justify-between p-2 bg-gray-50 dark:bg-slate-800 rounded border border-gray-100 dark:border-slate-700";
+                div.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="check-circle" class="w-4 h-4 text-green-500"></i>
+                        <span class="truncate max-w-[180px]">${name}</span>
+                    </div>
+                `;
+                el.cacheList.appendChild(div);
+            });
+            lucide.createIcons();
+        }
+
+        async function verifyCacheIntegrity() {
+            // Optional: Advanced users can actually check 'caches.keys()' here.
+            // For now, we trust localStorage. If the user clears browser data,
+            // the library will just re-download (robust fallback).
+        }
+
+        async function clearAllModelCaches() {
+            if(!confirm("This will delete all downloaded AI models from your browser to free up space. You will need to download them again to chat. Continue?")) return;
+            
+            updateOverlay(true, "Deleting caches...", 100);
+            
+            try {
+                // Delete Cache API entries
+                const keys = await caches.keys();
+                for (const key of keys) {
+                    await caches.delete(key);
+                }
+                
+                // Clear our record
+                STATE.prefs.downloadedModels = [];
+                saveState();
+                
+                updateOverlay(false);
+                alert("All model caches deleted.");
+                window.location.reload();
+            } catch (e) {
+                console.error(e);
+                alert("Error clearing cache: " + e.message);
+                updateOverlay(false);
+            }
+        }
+
+        /**
+         * 3. Engine Logic
+         */
+        
+        async function initWebLLM(modelId) {
+            updateOverlay(true, "Initializing WebGPU Engine...", 0);
+            try {
+                const { CreateWebWorkerMLCEngine } = await import("https://esm.sh/@mlc-ai/web-llm@0.2.78");
+
+                // Blob worker to bypass CORS on GitHub Pages
+                const workerCode = `
+                    import { WebWorkerMLCEngineHandler } from "https://esm.sh/@mlc-ai/web-llm@0.2.78";
+                    const h = new WebWorkerMLCEngineHandler();
+                    self.onmessage = (e) => h.onmessage(e);
+                `;
+                const blob = new Blob([workerCode], { type: "text/javascript" });
+                const workerUrl = URL.createObjectURL(blob);
+                const worker = new Worker(workerUrl, { type: "module" });
+
+                const engine = await CreateWebWorkerMLCEngine(
+                    worker,
+                    { model: modelId },
+                    {
+                        initProgressCallback: (r) => {
+                            const p = r.progress * 100;
+                            // Customize message based on whether it's downloading or just loading
+                            const phase = r.text.includes("Fetching") ? "Downloading" : "Loading";
+                            updateOverlay(true, `${phase} Model (${Math.round(p)}%)`, p);
+                        }
+                    }
+                );
+                return engine;
+            } catch (e) {
+                console.error("GPU Init Failed", e);
+                throw e;
+            }
+        }
+
+        async function initWASM(modelId) {
+            updateOverlay(true, "Initializing WASM Engine...", 0);
+            try {
+                const { pipeline, env } = await import("https://esm.sh/@huggingface/transformers@3.0.0");
+                
+                env.allowRemoteModels = true;
+                env.useFS = false; 
+                env.useBrowserCache = true; // Explicitly ensure caching is on
+
+                const generator = await pipeline("text-generation", modelId, {
+                    device: "wasm",
+                    dtype: "q8",
+                    progress_callback: (data) => {
+                        if (data.status === 'progress') {
+                            const p = (data.loaded / data.total) * 100;
+                            updateOverlay(true, `Downloading ${data.file}...`, p);
+                        } else if (data.status === 'done') {
+                            updateOverlay(true, "Compiling WASM...", 99);
+                        }
+                    }
+                });
+                return generator;
+            } catch (e) {
+                console.error("WASM Init Failed", e);
+                throw e;
+            }
+        }
+
+        async function loadSelectedModel() {
+            const select = window.innerWidth < 768 ? el.modelSelectMobile : el.modelSelect;
+            const modelId = select.value;
+            if(!modelId) return alert("Please select a model first.");
+
+            STATE.prefs.modelId = modelId;
+            saveState();
+
+            try {
+                // If it's already in our list, UI feedback changes
+                const isCached = STATE.prefs.downloadedModels.includes(modelId);
+                if(isCached) {
+                    updateOverlay(true, "Loading from Disk...", 50);
+                }
+
+                if (STATE.prefs.mode === 'gpu') {
+                    STATE.runtime.engine = await initWebLLM(modelId);
+                    STATE.runtime.type = 'gpu';
+                } else {
+                    STATE.runtime.engine = await initWASM(modelId);
+                    STATE.runtime.type = 'wasm';
+                }
+                
+                // Success! Mark as downloaded
+                if (!STATE.prefs.downloadedModels.includes(modelId)) {
+                    STATE.prefs.downloadedModels.push(modelId);
+                    saveState();
+                    refreshModelLists(); // Update UI to show checkmark
+                }
+
+                STATE.runtime.status = 'ready';
+                updateOverlay(false);
+                
+                // Update UI Stats
+                el.statEngine.textContent = modelId.split('/').pop().split('-')[0];
+                el.statDevice.textContent = STATE.runtime.type.toUpperCase();
+                
+                el.welcome.classList.add('hidden');
+                addSystemMessage(`System ready. ${isCached ? 'Loaded from local storage.' : 'Download complete.'}`);
+                
+            } catch (err) {
+                updateOverlay(true, `Error: ${err.message}`, 0);
+                el.overlayClose.classList.remove('hidden');
+            }
+        }
+
+        /**
+         * 4. Chat & Interaction
+         */
+        async function handleSend() {
+            const text = el.input.value.trim();
+            if (!text) return;
+            if (STATE.runtime.status !== 'ready') {
+                if (STATE.runtime.status === 'idle') return alert("Please load a model first.");
+                return;
+            }
+
+            addMessage('user', text);
+            el.input.value = '';
+            el.input.style.height = 'auto'; 
+            
+            const assistantMsgId = addMessage('assistant', '');
+            STATE.runtime.status = 'generating';
+            toggleInputState(true);
+
+            const context = buildContext();
+            let fullResponse = "";
+            let startTime = performance.now();
+
+            try {
+                if (STATE.runtime.type === 'gpu') {
+                    const completion = await STATE.runtime.engine.chat.completions.create({
+                        messages: context,
+                        stream: true,
+                        max_tokens: 1024,
+                        temperature: 0.7,
+                    });
+
+                    for await (const chunk of completion) {
+                        const delta = chunk.choices[0].delta.content;
+                        if (delta) {
+                            fullResponse += delta;
+                            updateMessage(assistantMsgId, fullResponse);
+                            
+                            const elapsed = (performance.now() - startTime) / 1000;
+                            const tps = (fullResponse.length / 4) / elapsed; 
+                            el.statSpeed.textContent = `${tps.toFixed(1)} t/s`;
+                        }
+                    }
+                } else {
+                    // WASM
+                    const prompt = context.map(m => `<|${m.role}|>\n${m.content}</s>`).join('\n') + "\n<|assistant|>\n";
+                    const output = await STATE.runtime.engine(prompt, {
+                        max_new_tokens: 256,
+                        temperature: 0.7,
+                        do_sample: true,
+                    });
+                    
+                    let raw = output[0].generated_text;
+                    fullResponse = raw.substring(prompt.length) || raw; 
+                    updateMessage(assistantMsgId, fullResponse);
+                }
+            } catch (err) {
+                updateMessage(assistantMsgId, fullResponse + `\n\n*[Error: ${err.message}]*`);
+            }
+
+            STATE.runtime.status = 'ready';
+            toggleInputState(false);
+            saveState();
+        }
+
+        function buildContext() {
+            const history = STATE.messages.slice(-10).map(m => ({ role: m.role, content: m.content }));
+            return [
+                { role: "system", content: "You are a helpful AI assistant." },
+                ...history
+            ];
+        }
+
+        function toggleInputState(isGenerating) {
+            el.btnSend.classList.toggle('hidden', isGenerating);
+            el.btnStop.classList.toggle('hidden', !isGenerating);
+            el.input.disabled = isGenerating;
+            if(!isGenerating) el.input.focus();
+        }
+
+        function addMessage(role, content) {
+            const id = crypto.randomUUID();
+            STATE.messages.push({ id, role, content, timestamp: Date.now() });
+            
+            const div = document.createElement('div');
+            div.id = `msg-${id}`;
+            div.className = `flex w-full ${role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`;
+            
+            const bubble = document.createElement('div');
+            bubble.className = `max-w-[85%] md:max-w-[75%] rounded-2xl px-4 py-3 shadow-sm ${
+                role === 'user' 
+                ? 'bg-blue-600 text-white rounded-br-none' 
+                : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 rounded-bl-none border border-gray-100 dark:border-slate-700'
+            }`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = `prose ${role === 'user' ? 'prose-invert' : 'dark:prose-invert'} max-w-none text-sm break-words`;
+            contentDiv.innerHTML = role === 'user' ? escapeHtml(content) : (content ? marked.parse(content) : '<span class="animate-pulse">...</span>');
+            
+            bubble.appendChild(contentDiv);
+            div.appendChild(bubble);
+            el.msgContainer.appendChild(div);
+            scrollToBottom();
+            
+            el.welcome.classList.add('hidden');
+            return id;
+        }
+
+        function addSystemMessage(text) {
+             const div = document.createElement('div');
+             div.className = "flex justify-center my-4";
+             div.innerHTML = `<span class="text-xs bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-3 py-1 rounded-full border border-gray-300 dark:border-slate-700">${text}</span>`;
+             el.msgContainer.appendChild(div);
+             scrollToBottom();
+        }
+
+        function updateMessage(id, content) {
+            const msgObj = STATE.messages.find(m => m.id === id);
+            if(msgObj) msgObj.content = content;
+            
+            const domEl = document.getElementById(`msg-${id}`);
+            if(domEl) {
+                const contentDiv = domEl.querySelector('.prose');
+                contentDiv.innerHTML = marked.parse(content);
+            }
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            el.msgContainer.scrollTop = el.msgContainer.scrollHeight;
+        }
+
+        function updateOverlay(show, msg, percent) {
+            if(show) {
+                el.overlay.classList.remove('hidden');
+                el.overlayMsg.textContent = msg || "Loading...";
+                if (percent !== undefined) {
+                    el.progressBar.style.width = `${percent}%`;
+                }
+            } else {
+                el.overlay.classList.add('hidden');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML.replace(/\n/g, '<br>');
+        }
+
+        /**
+         * 5. State Management
+         */
+        function saveState() {
+            localStorage.setItem('localchat_v2', JSON.stringify({
+                messages: STATE.messages,
+                prefs: STATE.prefs
+            }));
+        }
+
+        function loadState() {
+            const raw = localStorage.getItem('localchat_v2');
+            if (raw) {
+                try {
+                    const data = JSON.parse(raw);
+                    STATE.messages = data.messages || [];
+                    STATE.prefs = { ...STATE.prefs, ...data.prefs };
+                    
+                    // Ensure downloadedModels is an array
+                    if (!Array.isArray(STATE.prefs.downloadedModels)) {
+                        STATE.prefs.downloadedModels = [];
+                    }
+
+                    if(STATE.messages.length > 0) el.welcome.classList.add('hidden');
+                } catch (e) {
+                    console.error("State load error", e);
+                }
+            }
+        }
+
+        function applyTheme() {
+            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                el.app.classList.add('dark');
+            } else {
+                el.app.classList.remove('dark');
+            }
+        }
+
+        function setupEventListeners() {
+            el.btnLoad.addEventListener('click', loadSelectedModel);
+            el.btnLoadMobile.addEventListener('click', loadSelectedModel);
+
+            el.btnSend.addEventListener('click', handleSend);
+            el.input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                }
+                el.input.style.height = 'auto';
+                el.input.style.height = el.input.scrollHeight + 'px';
+            });
+            
+            el.btnStop.addEventListener('click', () => window.location.reload());
+
+            el.btnSettings.addEventListener('click', () => el.drawer.classList.remove('translate-x-full'));
+            el.btnCloseSettings.addEventListener('click', () => el.drawer.classList.add('translate-x-full'));
+            
+            el.btnTheme.addEventListener('click', () => {
+                el.app.classList.toggle('dark');
+                localStorage.theme = el.app.classList.contains('dark') ? 'dark' : 'light';
+                saveState();
+            });
+
+            el.btnReset.addEventListener('click', () => {
+                if(confirm("Start new chat? This keeps history in settings but clears view.")) {
+                    STATE.messages = [];
+                    renderMessages();
+                    el.welcome.classList.remove('hidden');
+                    saveState();
+                }
+            });
+
+            el.btnClear.addEventListener('click', () => {
+                if(confirm("Permanently delete all chat history?")) {
+                    STATE.messages = [];
+                    saveState();
+                    renderMessages();
+                    el.welcome.classList.remove('hidden');
+                }
+            });
+            
+            // Cache Clear
+            el.btnClearCache.addEventListener('click', clearAllModelCaches);
+
+            const doExport = () => {
+                const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(STATE));
+                const node = document.createElement('a');
+                node.setAttribute("href", dataStr);
+                node.setAttribute("download", `chat_export_${new Date().toISOString()}.json`);
+                document.body.appendChild(node);
+                node.click();
+                node.remove();
+            };
+            el.btnExport.addEventListener('click', doExport);
+            el.btnExportUi.addEventListener('click', doExport);
+
+            el.fileImport.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        if (data.messages && Array.isArray(data.messages)) {
+                            STATE.messages = data.messages;
+                            STATE.prefs = { ...STATE.prefs, ...data.prefs };
+                            saveState();
+                            renderMessages();
+                            refreshModelLists(); // Update cached status if import had them
+                            alert("Chat imported successfully!");
+                        }
+                    } catch (err) {
+                        alert("Invalid file format");
+                    }
+                };
+                reader.readAsText(file);
+            });
+
+            el.overlayClose.addEventListener('click', () => updateOverlay(false));
+
+            document.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'n') { e.preventDefault(); el.btnReset.click(); }
+                if (e.ctrlKey && e.key === 'd') { e.preventDefault(); el.btnTheme.click(); }
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
+
+
