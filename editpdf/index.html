@@ -2,62 +2,70 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple PDF Editor</title>
-    <!-- Tailwind CSS for styling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>PDF Editor Pro</title>
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <!-- PDF.js for rendering -->
+    <!-- PDF.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- PDF-Lib for modifying/saving -->
+    <!-- PDF-Lib -->
     <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 
     <script>
-        // Configure PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
     </script>
 
     <style>
         body {
-            background-color: #e5e7eb; /* Darker background for contrast */
-            touch-action: none; 
+            background-color: #f3f4f6;
+            /* Allow default touch actions (scroll/zoom) on body */
+            overscroll-behavior: none; 
         }
-        /* The main scrollable area */
+
+        /* --- Workspace & Pages --- */
         #workspace {
             overflow-y: auto;
-            scroll-behavior: smooth;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 120px; /* Space for floating toolbar */
         }
         
-        /* Page Wrapper */
         .page-container {
             position: relative;
             background-color: white;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            margin-bottom: 24px; /* Gap between pages */
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            margin: 0 auto 24px auto;
+            /* Default to blocking touch only when drawing class is active */
+            touch-action: auto; 
+        }
+
+        /* When drawing, disable browser handling of gestures on the page */
+        .page-container.drawing-active {
+            touch-action: none;
         }
 
         canvas {
             display: block;
         }
 
-        /* Layers per page */
         .interaction-layer {
             position: absolute;
             top: 0;
             left: 0;
-            cursor: crosshair;
             z-index: 10;
         }
+
+        /* --- Text Elements --- */
         .text-layer {
             position: absolute;
             inset: 0;
             overflow: hidden;
-            z-index: 20; 
-            pointer-events: none; 
+            z-index: 20;
+            pointer-events: none;
         }
-
-        /* Text Elements */
+        
         .text-element {
             position: absolute;
             font-family: sans-serif;
@@ -65,695 +73,687 @@
             color: black;
             padding: 4px;
             border: 1px dashed transparent;
-            cursor: move; 
-            pointer-events: auto; 
-            min-width: 20px;
-            min-height: 20px;
+            pointer-events: auto;
             white-space: pre-wrap;
             line-height: 1;
+            /* Better touch targets */
+            min-width: 40px; 
+            min-height: 40px;
         }
-        .text-element:hover {
-            border-color: #3b82f6; 
-            background-color: rgba(255, 255, 255, 0.5);
+        .text-element:hover, .text-element:active {
+            border-color: #3b82f6;
+            background-color: rgba(255, 255, 255, 0.8);
         }
         .text-element:focus {
             outline: none;
             border-color: #2563eb;
             background-color: white;
-            cursor: text;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* --- Floating Toolbar --- */
+        .floating-toolbar {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 9999px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+            max-width: 95vw;
+            overflow-x: auto;
+        }
+
+        .tool-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            color: #4b5563;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+        
+        .tool-btn i {
+            font-size: 24px;
+            margin-bottom: 2px;
+        }
+        
+        .tool-btn span {
+            font-size: 10px;
+            font-weight: 500;
         }
 
         .tool-btn.active {
-            background-color: #dbeafe;
+            background-color: #eff6ff;
             color: #2563eb;
-            border-color: #2563eb;
         }
         
-        /* Preview Mode Styles */
-        .preview-mode .interaction-layer,
-        .preview-mode .text-layer {
-            display: none;
+        .tool-btn:active {
+            transform: scale(0.95);
         }
-        .disabled-area {
-            pointer-events: none;
-            opacity: 0.5;
-            filter: grayscale(1);
+
+        /* Preview Mode */
+        .preview-mode .interaction-layer, 
+        .preview-mode .text-layer { display: none; }
+        
+        .disabled { opacity: 0.5; pointer-events: none; }
+
+        /* Hide scrollbar on toolbar */
+        .floating-toolbar::-webkit-scrollbar { display: none; }
+
+        /* Media Queries for Desktop layout tweaks */
+        @media (min-width: 768px) {
+            .floating-toolbar {
+                top: 80px; /* Below header */
+                bottom: auto;
+                padding: 6px 12px;
+                border-radius: 16px;
+            }
+            .tool-btn {
+                width: 44px;
+                height: 44px;
+            }
         }
     </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden">
+<body class="h-screen flex flex-col text-gray-800 font-sans">
 
-    <!-- Header / Toolbar -->
-    <header class="bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm z-30 shrink-0">
-        <div class="flex items-center gap-4">
-            <h1 class="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <i class="ph ph-file-pdf text-red-500 text-2xl"></i>
-                PDF Editor
-            </h1>
-            <div class="h-6 w-px bg-gray-300 mx-2"></div>
-            
+    <!-- Navbar -->
+    <header class="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-4 z-40 shrink-0 sticky top-0 shadow-sm">
+        <div class="flex items-center gap-2">
+            <i class="ph-fill ph-file-pdf text-red-500 text-3xl"></i>
+            <h1 class="font-bold text-lg leading-tight hidden sm:block">PDF Editor</h1>
+        </div>
+
+        <div class="flex items-center gap-2 sm:gap-3">
             <!-- File Upload -->
-            <label id="upload-label" class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-md text-sm font-medium transition flex items-center gap-2">
-                <i class="ph ph-upload-simple"></i>
-                Upload PDF
+            <label class="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                <i class="ph-bold ph-upload-simple text-lg"></i>
+                <span class="hidden sm:inline">Upload</span>
                 <input type="file" id="file-upload" accept="application/pdf" class="hidden">
             </label>
-        </div>
 
-        <!-- Editor Tools -->
-        <div id="tools-panel" class="hidden flex items-center gap-2 bg-gray-50 p-1.5 rounded-lg border border-gray-200">
-            <button id="btn-cursor" class="tool-btn active p-2 rounded hover:bg-white transition" title="Select/Move">
-                <i class="ph ph-cursor text-lg"></i>
-            </button>
-            <button id="btn-whiteout" class="tool-btn p-2 rounded hover:bg-white transition" title="Whiteout (Cover Text)">
-                <i class="ph ph-eraser text-lg"></i>
-            </button>
-            <button id="btn-draw" class="tool-btn p-2 rounded hover:bg-white transition" title="Draw/Sign">
-                <i class="ph ph-pen-nib text-lg"></i>
-            </button>
-            <button id="btn-text" class="tool-btn p-2 rounded hover:bg-white transition" title="Add Text">
-                <i class="ph ph-text-t text-lg"></i>
-            </button>
-            <div class="w-px h-6 bg-gray-300 mx-1"></div>
-            <button id="btn-undo" class="p-2 rounded hover:bg-white text-gray-600 transition" title="Undo Last Action">
-                <i class="ph ph-arrow-u-up-left text-lg"></i>
-            </button>
-        </div>
-
-        <!-- Actions -->
-        <div class="flex items-center gap-3">
-            <span id="page-count" class="hidden text-sm text-gray-500 mr-2"></span>
-            
-            <button id="btn-preview" disabled class="bg-gray-800 hover:bg-gray-900 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 opacity-50 cursor-not-allowed">
-                <i class="ph ph-eye"></i>
-                <span>Preview</span>
+            <!-- Preview Toggle -->
+            <button id="btn-preview" disabled class="disabled bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2">
+                <i class="ph-bold ph-eye text-lg"></i>
+                <span class="hidden sm:inline">Preview</span>
             </button>
 
-            <button id="btn-download" disabled class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition flex items-center gap-2 opacity-50 cursor-not-allowed">
-                <i class="ph ph-download-simple"></i>
-                Download
+            <!-- Download -->
+            <button id="btn-download" disabled class="disabled bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-sm">
+                <i class="ph-bold ph-download-simple text-lg"></i>
+                <span class="hidden sm:inline">Save</span>
             </button>
         </div>
     </header>
 
-    <!-- Main Workspace (Scrollable) -->
-    <main class="flex-1 bg-gray-200 relative p-8 text-center" id="workspace">
+    <!-- Main Workspace -->
+    <main id="workspace" class="flex-1 w-full bg-gray-100 relative">
         
-        <!-- Placeholder Empty State -->
-        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-            <i class="ph ph-file-arrow-up text-6xl mb-4 text-gray-300"></i>
-            <p class="text-lg">Upload a PDF to start editing</p>
+        <!-- Empty State -->
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 p-6 text-center">
+            <div class="bg-white p-6 rounded-full shadow-sm mb-4">
+                <i class="ph-duotone ph-file-pdf text-6xl text-blue-500"></i>
+            </div>
+            <h2 class="text-xl font-semibold text-gray-700 mb-2">Upload a PDF to Edit</h2>
+            <p class="text-sm max-w-xs mx-auto">Tap "Upload" to select a document. Sign, draw, or add text.</p>
         </div>
 
         <!-- Pages Container -->
-        <div id="pages-container" class="hidden flex flex-col items-center pb-20">
-            <!-- Pages will be injected here -->
+        <div id="pages-container" class="hidden flex flex-col items-center pt-6 px-2 sm:px-6">
+            <!-- Pages injected here -->
         </div>
 
     </main>
 
+    <!-- Floating Tools (Bottom on Mobile, Top-Floating on Desktop) -->
+    <div id="tools-bar" class="floating-toolbar hidden">
+        <button id="btn-hand" class="tool-btn active" title="Hand / Navigate">
+            <i class="ph-bold ph-hand-grabbing"></i>
+            <span>Move</span>
+        </button>
+        <div class="w-px h-8 bg-gray-200 mx-1"></div>
+        <button id="btn-draw" class="tool-btn" title="Pen Tool">
+            <i class="ph-bold ph-pen-nib"></i>
+            <span>Draw</span>
+        </button>
+        <button id="btn-whiteout" class="tool-btn" title="Whiteout">
+            <i class="ph-bold ph-eraser"></i>
+            <span>Erase</span>
+        </button>
+        <button id="btn-text" class="tool-btn" title="Text Tool">
+            <i class="ph-bold ph-text-t"></i>
+            <span>Text</span>
+        </button>
+        <div class="w-px h-8 bg-gray-200 mx-1"></div>
+        <button id="btn-undo" class="tool-btn text-gray-500" title="Undo">
+            <i class="ph-bold ph-arrow-u-up-left"></i>
+            <span>Undo</span>
+        </button>
+    </div>
+
+    <!-- Status Toast (Optional) -->
+    <div id="toast" class="fixed top-20 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-full text-sm opacity-0 transition pointer-events-none z-50">
+        Action Saved
+    </div>
+
     <script>
-        // --- State Management ---
+        // --- State ---
         const state = {
-            currentPdfBytes: null, 
-            previewPdfBytes: null, 
-            
+            currentPdfBytes: null,
+            previewPdfBytes: null,
             totalPages: 0,
-            scale: 1.5,           
-            tool: 'cursor',       
+            
+            // Adjust scale based on device width for better mobile fit
+            scale: window.innerWidth < 768 ? 0.6 : 1.2, 
+            
+            tool: 'hand', // hand, draw, whiteout, text
+            activePage: 0,
             isDrawing: false,
             isPreview: false,
-            
-            // Interaction State
-            activePage: 0, // 1-based index of the page currently being interacted with
-            
-            // Store edits per page
-            // Structure: { [pageIndex]: { paths: [], texts: [{id, x, y, text}], rects: [] } }
-            edits: {} 
+            edits: {} // { [pageNum]: { paths: [], rects: [], texts: [] } }
         };
 
-        let activeDragId = null; 
-        let dragOffset = { x: 0, y: 0 };
-        let draggedPageNum = 0; // Track which page the dragged element belongs to
-
-        // --- DOM Elements ---
-        const elements = {
+        // --- Refs ---
+        const els = {
             fileInput: document.getElementById('file-upload'),
-            uploadLabel: document.getElementById('upload-label'),
-            workspace: document.getElementById('workspace'),
             pagesContainer: document.getElementById('pages-container'),
             emptyState: document.getElementById('empty-state'),
-            toolsPanel: document.getElementById('tools-panel'),
-            pageCountLabel: document.getElementById('page-count'),
+            toolsBar: document.getElementById('tools-bar'),
             btnDownload: document.getElementById('btn-download'),
             btnPreview: document.getElementById('btn-preview'),
+            toast: document.getElementById('toast'),
             tools: {
-                cursor: document.getElementById('btn-cursor'),
+                hand: document.getElementById('btn-hand'),
                 draw: document.getElementById('btn-draw'),
-                text: document.getElementById('btn-text'),
                 whiteout: document.getElementById('btn-whiteout'),
+                text: document.getElementById('btn-text'),
                 undo: document.getElementById('btn-undo')
             }
         };
 
-        // --- Initialization ---
+        let currentPath = [];
+        let currentRect = null;
+        let activeDragId = null;
+        let dragOffset = { x: 0, y: 0 };
+        let draggedPageNum = 0;
 
-        elements.fileInput.addEventListener('change', async (e) => {
+        // --- Init ---
+        els.fileInput.addEventListener('change', async (e) => {
             const file = e.target.files[0];
             if (!file) return;
+            if (file.type !== 'application/pdf') return alert('PDF only!');
 
-            if (file.type !== 'application/pdf') {
-                alert('Please upload a valid PDF file.');
+            // Loading State
+            els.emptyState.innerHTML = '<div class="animate-spin text-4xl text-blue-500"><i class="ph-bold ph-circle-notch"></i></div><p class="mt-4 text-gray-600">Loading PDF...</p>';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                state.currentPdfBytes = arrayBuffer;
+                
+                const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
+                state.totalPages = pdfDoc.getPageCount();
+
+                // Reset
+                state.isPreview = false;
+                state.edits = {};
+                for (let i = 1; i <= state.totalPages; i++) {
+                    state.edits[i] = { paths: [], rects: [], texts: [] };
+                }
+
+                els.emptyState.classList.add('hidden');
+                els.pagesContainer.classList.remove('hidden');
+                els.toolsBar.classList.remove('hidden');
+                els.btnDownload.disabled = false;
+                els.btnPreview.disabled = false;
+                els.btnDownload.classList.remove('disabled');
+                els.btnPreview.classList.remove('disabled');
+
+                await renderAllPages();
+                showToast(`Loaded ${state.totalPages} pages`);
+            } catch (err) {
+                console.error(err);
+                els.emptyState.innerHTML = '<p class="text-red-500">Error loading PDF</p>';
+            }
+        });
+
+        // --- Render ---
+        async function renderAllPages() {
+            els.pagesContainer.innerHTML = '';
+            const bytes = state.isPreview ? state.previewPdfBytes : state.currentPdfBytes;
+            if (!bytes) return;
+
+            const loadingTask = pdfjsLib.getDocument({ data: bytes.slice(0) });
+            const pdf = await loadingTask.promise;
+
+            for (let i = 1; i <= state.totalPages; i++) {
+                const page = await pdf.getPage(i);
+                const viewport = page.getViewport({ scale: state.scale });
+
+                // Wrapper
+                const div = document.createElement('div');
+                div.className = 'page-container';
+                div.dataset.page = i;
+                if (state.tool === 'draw' || state.tool === 'whiteout') {
+                    div.classList.add('drawing-active');
+                }
+                div.style.width = `${viewport.width}px`;
+                div.style.height = `${viewport.height}px`;
+
+                // Canvas (PDF)
+                const canvasPdf = document.createElement('canvas');
+                canvasPdf.width = viewport.width;
+                canvasPdf.height = viewport.height;
+                await page.render({ canvasContext: canvasPdf.getContext('2d'), viewport }).promise;
+
+                // Canvas (Interaction)
+                const canvasInteract = document.createElement('canvas');
+                canvasInteract.className = 'interaction-layer';
+                canvasInteract.width = viewport.width;
+                canvasInteract.height = viewport.height;
+
+                // Div (Text)
+                const divText = document.createElement('div');
+                divText.className = 'text-layer';
+
+                div.appendChild(canvasPdf);
+                div.appendChild(canvasInteract);
+                div.appendChild(divText);
+                els.pagesContainer.appendChild(div);
+
+                if (!state.isPreview) {
+                    redrawCanvas(i, canvasInteract);
+                    renderTexts(i, divText);
+                }
+            }
+        }
+
+        // --- Tools ---
+        Object.keys(els.tools).forEach(k => {
+            if(k === 'undo') return;
+            els.tools[k].addEventListener('click', () => setTool(k));
+        });
+
+        els.tools.undo.addEventListener('click', undoLast);
+
+        function setTool(t) {
+            state.tool = t;
+            // UI
+            document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+            els.tools[t].classList.add('active');
+
+            // Touch Action logic:
+            // If Hand/Text -> user can scroll (touch-action: auto)
+            // If Draw/Eraser -> user draws (touch-action: none on pages)
+            const pages = document.querySelectorAll('.page-container');
+            pages.forEach(p => {
+                if (t === 'draw' || t === 'whiteout') {
+                    p.classList.add('drawing-active');
+                    p.querySelector('.interaction-layer').style.cursor = 'crosshair';
+                } else {
+                    p.classList.remove('drawing-active');
+                    p.querySelector('.interaction-layer').style.cursor = t === 'text' ? 'text' : 'default';
+                }
+            });
+
+            showToast(`Tool: ${t.charAt(0).toUpperCase() + t.slice(1)}`);
+        }
+
+        function showToast(msg) {
+            els.toast.textContent = msg;
+            els.toast.classList.remove('opacity-0');
+            setTimeout(() => els.toast.classList.add('opacity-0'), 2000);
+        }
+
+        // --- Interaction Logic (Delegated) ---
+        // We use pointer events for unified mouse/touch handling where possible, 
+        // but need specific touch logic for canvas drawing vs scrolling.
+
+        const container = els.pagesContainer;
+
+        // 1. POINTER DOWN
+        container.addEventListener('pointerdown', (e) => {
+            if (state.isPreview) return;
+            
+            const target = e.target;
+            // Check if hitting interaction layer
+            if (!target.classList.contains('interaction-layer')) return;
+
+            const pageDiv = target.closest('.page-container');
+            const pageNum = parseInt(pageDiv.dataset.page);
+            state.activePage = pageNum;
+
+            const rect = target.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            // TEXT TOOL: Create text immediately
+            if (state.tool === 'text') {
+                e.preventDefault(); // Stop potential emulated mouse clicks
+                const id = Date.now().toString();
+                state.edits[pageNum].texts.push({ id, x, y: y - 10, text: 'Text' });
+                renderTexts(pageNum, pageDiv.querySelector('.text-layer'));
+                
+                // Focus newly created text
+                setTimeout(() => {
+                    const el = document.getElementById(`txt-${id}`);
+                    if(el) {
+                        el.focus();
+                        // select all
+                        const range = document.createRange();
+                        range.selectNodeContents(el);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }, 50);
+                
+                setTool('hand'); // Auto switch back to hand for panning
                 return;
             }
 
-            const arrayBuffer = await file.arrayBuffer();
-            state.currentPdfBytes = arrayBuffer;
-            
-            const pdfDoc = await PDFLib.PDFDocument.load(arrayBuffer);
-            state.totalPages = pdfDoc.getPageCount();
-            
-            // Reset state
-            state.isPreview = false;
-            state.previewPdfBytes = null;
-            state.edits = {};
-            for(let i=1; i<=state.totalPages; i++) {
-                state.edits[i] = { paths: [], texts: [], rects: [] };
-            }
-
-            // Update UI
-            elements.emptyState.classList.add('hidden');
-            elements.pagesContainer.classList.remove('hidden');
-            elements.toolsPanel.classList.remove('hidden');
-            elements.pageCountLabel.classList.remove('hidden');
-            elements.pageCountLabel.textContent = `${state.totalPages} Page${state.totalPages > 1 ? 's' : ''}`;
-            
-            elements.btnDownload.disabled = false;
-            elements.btnDownload.classList.remove('opacity-50', 'cursor-not-allowed');
-            
-            elements.btnPreview.disabled = false;
-            elements.btnPreview.classList.remove('opacity-50', 'cursor-not-allowed');
-            updatePreviewUI();
-
-            renderAllPages();
-        });
-
-        // --- Core PDF Generation Logic ---
-        
-        async function generateModifiedPdf() {
-            const pdfDoc = await PDFLib.PDFDocument.load(state.currentPdfBytes.slice(0));
-            const pdfJsDoc = await pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) }).promise;
-            const pages = pdfDoc.getPages();
-            
-            for (let i = 1; i <= state.totalPages; i++) {
-                const pageEdits = state.edits[i];
-                if (pageEdits.paths.length === 0 && pageEdits.texts.length === 0 && pageEdits.rects.length === 0) continue;
-
-                const page = pages[i-1];
-                const pageHeight = page.getHeight();
+            // DRAW / WHITEOUT
+            if (state.tool === 'draw' || state.tool === 'whiteout') {
+                // Prevent scrolling via touch-action css, but also ensure capture
+                target.setPointerCapture(e.pointerId);
+                state.isDrawing = true;
                 
-                const renderViewport = await pdfJsDoc.getPage(i).then(p => p.getViewport({ scale: state.scale }));
-                
-                const scaleX = page.getWidth() / renderViewport.width;
-                const scaleY = page.getHeight() / renderViewport.height;
-
-                // 1. Burn Whiteouts
-                pageEdits.rects.forEach(r => {
-                    const x = r.x * scaleX;
-                    const y = pageHeight - ((r.y + r.h) * scaleY);
-                    const w = r.w * scaleX;
-                    const h = r.h * scaleY;
-
-                    page.drawRectangle({
-                        x, y, width: w, height: h,
-                        color: PDFLib.rgb(1, 1, 1),
-                    });
-                });
-
-                // 2. Burn Paths
-                pageEdits.paths.forEach(path => {
-                    const svgPath = path.map(p => {
-                        const x = p.x * scaleX;
-                        const y = pageHeight - (p.y * scaleY); 
-                        return { x, y };
-                    });
-
-                    for(let k=0; k<svgPath.length-1; k++) {
-                        page.drawLine({
-                            start: svgPath[k],
-                            end: svgPath[k+1],
-                            thickness: 2,
-                            color: PDFLib.rgb(0, 0, 0),
-                        });
-                    }
-                });
-
-                // 3. Burn Text
-                pageEdits.texts.forEach(textItem => {
-                    const x = textItem.x * scaleX;
-                    const fontSize = 16 * scaleY;
-                    const domY = textItem.y + 20; 
-                    const y = pageHeight - (domY * scaleY);
-                    
-                    page.drawText(textItem.text, {
-                        x: x, y: y, size: fontSize, 
-                        color: PDFLib.rgb(0, 0, 0),
-                    });
-                });
-            }
-
-            return await pdfDoc.save();
-        }
-
-        // --- Rendering Logic (Multi-Page) ---
-
-        async function renderAllPages() {
-            elements.pagesContainer.innerHTML = ''; // Clear existing
-            
-            // Decide source
-            let bytesToRender = state.isPreview && state.previewPdfBytes 
-                ? state.previewPdfBytes 
-                : state.currentPdfBytes;
-
-            if (!bytesToRender) return;
-
-            // Load Doc
-            const loadingTask = pdfjsLib.getDocument({ data: bytesToRender.slice(0) });
-            const pdf = await loadingTask.promise;
-
-            // Loop through pages
-            for (let pageNum = 1; pageNum <= state.totalPages; pageNum++) {
-                
-                // Create Container
-                const pageDiv = document.createElement('div');
-                pageDiv.className = 'page-container';
-                pageDiv.dataset.page = pageNum;
-                if (state.isPreview) pageDiv.classList.add('preview-mode');
-
-                // Create Elements
-                const pdfCanvas = document.createElement('canvas');
-                pdfCanvas.className = 'pdf-render';
-                
-                const interactCanvas = document.createElement('canvas');
-                interactCanvas.className = 'interaction-layer';
-                
-                const textDiv = document.createElement('div');
-                textDiv.className = 'text-layer';
-                textDiv.dataset.page = pageNum;
-
-                pageDiv.appendChild(pdfCanvas);
-                pageDiv.appendChild(interactCanvas);
-                pageDiv.appendChild(textDiv);
-                elements.pagesContainer.appendChild(pageDiv);
-
-                // Render PDF to Canvas
-                const page = await pdf.getPage(pageNum);
-                const viewport = page.getViewport({ scale: state.scale });
-
-                pdfCanvas.height = viewport.height;
-                pdfCanvas.width = viewport.width;
-                interactCanvas.height = viewport.height;
-                interactCanvas.width = viewport.width;
-                pageDiv.style.width = `${viewport.width}px`;
-                pageDiv.style.height = `${viewport.height}px`;
-
-                const renderContext = {
-                    canvasContext: pdfCanvas.getContext('2d'),
-                    viewport: viewport
-                };
-                await page.render(renderContext).promise;
-
-                // Restore Edits (If not preview)
-                if (!state.isPreview) {
-                    redrawInteractionLayer(pageNum, interactCanvas);
-                    renderTextLayer(pageNum, textDiv);
+                if (state.tool === 'draw') {
+                    currentPath = [{ x, y }];
+                } else {
+                    currentRect = { x, y, w: 0, h: 0 };
                 }
             }
-        }
-
-        // --- Preview Logic ---
-        
-        elements.btnPreview.addEventListener('click', async () => {
-            if (state.isPreview) {
-                state.isPreview = false;
-                state.previewPdfBytes = null;
-                updatePreviewUI();
-                renderAllPages();
-            } else {
-                const modifiedBytes = await generateModifiedPdf();
-                state.previewPdfBytes = modifiedBytes;
-                state.isPreview = true;
-                updatePreviewUI();
-                renderAllPages();
-            }
         });
 
-        function updatePreviewUI() {
-            const btn = elements.btnPreview;
-            const tools = elements.toolsPanel;
-            const upload = elements.uploadLabel;
-            
-            if (state.isPreview) {
-                btn.innerHTML = `<i class="ph ph-pencil-simple"></i><span>Edit</span>`;
-                btn.classList.add('bg-blue-600', 'hover:bg-blue-700');
-                btn.classList.remove('bg-gray-800', 'hover:bg-gray-900');
-                tools.classList.add('disabled-area');
-                upload.classList.add('disabled-area');
-            } else {
-                btn.innerHTML = `<i class="ph ph-eye"></i><span>Preview</span>`;
-                btn.classList.remove('bg-blue-600', 'hover:bg-blue-700');
-                btn.classList.add('bg-gray-800', 'hover:bg-gray-900');
-                tools.classList.remove('disabled-area');
-                upload.classList.remove('disabled-area');
-            }
-        }
-
-        // --- Event Delegation for Interaction ---
-
-        let currentPath = [];
-        let currentRect = null; 
-
-        Object.keys(elements.tools).forEach(key => {
-            if (key === 'undo') return;
-            elements.tools[key].addEventListener('click', () => {
-                if (state.isPreview) return; 
-                setTool(key);
-            });
-        });
-
-        function setTool(toolName) {
-            state.tool = toolName;
-            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
-            elements.tools[toolName].classList.add('active');
-            
-            // Cursor is handled dynamically via CSS classes or JS based on target
-            // We set a global class on workspace to hint cursor?
-            // Actually, we'll just let the specific events handle cursor styles or set inline
-        }
-
-        // --- Global Mouse Events (Delegated) ---
-        
-        // We attach listeners to the Container to capture events on ANY page
-        elements.pagesContainer.addEventListener('mousedown', handleMouseDown);
-        elements.pagesContainer.addEventListener('mousemove', handleMouseMove);
-        elements.pagesContainer.addEventListener('mouseup', handleMouseUp);
-        elements.pagesContainer.addEventListener('mouseout', handleMouseUp);
-
-        // Map touch to mouse
-        elements.pagesContainer.addEventListener('touchstart', (e) => {
-            if(state.isPreview) return;
-            if(e.target.classList.contains('interaction-layer')) e.preventDefault();
-            const touch = e.touches[0];
-            const mouseEvent = new MouseEvent('mousedown', { 
-                clientX: touch.clientX, clientY: touch.clientY, bubbles: true, cancelable: true 
-            });
-            e.target.dispatchEvent(mouseEvent);
-        });
-        elements.pagesContainer.addEventListener('touchmove', (e) => {
-             if(state.isPreview) return;
-             if(e.target.classList.contains('interaction-layer')) e.preventDefault();
-             const touch = e.touches[0];
-             const mouseEvent = new MouseEvent('mousemove', { 
-                 clientX: touch.clientX, clientY: touch.clientY, bubbles: true, cancelable: true 
-             });
-             e.target.dispatchEvent(mouseEvent);
-        });
-        elements.pagesContainer.addEventListener('touchend', (e) => {
-             if(state.isPreview) return;
-             const mouseEvent = new MouseEvent('mouseup', { bubbles: true, cancelable: true });
-             e.target.dispatchEvent(mouseEvent);
-        });
-
-
-        function getLocalCoordinates(event, element) {
-            const rect = element.getBoundingClientRect();
-            return {
-                x: event.clientX - rect.left,
-                y: event.clientY - rect.top
-            };
-        }
-
-        function handleMouseDown(e) {
+        // 2. POINTER MOVE
+        container.addEventListener('pointermove', (e) => {
+            if (!state.isDrawing) return;
             if (state.isPreview) return;
 
-            // Identify Target
             const target = e.target;
-            
-            // 1. Check if clicking on Interaction Layer (Drawing/Whiteout/Placing Text)
-            if (target.classList.contains('interaction-layer')) {
-                const pageContainer = target.closest('.page-container');
-                const pageNum = parseInt(pageContainer.dataset.page);
-                state.activePage = pageNum;
-                
-                const coords = getLocalCoordinates(e, target);
-                const ctx = target.getContext('2d');
-
-                // TEXT TOOL
-                if (state.tool === 'text') {
-                    const newId = Date.now().toString(); 
-                    state.edits[pageNum].texts.push({
-                        id: newId,
-                        x: coords.x,
-                        y: coords.y - 12, 
-                        text: 'Type here...',
-                    });
-                    
-                    const textDiv = pageContainer.querySelector('.text-layer');
-                    renderTextLayer(pageNum, textDiv);
-                    
-                    setTimeout(() => {
-                        const el = document.getElementById(`text-${newId}`);
-                        if (el) {
-                            el.focus();
-                            document.execCommand('selectAll', false, null);
-                        }
-                    }, 10);
-                    
-                    setTool('cursor'); 
-                    return;
-                }
-
-                // DRAW / WHITEOUT
-                if (state.tool === 'draw' || state.tool === 'whiteout') {
-                    state.isDrawing = true;
-                    if (state.tool === 'draw') {
-                        currentPath = [{ x: coords.x, y: coords.y }];
-                        ctx.beginPath();
-                        ctx.moveTo(coords.x, coords.y);
-                        ctx.strokeStyle = '#000';
-                        ctx.lineWidth = 2;
-                        ctx.lineCap = 'round';
-                        ctx.lineJoin = 'round';
-                    } else {
-                        currentRect = { x: coords.x, y: coords.y, w: 0, h: 0 };
-                    }
-                }
-            }
-        }
-
-        function handleMouseMove(e) {
-            if (!state.isDrawing || state.isPreview || state.activePage === 0) return;
-
-            const target = e.target;
-            // Ensure we are dragging on the same page we started
             if (!target.classList.contains('interaction-layer')) return;
-            const pageContainer = target.closest('.page-container');
-            const pageNum = parseInt(pageContainer.dataset.page);
             
-            if (pageNum !== state.activePage) return; // Ignore if moved to another page
+            const rect = target.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
 
-            const coords = getLocalCoordinates(e, target);
             const ctx = target.getContext('2d');
 
             if (state.tool === 'draw') {
-                currentPath.push({ x: coords.x, y: coords.y });
-                ctx.lineTo(coords.x, coords.y);
-                ctx.stroke();
-            } else if (state.tool === 'whiteout' && currentRect) {
-                currentRect.w = coords.x - currentRect.x;
-                currentRect.h = coords.y - currentRect.y;
-                redrawInteractionLayer(pageNum, target);
+                // simple smoothing could go here, but raw lineTo is fast
+                const prev = currentPath[currentPath.length - 1];
+                currentPath.push({ x, y });
                 
-                // Preview rect
+                ctx.beginPath();
+                ctx.moveTo(prev.x, prev.y);
+                ctx.lineTo(x, y);
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#000000';
+                ctx.stroke();
+            } 
+            else if (state.tool === 'whiteout') {
+                currentRect.w = x - currentRect.x;
+                currentRect.h = y - currentRect.y;
+                redrawCanvas(state.activePage, target); // clear & redraw existing + preview
+                
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-                ctx.strokeStyle = '#000';
-                ctx.lineWidth = 1;
                 ctx.fillRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
+                ctx.strokeStyle = '#999';
+                ctx.lineWidth = 1;
                 ctx.strokeRect(currentRect.x, currentRect.y, currentRect.w, currentRect.h);
             }
-        }
+        });
 
-        function handleMouseUp(e) {
+        // 3. POINTER UP
+        container.addEventListener('pointerup', (e) => {
             if (!state.isDrawing) return;
             state.isDrawing = false;
             
-            const pageNum = state.activePage;
-            // Find canvas
-            const pageDiv = document.querySelector(`.page-container[data-page="${pageNum}"]`);
-            if (!pageDiv) return;
-            const canvas = pageDiv.querySelector('.interaction-layer');
-            const ctx = canvas.getContext('2d');
+            const target = e.target;
+            if (target.classList.contains('interaction-layer')) {
+                 target.releasePointerCapture(e.pointerId);
+            }
 
-            if (state.tool === 'draw') {
-                ctx.closePath();
-                if (currentPath.length > 1) {
-                    state.edits[pageNum].paths.push([...currentPath]);
-                }
-                currentPath = [];
-            } else if (state.tool === 'whiteout' && currentRect) {
+            const pIdx = state.activePage;
+            
+            if (state.tool === 'draw' && currentPath.length > 1) {
+                state.edits[pIdx].paths.push([...currentPath]);
+            } 
+            else if (state.tool === 'whiteout' && currentRect) {
+                // Normalize rect
                 if (currentRect.w < 0) { currentRect.x += currentRect.w; currentRect.w = Math.abs(currentRect.w); }
                 if (currentRect.h < 0) { currentRect.y += currentRect.h; currentRect.h = Math.abs(currentRect.h); }
-                
                 if (currentRect.w > 2 && currentRect.h > 2) {
-                    state.edits[pageNum].rects.push({...currentRect});
+                    state.edits[pIdx].rects.push({...currentRect});
                 }
-                currentRect = null;
-                redrawInteractionLayer(pageNum, canvas);
+                // Redraw to remove the gray preview and show whiteout
+                const pageDiv = document.querySelector(`.page-container[data-page="${pIdx}"]`);
+                if(pageDiv) redrawCanvas(pIdx, pageDiv.querySelector('.interaction-layer'));
             }
+            
+            currentPath = [];
+            currentRect = null;
+        });
+
+
+        // --- Drawing Helpers ---
+        function redrawCanvas(pageNum, canvas) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const data = state.edits[pageNum];
+
+            // 1. Whiteouts
+            ctx.fillStyle = '#ffffff';
+            data.rects.forEach(r => ctx.fillRect(r.x, r.y, r.w, r.h));
+
+            // 2. Paths
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#000000';
+            
+            ctx.beginPath();
+            data.paths.forEach(path => {
+                if(path.length < 2) return;
+                ctx.moveTo(path[0].x, path[0].y);
+                for(let i=1; i<path.length; i++) ctx.lineTo(path[i].x, path[i].y);
+            });
+            ctx.stroke();
         }
 
-        // --- Text Layer Management ---
-
-        function renderTextLayer(pageNum, container) {
+        // --- Text Handling ---
+        function renderTexts(pageNum, container) {
             container.innerHTML = '';
-            if (state.isPreview) return;
-
-            const texts = state.edits[pageNum].texts;
-
-            texts.forEach(item => {
+            state.edits[pageNum].texts.forEach(t => {
                 const el = document.createElement('div');
-                el.id = `text-${item.id}`;
+                el.id = `txt-${t.id}`;
                 el.className = 'text-element';
-                el.contentEditable = true; 
-                el.style.left = `${item.x}px`;
-                el.style.top = `${item.y}px`;
-                el.innerText = item.text;
+                el.contentEditable = true;
+                el.innerText = t.text;
+                el.style.left = `${t.x}px`;
+                el.style.top = `${t.y}px`;
 
-                el.addEventListener('mousedown', (e) => {
-                    if (state.isPreview) return;
-                    if (document.activeElement === el) return; 
+                // Drag Start
+                el.addEventListener('pointerdown', (e) => {
+                    if (state.tool !== 'hand') return; // Only move in hand mode
+                    e.stopPropagation(); // Don't trigger page tools
                     
-                    e.stopPropagation(); // Don't trigger page mousedown
-                    e.preventDefault(); 
-                    activeDragId = item.id;
+                    activeDragId = t.id;
                     draggedPageNum = pageNum;
-                    
-                    const rect = el.getBoundingClientRect();
-                    dragOffset = {
-                        x: e.clientX - rect.left,
-                        y: e.clientY - rect.top
-                    };
+                    const r = el.getBoundingClientRect();
+                    dragOffset = { x: e.clientX - r.left, y: e.clientY - r.top };
+                    el.setPointerCapture(e.pointerId);
                 });
 
-                el.addEventListener('blur', () => {
-                    if (state.isPreview) return;
-                    item.text = el.innerText;
-                    if (item.text.trim() === '') {
-                        const idx = state.edits[pageNum].texts.findIndex(t => t.id === item.id);
-                        if (idx > -1) state.edits[pageNum].texts.splice(idx, 1);
-                        renderTextLayer(pageNum, container);
+                // Drag Move
+                el.addEventListener('pointermove', (e) => {
+                    if (activeDragId !== t.id) return;
+                    e.preventDefault();
+                    
+                    // We need coordinates relative to the text-layer
+                    const parentRect = container.getBoundingClientRect();
+                    const newX = e.clientX - parentRect.left - dragOffset.x;
+                    const newY = e.clientY - parentRect.top - dragOffset.y;
+                    
+                    el.style.left = `${newX}px`;
+                    el.style.top = `${newY}px`;
+                    t.x = newX;
+                    t.y = newY;
+                });
+
+                // Drag End
+                el.addEventListener('pointerup', (e) => {
+                    if(activeDragId === t.id) {
+                        el.releasePointerCapture(e.pointerId);
+                        activeDragId = null;
                     }
                 });
-                
+
+                // Edit Content
+                el.addEventListener('blur', () => {
+                    t.text = el.innerText;
+                    if (!t.text.trim()) {
+                        // Remove empty
+                        state.edits[pageNum].texts = state.edits[pageNum].texts.filter(x => x.id !== t.id);
+                        renderTexts(pageNum, container);
+                    }
+                });
+
                 container.appendChild(el);
             });
         }
 
-        // Global Text Dragging
-        document.addEventListener('mousemove', (e) => {
-            if (activeDragId && !state.isPreview) {
-                // Find container for the page we are dragging on
-                const pageDiv = document.querySelector(`.page-container[data-page="${draggedPageNum}"]`);
-                const textDiv = pageDiv.querySelector('.text-layer');
-                const containerRect = textDiv.getBoundingClientRect();
-                
-                const x = e.clientX - containerRect.left - dragOffset.x;
-                const y = e.clientY - containerRect.top - dragOffset.y;
-                
-                const el = document.getElementById(`text-${activeDragId}`);
-                if (el) {
-                    el.style.left = `${x}px`;
-                    el.style.top = `${y}px`;
-                }
+        function undoLast() {
+            if (!state.activePage || state.activePage < 1) return showToast('Tap a page first');
+            const d = state.edits[state.activePage];
+            
+            // Simple logic: remove from whichever array is non-empty, checking order loosely
+            if (d.paths.length > 0) d.paths.pop();
+            else if (d.rects.length > 0) d.rects.pop();
+            else if (d.texts.length > 0) d.texts.pop();
+            else return showToast('Nothing to undo');
 
-                const item = state.edits[draggedPageNum].texts.find(t => t.id === activeDragId);
-                if (item) {
-                    item.x = x;
-                    item.y = y;
-                }
+            const pageDiv = document.querySelector(`.page-container[data-page="${state.activePage}"]`);
+            if (pageDiv) {
+                redrawCanvas(state.activePage, pageDiv.querySelector('.interaction-layer'));
+                renderTexts(state.activePage, pageDiv.querySelector('.text-layer'));
             }
-        });
-
-        document.addEventListener('mouseup', () => {
-            activeDragId = null;
-            draggedPageNum = 0;
-        });
-
-        function redrawInteractionLayer(pageNum, canvas) {
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            if (state.isPreview) return;
-
-            const pageEdits = state.edits[pageNum];
-
-            ctx.fillStyle = '#ffffff';
-            pageEdits.rects.forEach(r => {
-                ctx.fillRect(r.x, r.y, r.w, r.h);
-            });
-
-            ctx.lineWidth = 2;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            ctx.strokeStyle = '#000';
-
-            pageEdits.paths.forEach(path => {
-                if(path.length < 2) return;
-                ctx.beginPath();
-                ctx.moveTo(path[0].x, path[0].y);
-                for(let i=1; i<path.length; i++) {
-                    ctx.lineTo(path[i].x, path[i].y);
-                }
-                ctx.stroke();
-            });
+            showToast('Undone');
         }
 
-        // Undo Functionality - now undoes last action on the *last active page* or just globally?
-        // Let's make it global: undo last action on activePage
-        elements.tools.undo.addEventListener('click', () => {
-            if (state.isPreview || state.activePage === 0) return;
-            
-            const pageEdits = state.edits[state.activePage];
-            if (!pageEdits) return; // No edits on this page yet?
 
-            if (pageEdits.paths.length > 0) {
-                pageEdits.paths.pop();
-            } else if (pageEdits.rects.length > 0) {
-                pageEdits.rects.pop();
-            } else if (pageEdits.texts.length > 0) {
-                pageEdits.texts.pop(); 
+        // --- Save / Preview ---
+        els.btnPreview.addEventListener('click', async () => {
+            if (state.isPreview) {
+                state.isPreview = false;
+                state.previewPdfBytes = null;
+                els.btnPreview.innerHTML = '<i class="ph-bold ph-eye text-lg"></i><span class="hidden sm:inline">Preview</span>';
+                els.toolsBar.classList.remove('hidden');
+                await renderAllPages();
+            } else {
+                showToast('Generating Preview...');
+                state.previewPdfBytes = await generatePdf();
+                state.isPreview = true;
+                els.btnPreview.innerHTML = '<i class="ph-bold ph-pencil-simple text-lg"></i><span class="hidden sm:inline">Edit</span>';
+                els.toolsBar.classList.add('hidden');
+                await renderAllPages();
+                document.querySelectorAll('.page-container').forEach(p => p.classList.add('preview-mode'));
             }
-            
-            const pageDiv = document.querySelector(`.page-container[data-page="${state.activePage}"]`);
-            const canvas = pageDiv.querySelector('.interaction-layer');
-            const textDiv = pageDiv.querySelector('.text-layer');
-            
-            redrawInteractionLayer(state.activePage, canvas);
-            renderTextLayer(state.activePage, textDiv);
         });
 
-        // --- Saving / Downloading ---
-
-        elements.btnDownload.addEventListener('click', async () => {
-            if (!state.currentPdfBytes) return;
-
-            const finalPdfBytes = await generateModifiedPdf();
-            const blob = new Blob([finalPdfBytes], { type: 'application/pdf' });
+        els.btnDownload.addEventListener('click', async () => {
+            showToast('Preparing Download...');
+            const bytes = await generatePdf();
+            const blob = new Blob([bytes], { type: 'application/pdf' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);
-            link.download = 'edited_document.pdf';
+            link.download = `edited_${Date.now()}.pdf`;
             link.click();
+            showToast('Download Started');
         });
 
+        async function generatePdf() {
+            // Load original
+            const pdfDoc = await PDFLib.PDFDocument.load(state.currentPdfBytes.slice(0));
+            const pdfJsDoc = await pdfjsLib.getDocument({ data: state.currentPdfBytes.slice(0) }).promise;
+            const pages = pdfDoc.getPages();
+
+            for (let i = 1; i <= state.totalPages; i++) {
+                const data = state.edits[i];
+                if (!data.paths.length && !data.rects.length && !data.texts.length) continue;
+
+                const page = pages[i - 1];
+                const pageH = page.getHeight();
+                
+                // Calc scale factor based on how we rendered it on screen vs actual PDF size
+                const pageViewport = await pdfJsDoc.getPage(i).then(p => p.getViewport({ scale: state.scale }));
+                const scaleX = page.getWidth() / pageViewport.width;
+                const scaleY = page.getHeight() / pageViewport.height;
+
+                // 1. Whiteouts
+                data.rects.forEach(r => {
+                    page.drawRectangle({
+                        x: r.x * scaleX,
+                        y: pageH - ((r.y + r.h) * scaleY),
+                        width: r.w * scaleX,
+                        height: r.h * scaleY,
+                        color: PDFLib.rgb(1, 1, 1)
+                    });
+                });
+
+                // 2. Paths
+                data.paths.forEach(p => {
+                    // Convert screen coords to PDF coords
+                    // Remember PDF coords are Bottom-Left origin
+                    const pdfPath = p.map(pt => ({
+                        x: pt.x * scaleX,
+                        y: pageH - (pt.y * scaleY)
+                    }));
+
+                    for(let k=0; k<pdfPath.length-1; k++) {
+                        page.drawLine({
+                            start: pdfPath[k],
+                            end: pdfPath[k+1],
+                            thickness: 2,
+                            color: PDFLib.rgb(0,0,0)
+                        });
+                    }
+                });
+
+                // 3. Texts
+                data.texts.forEach(t => {
+                    // Visual adjustment for font baseline
+                    // On screen, (x,y) is top-left of box. In PDF, drawText (x,y) is baseline.
+                    // 16px font ~ 12pt in PDF? We scale explicitly.
+                    
+                    const fontSize = 16 * scaleY; 
+                    // Move down by ~fontSize to match top-left vs baseline visual difference
+                    const adjustedY = t.y + (16 * 0.8); 
+                    
+                    page.drawText(t.text, {
+                        x: t.x * scaleX,
+                        y: pageH - (adjustedY * scaleY),
+                        size: fontSize,
+                        color: PDFLib.rgb(0,0,0)
+                    });
+                });
+            }
+            return await pdfDoc.save();
+        }
     </script>
 </body>
 </html>
