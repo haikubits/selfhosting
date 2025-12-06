@@ -1,0 +1,1053 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Collage Studio</title>
+    <style>
+        :root {
+            --bg-dark: #121212;
+            --bg-panel: #1e1e1e;
+            --bg-input: #2c2c2c;
+            --accent: #3b82f6;
+            --text-main: #f3f4f6;
+            --text-muted: #a1a1aa;
+            --border: #3f3f46;
+            --safe-area-bottom: env(safe-area-inset-bottom);
+        }
+
+        * { box-sizing: border-box; user-select: none; -webkit-user-drag: none; -webkit-tap-highlight-color: transparent; }
+        
+        body {
+            margin: 0;
+            font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* --- Header --- */
+        header {
+            height: 48px;
+            background-color: var(--bg-panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        h1 { font-size: 1rem; font-weight: 600; margin: 0; display:flex; align-items:center; gap:8px; }
+        
+        .btn-icon {
+            background: none; border: none; color: var(--text-main);
+            padding: 8px; border-radius: 4px; cursor: pointer;
+        }
+        .btn-icon:hover { background: var(--bg-input); }
+        
+        .btn-primary {
+            background-color: var(--accent); color: white;
+            border: none; padding: 6px 14px; border-radius: 20px;
+            font-size: 0.85rem; font-weight: 500;
+        }
+
+        /* --- Layout --- */
+        .app-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Workspace (Canvas Area) */
+        .workspace {
+            flex: 1;
+            background-color: #000;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 20px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            touch-action: none; /* Prevent browser scrolling */
+        }
+
+        /* Panels Container */
+        .panels-container {
+            background-color: var(--bg-panel);
+            display: flex;
+            flex-direction: column;
+            z-index: 10;
+            border-left: 1px solid var(--border);
+        }
+
+        /* Tabs (Mobile Bottom / Desktop Header) */
+        .tab-bar {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-panel);
+        }
+        .tab-btn {
+            flex: 1;
+            background: none; border: none;
+            color: var(--text-muted);
+            padding: 12px 8px;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: rgba(59, 130, 246, 0.1);
+        }
+
+        /* Scrollable Panel Content */
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 16px;
+            display: none; /* Hidden by default */
+        }
+        .panel-content.active { display: block; }
+
+        /* --- Controls --- */
+        .control-group { margin-bottom: 20px; }
+        .control-header { 
+            font-size: 0.75rem; color: var(--text-muted); 
+            text-transform: uppercase; margin-bottom: 8px; font-weight: 600;
+        }
+        
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+        
+        /* Sliders */
+        input[type="range"] {
+            flex: 1; height: 6px;
+            background: var(--bg-input);
+            border-radius: 3px;
+            accent-color: var(--accent);
+            outline: none;
+            -webkit-appearance: none;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px; height: 18px;
+            background: var(--text-main);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* Inputs */
+        select, input[type="color"] {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 6px; border-radius: 6px;
+            font-size: 0.9rem;
+            height: 36px;
+        }
+        input[type="color"] { padding: 2px; width: 50px; }
+        
+        /* --- Grids --- */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+
+        .thumb {
+            width: 100%; aspect-ratio: 1;
+            background: #000; object-fit: cover;
+            border-radius: 4px; border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .thumb:active { opacity: 0.7; }
+
+        .template-item {
+            aspect-ratio: 1;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px;
+            cursor: pointer;
+        }
+        .template-item svg { width: 100%; height: 100%; fill: var(--text-muted); }
+        .template-item:hover, .template-item.active { border-color: var(--accent); }
+        .template-item:hover svg { fill: var(--text-main); }
+
+        /* --- Canvas DOM Elements --- */
+        #collage-area {
+            background-color: #fff;
+            box-shadow: 0 0 40px rgba(0,0,0,0.5);
+            position: relative;
+            transform-origin: center;
+            transition: width 0.2s, height 0.2s; 
+        }
+
+        .frame {
+            position: absolute;
+            overflow: hidden;
+            background-color: #eee;
+            touch-action: none;
+        }
+        
+        .frame.selected::after {
+            content: ''; position: absolute; inset: 0;
+            border: 2px solid var(--accent);
+            z-index: 10; pointer-events: none;
+        }
+        
+        .frame img {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform-origin: center;
+            pointer-events: none;
+            /* Critical for DOM preview to match Canvas logic */
+            min-width: 100%; min-height: 100%;
+            object-fit: cover; 
+            /* We will use transform for zoom/pan, so object-fit handles the base 'cover' aspect */
+        }
+
+        /* Resize Handles */
+        .resize-handle {
+            position: absolute; width: 24px; height: 24px; /* Larger touch target */
+            z-index: 20;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .resize-handle::before {
+            content:''; width: 12px; height: 12px;
+            background: var(--accent); border: 2px solid white; border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        .h-n { top: -12px; left: 50%; transform: translateX(-50%); }
+        .h-s { bottom: -12px; left: 50%; transform: translateX(-50%); }
+        .h-e { right: -12px; top: 50%; transform: translateY(-50%); }
+        .h-w { left: -12px; top: 50%; transform: translateY(-50%); }
+
+        .empty-icon {
+            position: absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+            color: #ccc; font-size: 24px;
+        }
+
+        /* --- File Input --- */
+        .add-btn {
+            background: var(--bg-input);
+            border: 2px dashed var(--border);
+            color: var(--text-muted);
+            border-radius: 8px;
+            padding: 20px; text-align: center;
+            cursor: pointer; margin-bottom: 20px;
+        }
+
+        /* --- Toast --- */
+        #toast {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); color: white;
+            padding: 12px 24px; border-radius: 30px;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s;
+            z-index: 9999; text-align: center;
+        }
+
+        /* ====== RESPONSIVE MODES ====== */
+        
+        /* Desktop / Tablet Landscape */
+        @media (min-width: 769px) {
+            .panels-container {
+                width: 320px;
+            }
+            .panel-content { height: 100%; }
+        }
+
+        /* Mobile / Tablet Portrait */
+        @media (max-width: 768px) {
+            .app-body {
+                flex-direction: column;
+            }
+            
+            .workspace {
+                height: 55%; /* Top half is canvas */
+                border-bottom: 1px solid var(--border);
+            }
+
+            .panels-container {
+                height: 45%; /* Bottom half is controls */
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--border);
+            }
+            
+            /* Move tab bar to bottom of panel container? No, top of panel container is better */
+            .tab-bar { order: -1; }
+            
+            /* Larger targets */
+            .template-item, .thumb { border-radius: 6px; }
+            input[type="range"]::-webkit-slider-thumb { width: 24px; height: 24px; }
+        }
+
+        /* Landscape Mobile (Short height) */
+        @media (max-height: 500px) and (orientation: landscape) {
+            .app-body { flex-direction: row; }
+            .workspace { height: 100%; width: auto; flex:1; }
+            .panels-container { width: 280px; height: 100%; }
+        }
+
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        Collage Studio
+    </h1>
+    <div style="display:flex; gap:8px;">
+        <button class="btn-icon" onclick="app.undo()">↶</button>
+        <button class="btn-icon" onclick="app.redo()">↷</button>
+        <button class="btn-primary" onclick="app.exportCollage()">Save</button>
+    </div>
+</header>
+
+<div class="app-body">
+    <!-- Workspace -->
+    <div class="workspace" id="workspace-container">
+        <div id="collage-area"></div>
+    </div>
+
+    <!-- Controls Panel -->
+    <div class="panels-container">
+        <!-- Tabs -->
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="app.switchTab('photos')">Photos</button>
+            <button class="tab-btn" onclick="app.switchTab('templates')">Layout</button>
+            <button class="tab-btn" onclick="app.switchTab('edit')">Edit</button>
+            <button class="tab-btn" onclick="app.switchTab('canvas')">Canvas</button>
+        </div>
+
+        <!-- Panel: Photos -->
+        <div id="tab-photos" class="panel-content active">
+            <div class="add-btn" onclick="document.getElementById('file-input').click()">
+                + Add Photos
+            </div>
+            <input type="file" id="file-input" multiple accept="image/*" style="display:none">
+            <div class="control-header">Library (Drag or Tap to fill selected)</div>
+            <div class="grid-3" id="photo-tray"></div>
+        </div>
+
+        <!-- Panel: Templates -->
+        <div id="tab-templates" class="panel-content">
+            <div class="control-header">Layouts</div>
+            <div class="grid-3" id="template-list"></div>
+        </div>
+
+        <!-- Panel: Edit (Selected Frame) -->
+        <div id="tab-edit" class="panel-content">
+            <div id="no-selection" style="text-align:center; padding:20px; color:var(--text-muted);">
+                Tap a photo frame to edit
+            </div>
+            <div id="edit-controls" style="display:none;">
+                <div class="control-group">
+                    <div class="control-header">Image Transform</div>
+                    <div class="row">
+                        <label>Zoom</label>
+                        <input type="range" min="0.5" max="3" step="0.1" id="inp-zoom" oninput="app.transformImage('zoom', this.value)">
+                    </div>
+                    <div class="row">
+                        <label>Rotate</label>
+                        <input type="range" min="-180" max="180" step="90" id="inp-rot" oninput="app.transformImage('rotate', this.value)">
+                    </div>
+                    <div class="grid-2">
+                        <button class="btn-icon" style="background:var(--bg-input); width:100%" onclick="app.fitImage()">Fit Center</button>
+                        <button class="btn-icon" style="background:var(--bg-input); width:100%; color:#ef4444" onclick="app.removeImage()">Clear</button>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="control-header">Frame Style</div>
+                    <div class="row">
+                        <label>Rounded</label>
+                        <input type="range" min="0" max="50" id="inp-br" oninput="app.updateFrameStyle('borderRadius', this.value)">
+                    </div>
+                    <div class="row">
+                        <label>Border</label>
+                        <input type="range" min="0" max="20" id="inp-bw" oninput="app.updateFrameStyle('borderWidth', this.value)">
+                    </div>
+                    <div class="row">
+                        <label>Color</label>
+                        <input type="color" id="inp-bc" onchange="app.updateFrameStyle('borderColor', this.value)">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel: Canvas -->
+        <div id="tab-canvas" class="panel-content">
+            <div class="control-group">
+                <div class="control-header">Dimensions</div>
+                <div class="row">
+                    <label>Aspect Ratio</label>
+                    <select id="aspect-select" onchange="app.setAspectRatio(this.value)" style="flex:1; max-width:120px;">
+                        <option value="1:1">1:1 Square</option>
+                        <option value="4:5">4:5 Portrait</option>
+                        <option value="9:16">9:16 Story</option>
+                        <option value="4:3">4:3 Photo</option>
+                        <option value="16:9">16:9 Cinema</option>
+                    </select>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="control-header">Spacing</div>
+                <div class="row">
+                    <label>Gap</label>
+                    <input type="range" min="0" max="40" id="inp-gap" oninput="app.updateCanvasStyle('gap', this.value)">
+                </div>
+                <div class="row">
+                    <label>Padding</label>
+                    <input type="range" min="0" max="80" id="inp-pad" oninput="app.updateCanvasStyle('padding', this.value)">
+                </div>
+                <div class="row">
+                    <label>Background</label>
+                    <input type="color" id="inp-bg" onchange="app.updateCanvasStyle('bg', this.value)">
+                </div>
+            </div>
+            <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:20px;">
+                <button class="btn-icon" style="width:100%; color:#ef4444; border:1px solid #ef4444;" onclick="app.resetProject()">Reset Project</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// --- Logic ---
+
+const TEMPLATES = {
+    'grid-1': [{x:0,y:0,w:100,h:100}],
+    'grid-2h': [{x:0,y:0,w:100,h:50}, {x:0,y:50,w:100,h:50}],
+    'grid-2v': [{x:0,y:0,w:50,h:100}, {x:50,y:0,w:50,h:100}],
+    'grid-3': [{x:0,y:0,w:50,h:100}, {x:50,y:0,w:50,h:50}, {x:50,y:50,w:50,h:50}],
+    'grid-4': [{x:0,y:0,w:50,h:50}, {x:50,y:0,w:50,h:50}, {x:0,y:50,w:50,h:50}, {x:50,y:50,w:50,h:50}],
+    'grid-6': [
+        {x:0,y:0,w:33.33,h:50}, {x:33.33,y:0,w:33.33,h:50}, {x:66.66,y:0,w:33.33,h:50},
+        {x:0,y:50,w:33.33,h:50}, {x:33.33,y:50,w:33.33,h:50}, {x:66.66,y:50,w:33.33,h:50}
+    ],
+    'grid-mix': [{x:0,y:0,w:66.66,h:100}, {x:66.66,y:0,w:33.33,h:50}, {x:66.66,y:50,w:33.33,h:50}]
+};
+
+class CollageApp {
+    constructor() {
+        this.state = {
+            canvas: { bg: '#ffffff', gap: 4, padding: 16, ratio: 1 },
+            frames: [],
+            images: {},
+            selection: null
+        };
+        this.history = [];
+        this.historyIndex = -1;
+        
+        // Interaction states
+        this.dragData = null; // { type: 'pan'|'resize', startX, startY, ... }
+        
+        this.init();
+    }
+
+    init() {
+        // Load or Default
+        const saved = localStorage.getItem('collage_project');
+        if (saved) {
+            try {
+                const data = JSON.parse(saved);
+                this.state = data.state;
+            } catch(e) { console.error(e); }
+        } else {
+            this.loadTemplate('grid-4', false);
+        }
+
+        this.setupUI();
+        this.setupEvents();
+        this.render();
+    }
+
+    setupUI() {
+        // Render Template List
+        const tplList = document.getElementById('template-list');
+        Object.keys(TEMPLATES).forEach(k => {
+            const div = document.createElement('div');
+            div.className = 'template-item';
+            div.onclick = () => this.loadTemplate(k);
+            let svg = `<svg viewBox="0 0 100 100">`;
+            TEMPLATES[k].forEach(r => {
+                svg += `<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="#555" stroke="#333" stroke-width="1"/>`;
+            });
+            svg += `</svg>`;
+            div.innerHTML = svg;
+            tplList.appendChild(div);
+        });
+    }
+
+    setupEvents() {
+        // File Input
+        document.getElementById('file-input').onchange = (e) => this.handleFiles(e.target.files);
+        
+        // Workspace Touch/Mouse
+        const ws = document.getElementById('collage-area');
+        ws.addEventListener('pointerdown', this.onPointerDown.bind(this));
+        document.addEventListener('pointermove', this.onPointerMove.bind(this));
+        document.addEventListener('pointerup', this.onPointerUp.bind(this));
+    }
+
+    /* --- Actions --- */
+
+    switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.panel-content').forEach(p => p.classList.remove('active'));
+        
+        document.querySelector(`.tab-btn[onclick="app.switchTab('${tabId}')"]`).classList.add('active');
+        document.getElementById(`tab-${tabId}`).classList.add('active');
+    }
+
+    pushHistory() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.historyIndex + 1);
+        }
+        this.history.push(JSON.stringify(this.state));
+        if (this.history.length > 20) this.history.shift();
+        else this.historyIndex++;
+        
+        localStorage.setItem('collage_project', JSON.stringify({ state: this.state }));
+    }
+
+    undo() {
+        if (this.historyIndex > 0) {
+            this.historyIndex--;
+            this.state = JSON.parse(this.history[this.historyIndex]);
+            this.render();
+        }
+    }
+
+    redo() {
+        if (this.historyIndex < this.history.length - 1) {
+            this.historyIndex++;
+            this.state = JSON.parse(this.history[this.historyIndex]);
+            this.render();
+        }
+    }
+
+    resetProject() {
+        if(confirm("Clear everything?")) {
+            this.state.images = {};
+            this.loadTemplate('grid-4');
+        }
+    }
+
+    /* --- Logic --- */
+
+    async handleFiles(files) {
+        for (let file of files) {
+            if (!file.type.startsWith('image/')) continue;
+            
+            // Downscale to prevent crashes on mobile
+            const bitmap = await createImageBitmap(file);
+            const maxDim = 1200; 
+            let w = bitmap.width, h = bitmap.height;
+            if (w > maxDim || h > maxDim) {
+                const scale = maxDim / Math.max(w, h);
+                w *= scale; h *= scale;
+            }
+            const cvs = document.createElement('canvas');
+            cvs.width = w; cvs.height = h;
+            cvs.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+            
+            const id = 'img_' + Date.now() + Math.random().toString(36).slice(2);
+            this.state.images[id] = cvs.toDataURL('image/jpeg', 0.8);
+            
+            // Auto-fill
+            const empty = this.state.frames.find(f => !f.image);
+            if (empty) {
+                empty.image = { id, zoom: 1, rot: 0, panX: 0, panY: 0 };
+            }
+        }
+        this.pushHistory();
+        this.render();
+    }
+
+    loadTemplate(key, record=true) {
+        if(record) this.pushHistory();
+        const tpl = TEMPLATES[key];
+        // Redistribute existing images
+        const imgs = this.state.frames.map(f => f.image).filter(i => i);
+        
+        this.state.frames = tpl.map((box, i) => ({
+            id: i,
+            x: box.x, y: box.y, w: box.w, h: box.h,
+            styles: { bw: 0, bc: '#ffffff', br: 0 },
+            image: imgs[i] || null
+        }));
+        this.render();
+    }
+
+    selectFrame(id) {
+        this.state.selection = id;
+        this.render();
+        
+        // If on mobile, maybe auto-switch to Edit tab? 
+        if (window.innerWidth < 768 && id !== null) {
+            this.switchTab('edit');
+        }
+    }
+
+    /* --- Rendering --- */
+
+    render() {
+        this.renderWorkspace();
+        this.renderControls();
+        this.renderTray();
+    }
+
+    renderWorkspace() {
+        const root = document.getElementById('collage-area');
+        const container = document.getElementById('workspace-container');
+        const c = this.state.canvas;
+
+        // Calc size
+        const maxW = container.clientWidth - 32;
+        const maxH = container.clientHeight - 32;
+        
+        // Ratio parsing
+        let r = 1;
+        if (typeof c.ratio === 'string' && c.ratio.includes(':')) {
+            const [rw, rh] = c.ratio.split(':').map(Number);
+            r = rw / rh;
+        } else { r = Number(c.ratio); }
+
+        let w = maxW;
+        let h = w / r;
+        if (h > maxH) { h = maxH; w = h * r; }
+
+        root.style.width = w + 'px';
+        root.style.height = h + 'px';
+        root.style.backgroundColor = c.bg;
+        root.innerHTML = '';
+
+        // Frames
+        const pad = parseInt(c.padding);
+        const gap = parseInt(c.gap);
+        // Logical Width (internal units)
+        const lw = w - (pad*2);
+        const lh = h - (pad*2);
+
+        this.state.frames.forEach(f => {
+            const el = document.createElement('div');
+            el.className = 'frame';
+            if (this.state.selection === f.id) el.classList.add('selected');
+
+            // Pos
+            const pxX = pad + (f.x/100 * lw);
+            const pxY = pad + (f.y/100 * lh);
+            const pxW = (f.w/100 * lw);
+            const pxH = (f.h/100 * lh);
+
+            // Apply Gap
+            const gapAdj = gap/2;
+            el.style.left = (pxX + gapAdj) + 'px';
+            el.style.top = (pxY + gapAdj) + 'px';
+            el.style.width = Math.max(0, pxW - gap) + 'px';
+            el.style.height = Math.max(0, pxH - gap) + 'px';
+
+            // Styles
+            el.style.border = `${f.styles.bw}px solid ${f.styles.bc}`;
+            el.style.borderRadius = `${f.styles.br}px`;
+
+            // Content
+            if (f.image && this.state.images[f.image.id]) {
+                const img = document.createElement('img');
+                img.src = this.state.images[f.image.id];
+                // DOM Transform
+                // translate(pan) rotate(r) scale(z)
+                img.style.transform = `translate(-50%, -50%) translate(${f.image.panX}px, ${f.image.panY}px) rotate(${f.image.rot}deg) scale(${f.image.zoom})`;
+                el.appendChild(img);
+            } else {
+                const icon = document.createElement('div');
+                icon.className = 'empty-icon';
+                icon.innerText = '+';
+                el.appendChild(icon);
+            }
+
+            // Events
+            el.onpointerdown = (e) => {
+                if (e.target.classList.contains('resize-handle')) return;
+                e.stopPropagation();
+                this.selectFrame(f.id);
+                if (f.image) {
+                    this.dragData = {
+                        type: 'pan',
+                        startX: e.clientX, startY: e.clientY,
+                        iX: f.image.panX, iY: f.image.panY,
+                        frameId: f.id
+                    };
+                }
+            };
+
+            // Handles
+            if (this.state.selection === f.id) {
+                ['n','s','e','w'].forEach(dir => {
+                    const h = document.createElement('div');
+                    h.className = `resize-handle h-${dir}`;
+                    h.onpointerdown = (e) => {
+                        e.stopPropagation();
+                        this.dragData = {
+                            type: 'resize',
+                            dir: dir,
+                            startX: e.clientX, startY: e.clientY,
+                            orig: {...f},
+                            frameId: f.id
+                        };
+                    };
+                    el.appendChild(h);
+                });
+            }
+
+            root.appendChild(el);
+        });
+    }
+
+    renderControls() {
+        const f = this.state.frames.find(x => x.id === this.state.selection);
+        
+        // Show/Hide Edit panel
+        const noSel = document.getElementById('no-selection');
+        const editCtrls = document.getElementById('edit-controls');
+        if (f) {
+            noSel.style.display = 'none';
+            editCtrls.style.display = 'block';
+            
+            // Sync Values
+            if(f.image) {
+                document.getElementById('inp-zoom').value = f.image.zoom;
+                document.getElementById('inp-rot').value = f.image.rot;
+            }
+            document.getElementById('inp-br').value = f.styles.br;
+            document.getElementById('inp-bw').value = f.styles.bw;
+            document.getElementById('inp-bc').value = f.styles.bc;
+        } else {
+            noSel.style.display = 'block';
+            editCtrls.style.display = 'none';
+        }
+
+        // Canvas Panel Sync
+        document.getElementById('aspect-select').value = this.state.canvas.ratio;
+        document.getElementById('inp-gap').value = this.state.canvas.gap;
+        document.getElementById('inp-pad').value = this.state.canvas.padding;
+        document.getElementById('inp-bg').value = this.state.canvas.bg;
+    }
+
+    renderTray() {
+        const tray = document.getElementById('photo-tray');
+        tray.innerHTML = '';
+        Object.entries(this.state.images).forEach(([id, url]) => {
+            const img = document.createElement('img');
+            img.src = url;
+            img.className = 'thumb';
+            img.onclick = () => {
+                if (this.state.selection !== null) {
+                    const f = this.state.frames.find(x => x.id === this.state.selection);
+                    if(f) {
+                        this.pushHistory();
+                        f.image = { id, zoom: 1, rot: 0, panX: 0, panY: 0 };
+                        this.render();
+                    }
+                }
+            };
+            tray.appendChild(img);
+        });
+    }
+
+    /* --- Interaction --- */
+
+    onPointerMove(e) {
+        if (!this.dragData) return;
+        e.preventDefault();
+        const d = this.dragData;
+        
+        if (d.type === 'pan') {
+            const f = this.state.frames.find(x => x.id === d.frameId);
+            if(f && f.image) {
+                const dx = e.clientX - d.startX;
+                const dy = e.clientY - d.startY;
+                f.image.panX = d.iX + dx;
+                f.image.panY = d.iY + dy;
+                // Simple DOM update for perf
+                const imgEl = document.querySelector(`.frame.selected img`);
+                if(imgEl) imgEl.style.transform = `translate(-50%, -50%) translate(${f.image.panX}px, ${f.image.panY}px) rotate(${f.image.rot}deg) scale(${f.image.zoom})`;
+            }
+        }
+        
+        if (d.type === 'resize') {
+            // Need to convert screen delta to % delta
+            const root = document.getElementById('collage-area');
+            const rect = root.getBoundingClientRect();
+            // Available inner area
+            const pad = this.state.canvas.padding;
+            const lw = rect.width - (pad*2);
+            const lh = rect.height - (pad*2);
+
+            const dxPct = (e.clientX - d.startX) / lw * 100;
+            const dyPct = (e.clientY - d.startY) / lh * 100;
+            
+            const f = this.state.frames.find(x => x.id === d.frameId);
+            
+            if (d.dir === 'e') f.w = Math.max(5, d.orig.w + dxPct);
+            if (d.dir === 's') f.h = Math.max(5, d.orig.h + dyPct);
+            if (d.dir === 'w') {
+                const change = Math.min(d.orig.w - 5, dxPct);
+                f.x = d.orig.x + change;
+                f.w = d.orig.w - change;
+            }
+            if (d.dir === 'n') {
+                const change = Math.min(d.orig.h - 5, dyPct);
+                f.y = d.orig.y + change;
+                f.h = d.orig.h - change;
+            }
+            this.renderWorkspace(); // Full render needed for layout
+        }
+    }
+
+    onPointerUp() {
+        if (this.dragData) {
+            this.pushHistory(); // Commit change
+            this.dragData = null;
+        }
+    }
+
+    /* --- Updates --- */
+    
+    transformImage(prop, val) {
+        const f = this.state.frames.find(x => x.id === this.state.selection);
+        if(f && f.image) {
+            if(prop === 'zoom') f.image.zoom = parseFloat(val);
+            if(prop === 'rotate') f.image.rot = parseInt(val);
+            this.renderWorkspace();
+        }
+    }
+    
+    updateFrameStyle(prop, val) {
+        const f = this.state.frames.find(x => x.id === this.state.selection);
+        if(f) {
+            if(prop === 'borderRadius') f.styles.br = val;
+            if(prop === 'borderWidth') f.styles.bw = val;
+            if(prop === 'borderColor') f.styles.bc = val;
+            this.renderWorkspace();
+        }
+    }
+
+    updateCanvasStyle(prop, val) {
+        if(prop === 'gap') this.state.canvas.gap = val;
+        if(prop === 'padding') this.state.canvas.padding = val;
+        if(prop === 'bg') this.state.canvas.bg = val;
+        this.renderWorkspace();
+    }
+    
+    setAspectRatio(val) {
+        this.state.canvas.ratio = val;
+        this.renderWorkspace();
+    }
+    
+    fitImage() {
+        const f = this.state.frames.find(x => x.id === this.state.selection);
+        if(f && f.image) {
+            f.image.zoom = 1; f.image.panX = 0; f.image.panY = 0; f.image.rot = 0;
+            this.render();
+        }
+    }
+    
+    removeImage() {
+        const f = this.state.frames.find(x => x.id === this.state.selection);
+        if(f) {
+            f.image = null;
+            this.render();
+        }
+    }
+
+    /* --- Export Fix --- */
+
+    async exportCollage() {
+        const toast = document.getElementById('toast');
+        toast.innerText = "Rendering High-Res...";
+        toast.style.opacity = 1;
+
+        // Wait a tick for UI update
+        await new Promise(r => setTimeout(r, 50));
+
+        const scale = 2; // 2x export
+        const c = this.state.canvas;
+        
+        // Base Size Calculation
+        let ratio = 1;
+        if (typeof c.ratio === 'string' && c.ratio.includes(':')) {
+            const [rw, rh] = c.ratio.split(':').map(Number);
+            ratio = rw / rh;
+        } else { ratio = Number(c.ratio); }
+
+        const baseW = 1200;
+        const width = baseW * scale;
+        const height = (baseW / ratio) * scale;
+
+        const cvs = document.createElement('canvas');
+        cvs.width = width;
+        cvs.height = height;
+        const ctx = cvs.getContext('2d');
+
+        // Background
+        ctx.fillStyle = c.bg;
+        ctx.fillRect(0,0, width, height);
+
+        // Metrics (Scaled)
+        // Since we render based on percentages of inner area:
+        // Need to calculate padding relative to 1200 base width? 
+        // No, we should rely on the state values which are pixels (conceptually).
+        // BUT in the DOM, we scaled padding relative to container width?
+        // Actually, in `renderWorkspace`: padding is pixels. 
+        // So we need to scale the pixels up.
+        
+        // We defined padding/gap as 'slider values'. Let's treat them as pixels relative to a ~800px screen.
+        // So we multiply by (width / 800) roughly.
+        // Let's assume the slider values are for a 800px wide canvas.
+        const pxScale = width / 800; 
+
+        const pad = c.padding * pxScale;
+        const gap = c.gap * pxScale;
+        const lw = width - (pad*2);
+        const lh = height - (pad*2);
+
+        // Draw
+        for (let f of this.state.frames) {
+            const pxX = pad + (f.x/100 * lw);
+            const pxY = pad + (f.y/100 * lh);
+            const pxW = (f.w/100 * lw);
+            const pxH = (f.h/100 * lh);
+
+            const gapAdj = gap/2;
+            let x = pxX + gapAdj;
+            let y = pxY + gapAdj;
+            let w = Math.max(0, pxW - gap);
+            let h = Math.max(0, pxH - gap);
+
+            // Clip
+            ctx.save();
+            ctx.beginPath();
+            // Rounded rect
+            const br = f.styles.br * pxScale;
+            if (ctx.roundRect) ctx.roundRect(x,y,w,h,br);
+            else ctx.rect(x,y,w,h);
+            ctx.clip();
+            
+            // Draw background
+            ctx.fillStyle = "#eee";
+            ctx.fillRect(x,y,w,h);
+
+            // Draw Image
+            if (f.image && this.state.images[f.image.id]) {
+                const img = new Image();
+                img.src = this.state.images[f.image.id];
+                await new Promise(r => { if(img.complete)r(); else img.onload=r; });
+                
+                const iw = img.naturalWidth;
+                const ih = img.naturalHeight;
+
+                ctx.save();
+                
+                // 1. Move to center of frame
+                ctx.translate(x + w/2, y + h/2);
+
+                // 2. Apply Pan (Scaled)
+                // Pan value in state is screen pixels (approx). Scale it up.
+                ctx.translate(f.image.panX * pxScale, f.image.panY * pxScale);
+                
+                // 3. Rotate
+                ctx.rotate(f.image.rot * Math.PI / 180);
+
+                // 4. Calculate "Cover" Scale
+                // We need to fill a box of size (w, h) with image (iw, ih).
+                // However, if rotated 90 or 270, we are filling (h, w).
+                let targetW = w;
+                let targetH = h;
+                if (Math.abs(f.image.rot) === 90 || Math.abs(f.image.rot) === 270) {
+                    targetW = h;
+                    targetH = w;
+                }
+
+                // Aspect Ratios
+                const aspectTarget = targetW / targetH;
+                const aspectImg = iw / ih;
+                
+                let scaleFactor;
+                if (aspectImg > aspectTarget) {
+                    // Image is wider than target -> Match height
+                    scaleFactor = targetH / ih;
+                } else {
+                    // Image is taller -> Match width
+                    scaleFactor = targetW / iw;
+                }
+
+                // 5. Apply Scale (Base Cover * User Zoom)
+                const finalScale = scaleFactor * f.image.zoom;
+                ctx.scale(finalScale, finalScale);
+
+                // 6. Draw centered
+                ctx.drawImage(img, -iw/2, -ih/2);
+                
+                ctx.restore();
+            }
+            ctx.restore(); // End Clip
+
+            // Border
+            if (f.styles.bw > 0) {
+                const bw = f.styles.bw * pxScale;
+                ctx.lineWidth = bw;
+                ctx.strokeStyle = f.styles.bc;
+                ctx.beginPath();
+                if (ctx.roundRect) ctx.roundRect(x,y,w,h,br);
+                else ctx.rect(x,y,w,h);
+                ctx.stroke();
+            }
+        }
+
+        // Save
+        const link = document.createElement('a');
+        link.download = 'collage.png';
+        link.href = cvs.toDataURL('image/png');
+        link.click();
+        
+        toast.innerText = "Saved!";
+        setTimeout(() => toast.style.opacity = 0, 2000);
+    }
+}
+
+const app = new CollageApp();
+
+// Safari Polyfill for roundRect
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+        if (w < 2 * r) r = w / 2;
+        if (h < 2 * r) r = h / 2;
+        this.beginPath();
+        this.moveTo(x + r, y);
+        this.arcTo(x + w, y, x + w, y + h, r);
+        this.arcTo(x + w, y + h, x, y + h, r);
+        this.arcTo(x, y + h, x, y, r);
+        this.arcTo(x, y, x + w, y, r);
+        this.closePath();
+    };
+}
+</script>
+</body>
+</html>
+
+
