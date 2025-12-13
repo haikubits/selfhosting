@@ -12,7 +12,8 @@
     <div id="fatal-error"></div>
     <script>
         window.onerror = function(msg, url, line, col, error) {
-            if (msg.includes("ResizeObserver")) return;
+            // Ignore benign browser/extension errors
+            if (msg.includes("ResizeObserver") || msg.includes("MMR") || msg.includes("Tracking")) return;
             const div = document.getElementById('fatal-error');
             div.style.display = 'block';
             div.innerHTML = `<h3>Critical App Error</h3><p>${msg}</p><p>Location: ${url}:${line}:${col}</p><pre>${error ? error.stack : 'No stack trace'}</pre><button onclick="window.location.reload()" style="padding:10px; margin-top:10px; border:1px solid #ccc; cursor:pointer;">Reload App</button>`;
@@ -71,7 +72,8 @@
     <!-- HEADER -->
     <header class="h-14 border-b border-gray-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 shrink-0 z-20">
         <div class="flex items-center gap-2">
-            <i data-lucide="cpu" class="w-6 h-6 text-blue-600 dark:text-blue-400"></i>
+            <!-- Inline SVG for Logo -->
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
             <h1 class="font-bold text-lg tracking-tight hidden sm:block">LocalChat WebAI</h1>
             <h1 class="font-bold text-lg tracking-tight sm:hidden">LocalChat</h1>
             <span id="mode-badge" class="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400 font-mono">...</span>
@@ -82,10 +84,16 @@
                 <select id="model-select" class="text-sm bg-gray-100 dark:bg-slate-800 border-none rounded-lg py-1.5 px-3 focus:ring-1 focus:ring-blue-500 max-w-[200px] truncate"></select>
                 <button id="btn-load-model" class="text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg transition-colors">Load</button>
             </div>
-            <button id="btn-reset" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"><i data-lucide="plus-circle" class="w-5 h-5"></i></button>
-            <button id="btn-theme" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"><i data-lucide="sun-moon" class="w-5 h-5"></i></button>
-            <button id="btn-settings" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg md:hidden"><i data-lucide="settings" class="w-5 h-5"></i></button>
-            <button id="btn-export-ui" class="hidden md:block p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg"><i data-lucide="download" class="w-5 h-5"></i></button>
+            
+            <button id="btn-reset" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg" title="New Chat">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
+            </button>
+            <button id="btn-theme" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg" title="Toggle Theme">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+            </button>
+            <button id="btn-settings" class="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg" title="Settings">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
         </div>
     </header>
 
@@ -95,7 +103,7 @@
             <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth pb-32">
                 <div id="welcome-screen" class="flex flex-col gap-2 items-center justify-center h-full text-center text-slate-400 p-8">
                     <div class="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4">
-                        <i data-lucide="message-square" class="w-8 h-8 text-blue-600 dark:text-blue-400"></i>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600 dark:text-blue-400"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     </div>
                     <h2 class="text-xl font-bold text-slate-700 dark:text-slate-200">Browser-Based AI</h2>
                     <p class="max-w-md text-sm">Runs locally using WebGPU or WASM.<br>First load downloads model weights (1GB+).</p>
@@ -110,9 +118,9 @@
                 <div class="relative max-w-3xl mx-auto shadow-lg rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
                     <textarea id="user-input" rows="1" class="w-full bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 px-4 py-3.5 pr-12 resize-none focus:outline-none max-h-48 rounded-2xl" placeholder="Type a message..."></textarea>
                     <button id="btn-send" disabled class="absolute right-2 bottom-2 p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-                        <i data-lucide="send-horizontal" class="w-5 h-5"></i>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
                     </button>
-                    <button id="btn-stop" class="hidden absolute right-14 bottom-2 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><i data-lucide="square" class="w-5 h-5 fill-current"></i></button>
+                    <button id="btn-stop" class="hidden absolute right-14 bottom-2 p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg></button>
                 </div>
                 <div class="text-center mt-2 flex justify-center items-center gap-2">
                     <p class="text-[10px] text-slate-400 dark:text-slate-600">AI can make mistakes.</p>
@@ -124,7 +132,7 @@
         <div id="settings-drawer" class="absolute inset-y-0 right-0 w-80 bg-white dark:bg-slate-900 shadow-2xl transform translate-x-full transition-transform duration-300 z-30 border-l border-gray-200 dark:border-slate-800 flex flex-col">
             <div class="p-4 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between">
                 <h2 class="font-bold">Settings</h2>
-                <button id="btn-close-settings" class="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"><i data-lucide="x" class="w-5 h-5"></i></button>
+                <button id="btn-close-settings" class="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
             </div>
             <div class="p-4 space-y-6 overflow-y-auto flex-1">
                 
@@ -142,16 +150,26 @@
                 <div>
                     <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Model Cache</h3>
                     <div id="cache-list" class="space-y-2 text-sm text-slate-400 italic">None.</div>
-                    <button id="btn-clear-cache" class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg"><i data-lucide="trash" class="w-3 h-3"></i> Clear Cache</button>
+                    <button id="btn-clear-cache" class="mt-2 w-full flex items-center justify-center gap-2 px-3 py-2 text-xs text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-1"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        Clear Cache
+                    </button>
                 </div>
                 <hr class="border-gray-100 dark:border-slate-800">
                 <div class="space-y-2">
-                    <button id="btn-export" class="w-full flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 dark:bg-slate-800 rounded-lg"><i data-lucide="download" class="w-4 h-4"></i> Export Chat</button>
+                    <button id="btn-export" class="w-full flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 dark:bg-slate-800 rounded-lg">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        Export Chat
+                    </button>
                     <label class="w-full flex items-center gap-2 px-3 py-2 text-sm bg-gray-100 dark:bg-slate-800 rounded-lg cursor-pointer">
-                        <i data-lucide="upload" class="w-4 h-4"></i> Import Chat
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+                         Import Chat
                         <input type="file" id="file-import" class="hidden" accept=".json">
                     </label>
-                    <button id="btn-clear-history" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i> Clear History</button>
+                    <button id="btn-clear-history" class="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+                        Clear History
+                    </button>
                 </div>
             </div>
         </div>
@@ -214,15 +232,18 @@
 
         // --- 2. STARTUP ---
         document.addEventListener('DOMContentLoaded', async () => {
-            lucide.createIcons();
+            // Try to load icons (might fail if CDN blocked, but inline SVGs handle critical UI)
+            try { lucide.createIcons(); } catch(e) {}
+            
             loadLocalState();
             applyTheme();
 
             // Detect GPU Support
             const hasGPU = !!navigator.gpu;
             
-            // If user hasn't explicitly set a preference, or if their preference is invalid (gpu on non-gpu device), auto-detect
-            if (!STATE.prefs.mode || (STATE.prefs.mode === 'gpu' && !hasGPU)) {
+            // FIXED: CRITICAL CRASH FIX
+            // If the mode is 'detect' (default) OR 'gpu' (but user has no GPU), force proper mode
+            if (STATE.prefs.mode === 'detect' || !STATE.prefs.mode || (STATE.prefs.mode === 'gpu' && !hasGPU)) {
                 STATE.prefs.mode = hasGPU ? 'gpu' : 'wasm';
             }
 
@@ -272,9 +293,9 @@
             env.allowLocalModels = false;
             env.useBrowserCache = true;
 
+            // FIXED: Removed dtype: "q8" to prevent RangeError in WASM
             return await pipeline("text-generation", modelId, {
                 device: "wasm",
-                dtype: "q8",
                 progress_callback: (data) => {
                     if (data.status === 'progress') {
                         const p = (data.loaded / data.total) * 100;
@@ -402,7 +423,13 @@
                     updateMessageContent(botMsgId, fullText);
                 }
             } catch (e) {
-                updateMessageContent(botMsgId, fullText + `\n\n[Error: ${e.message}]`);
+                const msg = e.message || e.toString();
+                // Check specifically for WASM memory/offset errors
+                if (msg.includes("RangeError") || msg.includes("offset is out of bounds")) {
+                     updateMessageContent(botMsgId, fullText + `\n\n*[Error: Model memory corrupted. Please clear cache in Settings and reload.]*`);
+                } else {
+                     updateMessageContent(botMsgId, fullText + `\n\n*[Error: ${msg}]*`);
+                }
             }
 
             STATE.runtime.status = 'ready';
@@ -416,14 +443,12 @@
         function renderModeSelector(hasGPU) {
             const isGPU = STATE.prefs.mode === 'gpu';
             
-            // Button Styles
             const activeClass = "bg-white dark:bg-slate-600 text-blue-600 dark:text-blue-300 shadow-sm";
             const inactiveClass = "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300";
 
             el.btnModeGpu.className = `flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${isGPU ? activeClass : inactiveClass}`;
             el.btnModeWasm.className = `flex-1 py-1.5 text-xs font-medium rounded-md transition-all ${!isGPU ? activeClass : inactiveClass}`;
 
-            // Hardware Check
             if (!hasGPU) {
                 el.btnModeGpu.disabled = true;
                 el.btnModeGpu.classList.add('opacity-50', 'cursor-not-allowed');
@@ -499,24 +524,42 @@
         }
 
         function refreshModelDropdowns() {
-            const list = MODELS[STATE.prefs.mode];
+            // FIXED: Safeguard against undefined mode
+            let mode = STATE.prefs.mode || 'wasm';
+            
+            // If mode is 'detect' (which breaks the lookup), force it to something safe
+            if (mode === 'detect') {
+                 mode = navigator.gpu ? 'gpu' : 'wasm';
+                 STATE.prefs.mode = mode;
+            }
+
+            // FIXED: Ensure list exists and default to []
+            const list = (MODELS[mode] || MODELS['wasm']) || []; 
+            
             const populate = (sel) => {
-                sel.innerHTML = `<option value="" disabled selected>Select Model (${STATE.prefs.mode.toUpperCase()})</option>`;
-                list.forEach(m => {
-                    const isCached = STATE.prefs.downloadedModels.includes(m.id);
-                    const opt = document.createElement('option');
-                    opt.value = m.id;
-                    opt.textContent = isCached ? `✓ ${m.name}` : m.name;
-                    if(m.id === STATE.prefs.modelId) opt.selected = true;
-                    sel.appendChild(opt);
-                });
+                if(!sel) return;
+                sel.innerHTML = `<option value="" disabled selected>Select Model (${mode.toUpperCase()})</option>`;
+                
+                // FIXED: Check if list is array before forEach
+                if (Array.isArray(list)) {
+                    list.forEach(m => {
+                        const isCached = STATE.prefs.downloadedModels.includes(m.id);
+                        const opt = document.createElement('option');
+                        opt.value = m.id;
+                        opt.textContent = isCached ? `✓ ${m.name}` : m.name;
+                        if(m.id === STATE.prefs.modelId) opt.selected = true;
+                        sel.appendChild(opt);
+                    });
+                }
             };
             populate(el.modelSelect);
             populate(el.modelSelectMobile);
             
             if(STATE.prefs.downloadedModels.length) {
-                el.cacheList.innerHTML = STATE.prefs.downloadedModels.map(id => `<div class="flex items-center gap-2"><i data-lucide="check" class="w-3 h-3 text-green-500"></i> ${id}</div>`).join('');
-                lucide.createIcons();
+                // Inline SVG for checkmark
+                el.cacheList.innerHTML = STATE.prefs.downloadedModels.map(id => 
+                    `<div class="flex items-center gap-2"><svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><path d="M20 6 9 17l-5-5"/></svg> ${id}</div>`
+                ).join('');
             } else {
                 el.cacheList.innerHTML = `<div class="italic text-slate-400">None</div>`;
             }
@@ -524,25 +567,34 @@
 
         function loadLocalState() {
             try {
+                // FIXED: Wrapped in try-catch to prevent crash if 'Tracking Prevention' blocks localStorage
                 const data = JSON.parse(localStorage.getItem('localchat_v3'));
                 if(data) {
                     STATE.messages = data.messages || [];
                     STATE.prefs = { ...STATE.prefs, ...data.prefs };
                     if(!Array.isArray(STATE.prefs.downloadedModels)) STATE.prefs.downloadedModels = [];
                 }
-            } catch(e) {}
+            } catch(e) {
+                console.warn("Storage access denied or corrupted state. Using defaults.");
+            }
         }
         
         function saveLocalState() {
-            localStorage.setItem('localchat_v3', JSON.stringify({ messages: STATE.messages, prefs: STATE.prefs }));
+            try {
+                localStorage.setItem('localchat_v3', JSON.stringify({ messages: STATE.messages, prefs: STATE.prefs }));
+            } catch(e) {
+                // Ignore storage errors if blocked by browser
+            }
         }
 
         function applyTheme() {
-            if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
-                el.app.classList.add('dark');
-            } else {
-                el.app.classList.remove('dark');
-            }
+            try {
+                if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    el.app.classList.add('dark');
+                } else {
+                    el.app.classList.remove('dark');
+                }
+            } catch(e) {}
         }
 
         function setupListeners() {
@@ -564,7 +616,9 @@
             
             el.btnTheme.onclick = () => {
                 el.app.classList.toggle('dark');
-                localStorage.theme = el.app.classList.contains('dark') ? 'dark' : 'light';
+                try {
+                    localStorage.theme = el.app.classList.contains('dark') ? 'dark' : 'light';
+                } catch(e) {}
             };
 
             el.btnReset.onclick = () => {
@@ -645,5 +699,3 @@
     </script>
 </body>
 </html>
-
-
