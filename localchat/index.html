@@ -185,9 +185,9 @@
                 { id: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", name: "Qwen 2.5 1.5B (GPU)" }
             ],
             wasm: [
-                { id: "Xenova/TinyLlama-1.1B-Chat-v1.0", name: "TinyLlama 1.1B (CPU)" },
-                { id: "Xenova/Qwen1.5-0.5B-Chat", name: "Qwen 1.5 0.5B (CPU)" },
-                { id: "Xenova/flan-t5-small", name: "Flan T5 (CPU)" }
+                { id: "Xenova/Qwen1.5-0.5B-Chat", name: "Qwen 1.5 0.5B (Fastest)" },
+                { id: "Xenova/TinyLlama-1.1B-Chat-v1.0", name: "TinyLlama 1.1B (Standard)" },
+                { id: "Xenova/flan-t5-small", name: "Flan T5 (Legacy)" }
             ]
         };
 
@@ -293,9 +293,14 @@
             env.allowLocalModels = false;
             env.useBrowserCache = true;
 
-            // FIXED: Removed dtype: "q8" to prevent RangeError in WASM
+            // FIX: Prevent RangeError by enforcing single-thread execution for memory safety
+            // and enabling q8 quantization explicitly which matches the model files better
             return await pipeline("text-generation", modelId, {
                 device: "wasm",
+                dtype: "q8", 
+                session_options: {
+                    intra_op_num_threads: 1, // Crucial for stability on lower-memory devices
+                },
                 progress_callback: (data) => {
                     if (data.status === 'progress') {
                         const p = (data.loaded / data.total) * 100;
@@ -538,7 +543,10 @@
             
             const populate = (sel) => {
                 if(!sel) return;
-                sel.innerHTML = `<option value="" disabled selected>Select Model (${mode.toUpperCase()})</option>`;
+                
+                // FIXED: Proper label update even if mode was detect
+                const modeLabel = mode === 'gpu' ? 'GPU' : 'CPU';
+                sel.innerHTML = `<option value="" disabled selected>Select Model (${modeLabel})</option>`;
                 
                 // FIXED: Check if list is array before forEach
                 if (Array.isArray(list)) {
