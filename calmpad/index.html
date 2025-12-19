@@ -174,9 +174,29 @@
             h2 { font-size: 18pt; font-weight: bold; margin-top: 18pt; margin-bottom: 10pt; color: #555; page-break-after: avoid; }
             p { margin-bottom: 10pt; line-height: 1.5; font-size: 11pt; }
             img { max-width: 100% !important; height: auto; page-break-inside: avoid; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; page-break-inside: auto; }
-            tr { page-break-inside: avoid; page-break-after: auto; }
-            td, th { border: 1px solid #ddd; padding: 6pt; }
+            
+            /* FORCE TABLE LAYOUT FOR PRINT */
+            table { 
+                width: 100% !important; 
+                border-collapse: collapse !important; 
+                margin-bottom: 12pt; 
+                page-break-inside: auto; 
+                display: table !important; /* Ensure it stays a table */
+            }
+            tbody {
+                display: table-row-group !important;
+            }
+            tr { 
+                page-break-inside: avoid; 
+                page-break-after: auto; 
+                display: table-row !important; /* Prevent stacking */
+            }
+            td, th { 
+                border: 1px solid #ddd !important; 
+                padding: 6pt !important; 
+                display: table-cell !important; /* Prevent stacking */
+                width: auto !important; /* Allow natural width */
+            }
             
             /* Page Breaks */
             .page-break { 
