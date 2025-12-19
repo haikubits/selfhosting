@@ -134,83 +134,31 @@
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
 
+        /* Drag and Drop Styles */
+        .note-item-dragging {
+            opacity: 0.5;
+            background: #f3f4f6;
+        }
+        .dark .note-item-dragging {
+            background: #1f2937;
+        }
+
         /* --- PRINT STYLES (PDF EXPORT) --- */
         @media print {
-            /* Hide the main app UI */
-            .app-ui {
-                display: none !important;
-            }
-
-            /* Show the print container */
-            #print-container {
-                display: block !important;
-                visibility: visible !important;
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                margin: 0;
-                padding: 0;
-                background: white;
-                color: black;
-                z-index: 9999;
-            }
-
-            /* Ensure descendants are visible but do NOT force block display */
-            #print-container * {
-                visibility: visible !important;
-            }
-
-            /* Reset Page */
-            @page {
-                margin: 2cm;
-                size: auto;
-            }
-
-            body {
-                background: white !important;
-                color: black !important;
-                overflow: visible !important;
-            }
-
-            /* Styling the content for print */
+            .app-ui { display: none !important; }
+            #print-container { display: block !important; visibility: visible !important; position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0; background: white; color: black; z-index: 9999; }
+            #print-container * { visibility: visible !important; }
+            @page { margin: 2cm; size: auto; }
+            body { background: white !important; color: black !important; overflow: visible !important; }
             h1 { font-size: 24pt; font-weight: bold; margin-bottom: 12pt; border-bottom: 2px solid #ccc; padding-bottom: 6pt; page-break-after: avoid; }
             h2 { font-size: 18pt; font-weight: bold; margin-top: 18pt; margin-bottom: 10pt; color: #555; page-break-after: avoid; }
             p { margin-bottom: 10pt; line-height: 1.5; font-size: 11pt; }
             img { max-width: 100% !important; height: auto; page-break-inside: avoid; }
-            
-            /* FORCE TABLE LAYOUT FOR PRINT */
-            table, .editor-table { 
-                width: 100% !important; 
-                border-collapse: collapse !important; 
-                margin-bottom: 12pt; 
-                page-break-inside: auto; 
-                display: table !important; /* Critical: Ensure it renders as table */
-                table-layout: auto !important; /* Allow auto width for print */
-            }
-            tbody {
-                display: table-row-group !important;
-            }
-            tr { 
-                page-break-inside: avoid; 
-                page-break-after: auto; 
-                display: table-row !important;
-            }
-            td, th { 
-                border: 1px solid #ddd !important; 
-                padding: 6pt !important; 
-                display: table-cell !important;
-                width: auto !important;
-            }
-            
-            /* Page Breaks */
-            .page-break { 
-                page-break-after: always; 
-                display: block; 
-                height: 1px; 
-                border: none;
-                margin: 0;
-            }
+            table, .editor-table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 12pt; page-break-inside: auto; display: table !important; table-layout: auto !important; }
+            tbody { display: table-row-group !important; }
+            tr { page-break-inside: avoid; page-break-after: auto; display: table-row !important; }
+            td, th { border: 1px solid #ddd !important; padding: 6pt !important; display: table-cell !important; width: auto !important; }
+            .page-break { page-break-after: always; display: block; height: 1px; border: none; margin: 0; }
         }
     </style>
 </head>
@@ -219,7 +167,7 @@
 
     <!-- MAIN REACT APPLICATION -->
     <script type="text/babel" data-type="module">
-        import React, { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
+        import React, { useState, useEffect, useRef, useCallback, forwardRef, useMemo } from 'react';
         import { createRoot } from 'react-dom/client';
         import { 
             Plus, Search, Settings, Download, Upload, 
@@ -231,7 +179,7 @@
             Heading1, Heading2, Highlighter, Table as TableIcon,
             Folder, FolderPlus, ChevronDown, ChevronRight, MoreHorizontal,
             ArrowDown, ArrowRight, Layout, Delete, MoreVertical,
-            Printer // Printer Icon
+            Printer, GripVertical
         } from 'lucide-react';
 
         const ID = () => '_' + Math.random().toString(36).substr(2, 9);
@@ -284,7 +232,6 @@
             }
         };
 
-        // --- UTILS FOR IMAGE COMPRESSION ---
         const compressImage = (file) => {
             return new Promise((resolve) => {
                 const reader = new FileReader();
@@ -306,30 +253,20 @@
             });
         };
 
-        // Forward Ref to expose the DOM node to App
         const RichTextEditor = forwardRef(({ initialContent, onChange, placeholder, readOnly, fontClass, onKeyDown }, ref) => {
-            
             useEffect(() => {
                 if (ref && ref.current) {
                     if (ref.current.innerHTML !== initialContent) {
                         ref.current.innerHTML = initialContent || '';
                     }
-                    
                     const checkboxes = ref.current.querySelectorAll('input[type="checkbox"]');
                     checkboxes.forEach(box => {
-                        box.onclick = (e) => {
-                             setTimeout(() => {
-                                 onChange(ref.current.innerHTML);
-                             }, 0);
-                        }
+                        box.onclick = (e) => { setTimeout(() => { onChange(ref.current.innerHTML); }, 0); }
                     });
                 }
-            }, []); // Intentionally empty to run once on mount per note key
+            }, []); 
 
-            const handleInput = (e) => {
-                onChange(e.currentTarget.innerHTML);
-            };
-
+            const handleInput = (e) => onChange(e.currentTarget.innerHTML);
             const handlePaste = async (e) => {
                 const items = (e.clipboardData || e.originalEvent.clipboardData).items;
                 for (let index in items) {
@@ -345,20 +282,8 @@
             };
 
             return (
-                <div
-                    ref={ref}
-                    contentEditable={!readOnly}
-                    onInput={handleInput}
-                    onKeyDown={onKeyDown}
-                    onPaste={handlePaste}
-                    placeholder={placeholder}
-                    className={`
-                        w-full h-full min-h-[60vh] outline-none bg-transparent 
-                        leading-relaxed text-lg md:text-xl pb-32
-                        selection:bg-purple-200 selection:text-purple-900
-                        ${fontClass}
-                        ${readOnly ? 'opacity-80' : ''}
-                    `}
+                <div ref={ref} contentEditable={!readOnly} onInput={handleInput} onKeyDown={onKeyDown} onPaste={handlePaste} placeholder={placeholder}
+                    className={`w-full h-full min-h-[60vh] outline-none bg-transparent leading-relaxed text-lg md:text-xl pb-32 selection:bg-purple-200 selection:text-purple-900 ${fontClass} ${readOnly ? 'opacity-80' : ''}`}
                     style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}
                 />
             );
@@ -380,18 +305,15 @@
             const [isReadOnly, setIsReadOnly] = useState(false);
             const [saveStatus, setSaveStatus] = useState('saved');
             const [showHistoryModal, setShowHistoryModal] = useState(false);
-            const [showMobileMenu, setShowMobileMenu] = useState(false); // Mobile Drawer State
+            const [showMobileMenu, setShowMobileMenu] = useState(false);
             const [isTableContext, setIsTableContext] = useState(false);
-            
-            // Print Logic
             const [printContent, setPrintContent] = useState(null);
+            const [draggedNoteId, setDraggedNoteId] = useState(null); // DRAG STATE
 
-            // Refs
             const saveTimeoutRef = useRef(null);
             const editorRef = useRef(null);
             const fileInputRef = useRef(null);
 
-            // Selection Listener for Contextual Toolbar
             useEffect(() => {
                 const handleSelectionChange = () => {
                     if (!editorRef.current) return;
@@ -399,20 +321,13 @@
                     if (selection.rangeCount > 0) {
                         const node = selection.anchorNode;
                         const element = node.nodeType === 3 ? node.parentElement : node;
-                        // Check if we are inside a table
-                        if (element.closest('table') && element.closest('.editor-table')) {
-                            setIsTableContext(true);
-                        } else {
-                            setIsTableContext(false);
-                        }
+                        if (element.closest('table') && element.closest('.editor-table')) { setIsTableContext(true); } else { setIsTableContext(false); }
                     }
                 };
-
                 document.addEventListener('selectionchange', handleSelectionChange);
                 return () => document.removeEventListener('selectionchange', handleSelectionChange);
             }, []);
 
-            // Init & Deep Link Logic
             useEffect(() => {
                 if (window.innerWidth < 768) setShowSidebar(false);
                 
@@ -426,32 +341,27 @@
                     try {
                         const parsed = JSON.parse(savedData);
                         loadedNotes = parsed.notes || [];
-                        loadedSections = parsed.sections || [{ id: 'default', name: 'Quick Notes' }];
+                        loadedSections = parsed.sections || [{ id: 'default', name: 'Quick Notes', noteOrder: [] }];
                         loadedActiveId = parsed.activeNoteId || null;
                         loadedSectionId = parsed.activeSectionId || 'default';
-                        
                         setTheme(parsed.preferences?.theme || 'light');
                         setBaseFont(parsed.preferences?.font || 'sans');
+                        
+                        // Migration: Ensure all sections have noteOrder array
+                        loadedSections = loadedSections.map(s => ({ ...s, noteOrder: s.noteOrder || [] }));
+
                     } catch (e) { console.error(e); }
                 } else {
                     const welcomeId = ID();
-                    const welcomeNote = {
-                        id: welcomeId,
-                        sectionId: 'default',
-                        title: 'Getting Started',
-                        content: `<h1>Welcome to Calm OneNote</h1><div><br></div><div>This is a <b>browser-based</b> notepad inspired by the best features of OneNote, but kept calm and private.</div><div><br></div><h2>Try the Tables!</h2><div>Click inside the table below to see the context tools appear in the toolbar.</div><div><br></div><table class="editor-table"><tbody><tr><td><b>Feature</b></td><td><b>Description</b></td></tr><tr><td>Add Row</td><td>Click + Row in toolbar</td></tr><tr><td>Add Col</td><td>Click + Col in toolbar</td></tr></tbody></table><div><br></div><div><input type="checkbox" class="todo-checkbox"> Checklists supported too.</div>`,
-                        updatedAt: Date.now(),
-                        versions: []
-                    };
+                    const welcomeNote = { id: welcomeId, sectionId: 'default', title: 'Getting Started', content: `<h1>Welcome to Calm OneNote</h1><div>This supports drag-and-drop ordering!</div>`, updatedAt: Date.now(), versions: [] };
                     loadedNotes = [welcomeNote];
-                    loadedSections = [{ id: 'default', name: 'Quick Notes' }];
+                    loadedSections = [{ id: 'default', name: 'Quick Notes', noteOrder: [welcomeId] }];
                     loadedActiveId = welcomeId;
                 }
 
                 setNotes(loadedNotes);
                 setSections(loadedSections);
 
-                // Deep Link Check
                 const params = new URLSearchParams(window.location.search);
                 const noteIdFromUrl = params.get('note');
                 const targetNote = noteIdFromUrl ? loadedNotes.find(n => n.id === noteIdFromUrl) : null;
@@ -465,19 +375,12 @@
                 }
             }, []);
 
-            // Sync URL with Active Note
             useEffect(() => {
                 try {
                     const url = new URL(window.location);
-                    if (activeNoteId) {
-                        url.searchParams.set('note', activeNoteId);
-                    } else {
-                        url.searchParams.delete('note');
-                    }
+                    if (activeNoteId) { url.searchParams.set('note', activeNoteId); } else { url.searchParams.delete('note'); }
                     window.history.replaceState({}, '', url);
-                } catch (e) {
-                    console.warn('URL sync skipped due to environment restrictions.');
-                }
+                } catch (e) { console.warn('URL sync skipped'); }
             }, [activeNoteId]);
 
             const saveData = useCallback(() => {
@@ -496,17 +399,23 @@
             }, [notes, sections, theme, baseFont]);
 
             useEffect(() => {
-                const handleKey = (e) => {
-                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveData(); }
-                };
+                const handleKey = (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveData(); } };
                 window.addEventListener('keydown', handleKey);
                 return () => window.removeEventListener('keydown', handleKey);
             }, [saveData]);
 
-            // CRUD Logic
             const createNote = () => {
                 const newNote = { id: ID(), sectionId: activeSectionId, title: '', content: '', updatedAt: Date.now(), versions: [] };
                 setNotes([newNote, ...notes]);
+                
+                // Update Order in Section
+                setSections(prev => prev.map(s => {
+                    if (s.id === activeSectionId) {
+                        return { ...s, noteOrder: [newNote.id, ...s.noteOrder] };
+                    }
+                    return s;
+                }));
+
                 setActiveNoteId(newNote.id);
                 if (window.innerWidth < 768) setShowSidebar(false);
             };
@@ -521,7 +430,6 @@
             const updateNoteContent = (html) => {
                 setNotes(prev => prev.map(n => {
                     if (n.id !== activeNoteId) return n;
-                    // Auto-title extraction removed to allow manual titles
                     let versions = n.versions || [];
                     const now = Date.now();
                     const lastTime = versions.length > 0 ? versions[versions.length-1].time : 0;
@@ -535,6 +443,10 @@
             const deleteNote = (id) => {
                 if (confirm('Delete this note?')) {
                     setNotes(notes.filter(n => n.id !== id));
+                    // Remove from order
+                    setSections(prev => prev.map(s => ({
+                        ...s, noteOrder: s.noteOrder.filter(nId => nId !== id)
+                    })));
                     if (activeNoteId === id) setActiveNoteId(null);
                 }
             };
@@ -542,7 +454,7 @@
             const createSection = () => {
                 const name = prompt("New Section Name:");
                 if (name) {
-                    const newSec = { id: ID(), name };
+                    const newSec = { id: ID(), name, noteOrder: [] };
                     setSections([...sections, newSec]);
                     setActiveSectionId(newSec.id);
                 }
@@ -557,506 +469,196 @@
                 }
             };
 
-            // Formatting & Table Logic
-            const exec = (cmd, val = null) => {
-                document.execCommand(cmd, false, val);
-                // On mobile, focus sometimes gets lost on button click
-                if(window.innerWidth < 768 && editorRef.current) {
-                   // editorRef.current.focus(); 
+            // --- DRAG AND DROP HANDLERS ---
+            const handleDragStart = (e, noteId) => {
+                if (searchQuery) {
+                    e.preventDefault(); // Disable drag during search
+                    return;
                 }
+                setDraggedNoteId(noteId);
+                e.dataTransfer.setData('text/plain', noteId);
+                e.dataTransfer.effectAllowed = 'move';
             };
+
+            const handleDragOver = (e) => {
+                e.preventDefault(); // Necessary to allow dropping
+            };
+
+            const handleDrop = (e, targetNoteId) => {
+                e.preventDefault();
+                const sourceNoteId = e.dataTransfer.getData('text/plain');
+                
+                if (sourceNoteId === targetNoteId) return;
+
+                setSections(prevSections => prevSections.map(sec => {
+                    if (sec.id !== activeSectionId) return sec;
+
+                    const newOrder = [...(sec.noteOrder || [])];
+                    const sourceIndex = newOrder.indexOf(sourceNoteId);
+                    const targetIndex = newOrder.indexOf(targetNoteId);
+
+                    // If items aren't in the order array yet (legacy data), rebuild array from current view
+                    if (sourceIndex === -1 || targetIndex === -1) return sec; 
+
+                    // Remove source
+                    newOrder.splice(sourceIndex, 1);
+                    // Insert at target (if moving down, target index shifts, but since we removed first, logic holds if we insert at target index)
+                    // Actually, if dragging down, target index has shifted down by 1 if source was above it. 
+                    // To simplify: remove then splice.
+                    
+                    // Re-calculate target index after removal if needed, or better:
+                    // Simple Array Move logic:
+                    const finalOrder = [...(sec.noteOrder || [])];
+                    const fromIndex = finalOrder.indexOf(sourceNoteId);
+                    finalOrder.splice(fromIndex, 1); // remove
+                    const toIndex = finalOrder.indexOf(targetNoteId); // find new target index
+                    finalOrder.splice(toIndex, 0, sourceNoteId); // insert
+
+                    return { ...sec, noteOrder: finalOrder };
+                }));
+                
+                setDraggedNoteId(null);
+            };
+
+            // Formatting & Utils
+            const exec = (cmd, val = null) => { document.execCommand(cmd, false, val); if(window.innerWidth < 768 && editorRef.current) {} };
+            const insertCheckbox = () => { const id = ID(); exec('insertHTML', `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`); };
+            const insertTable = () => { exec('insertHTML', `<table class="editor-table"><tbody><tr><td>Header 1</td><td>Header 2</td></tr><tr><td>Data 1</td><td>Data 2</td></tr></tbody></table><p><br></p>`); setShowMobileMenu(false); };
+            const insertImage = () => { fileInputRef.current?.click(); };
+            const handleImageUpload = async (e) => { const file = e.target.files[0]; if (!file) return; const compressedBase64 = await compressImage(file); exec('insertHTML', `<img src="${compressedBase64}" class="editor-image" /> <br>`); if(editorRef.current) updateNoteContent(editorRef.current.innerHTML); };
             
-            const insertCheckbox = () => {
-                const id = ID();
-                exec('insertHTML', `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`);
-            };
-
-            const insertTable = () => {
-                const html = `<table class="editor-table"><tbody><tr><td>Header 1</td><td>Header 2</td></tr><tr><td>Data 1</td><td>Data 2</td></tr></tbody></table><p><br></p>`;
-                exec('insertHTML', html);
-                setShowMobileMenu(false);
-            };
-
-            const insertImage = () => {
-                fileInputRef.current?.click();
-            };
-
-            const handleImageUpload = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const compressedBase64 = await compressImage(file);
-                exec('insertHTML', `<img src="${compressedBase64}" class="editor-image" /> <br>`);
-                if(editorRef.current) updateNoteContent(editorRef.current.innerHTML);
-            };
-
-            // TABLE OPERATIONS
             const handleTableOp = (op) => {
-                const selection = window.getSelection();
-                if (!selection.rangeCount) return;
-                const node = selection.anchorNode;
-                const element = node.nodeType === 3 ? node.parentElement : node;
-                const table = element.closest('table');
-                const td = element.closest('td');
-                const tr = element.closest('tr');
-
+                const selection = window.getSelection(); if (!selection.rangeCount) return; const node = selection.anchorNode; const element = node.nodeType === 3 ? node.parentElement : node;
+                const table = element.closest('table'); const td = element.closest('td'); const tr = element.closest('tr');
                 if (!table) return;
-
-                if (op === 'deleteTable') {
-                    table.remove();
-                } else if (op === 'addRow' && tr) {
-                    const newRow = table.insertRow(tr.rowIndex + 1);
-                    const cellsCount = tr.cells.length;
-                    for (let i = 0; i < cellsCount; i++) {
-                        const newCell = newRow.insertCell(i);
-                        newCell.innerHTML = '<br>'; // Placeholder to maintain height
-                    }
-                } else if (op === 'addCol' && td) {
-                    const cellIndex = td.cellIndex;
-                    for (let i = 0; i < table.rows.length; i++) {
-                        const newCell = table.rows[i].insertCell(cellIndex + 1);
-                        newCell.innerHTML = '<br>';
-                    }
-                } else if (op === 'delRow' && tr) {
-                    table.deleteRow(tr.rowIndex);
-                    if (table.rows.length === 0) table.remove();
-                } else if (op === 'delCol' && td) {
-                    const cellIndex = td.cellIndex;
-                    for (let i = 0; i < table.rows.length; i++) {
-                        table.rows[i].deleteCell(cellIndex);
-                    }
-                    if (table.rows.length > 0 && table.rows[0].cells.length === 0) table.remove();
-                }
-
+                if (op === 'deleteTable') { table.remove(); } 
+                else if (op === 'addRow' && tr) { const newRow = table.insertRow(tr.rowIndex + 1); for (let i = 0; i < tr.cells.length; i++) newRow.insertCell(i).innerHTML = '<br>'; } 
+                else if (op === 'addCol' && td) { for (let i = 0; i < table.rows.length; i++) table.rows[i].insertCell(td.cellIndex + 1).innerHTML = '<br>'; } 
+                else if (op === 'delRow' && tr) { table.deleteRow(tr.rowIndex); if (table.rows.length === 0) table.remove(); } 
+                else if (op === 'delCol' && td) { const idx = td.cellIndex; for (let i = 0; i < table.rows.length; i++) table.rows[i].deleteCell(idx); if (table.rows.length > 0 && table.rows[0].cells.length === 0) table.remove(); }
                 if (editorRef.current) updateNoteContent(editorRef.current.innerHTML);
             };
 
             const activeNote = notes.find(n => n.id === activeNoteId);
             const themeStyles = THEMES[theme];
-            const filteredNotes = notes.filter(n => {
-                if (searchQuery) return (n.title||'').toLowerCase().includes(searchQuery.toLowerCase());
-                return n.sectionId === activeSectionId;
-            }).sort((a,b) => b.updatedAt - a.updatedAt);
-
-            const handleFileUpload = (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    try {
-                        const json = JSON.parse(ev.target.result);
-                        if (json.notes && json.sections) {
-                            if(confirm("Merge backup?")) {
-                                setNotes([...json.notes, ...notes]);
-                                setSections([...json.sections, ...sections]); 
-                            }
-                        }
-                    } catch {}
-                };
-                reader.readAsText(file);
-            };
-
-            const exportAll = () => {
-                const blob = new Blob([JSON.stringify({ notes, sections, preferences: { theme, font: baseFont } })], { type: 'application/json' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `onenote-backup-${new Date().toISOString().slice(0,10)}.json`;
-                a.click();
-            };
-
-            // --- NATIVE PRINT LOGIC ---
             
-            // Watch for print content changes to trigger the browser dialog
-            useEffect(() => {
-                if (printContent) {
-                    // Small delay to allow DOM to render the print container
-                    const timer = setTimeout(() => {
-                        window.print();
-                        // Optional: Clear content after print interaction is done (browser dependent, usually safe to leave or clear)
-                        // setPrintContent(null); 
-                    }, 100);
-                    return () => clearTimeout(timer);
+            // --- FILTERING & SORTING LOGIC ---
+            const filteredNotes = useMemo(() => {
+                let result = notes.filter(n => n.sectionId === activeSectionId);
+                
+                // 1. Search Mode: Sort by date
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return notes.filter(n => (n.title||'').toLowerCase().includes(q) || (n.content||'').toLowerCase().includes(q))
+                                .sort((a,b) => b.updatedAt - a.updatedAt);
                 }
-            }, [printContent]);
 
-            const printSingleNote = () => {
-                if (!activeNote) return;
-                const html = `
-                    <div class="print-doc">
-                        <h1>${activeNote.title || 'Untitled'}</h1>
-                        <div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(activeNote.updatedAt).toLocaleString()}</div>
-                        ${activeNote.content}
-                    </div>
-                `;
-                setPrintContent(html);
-            };
-
-            const printNotebook = () => {
-                if (notes.length === 0) return alert("No notes to export.");
-                
-                let html = `
-                    <div style="text-align:center; padding-top: 50px; margin-bottom: 50px;">
-                        <h1 style="font-size: 32px; border:none;">Notebook Export</h1>
-                        <p>Generated on ${new Date().toLocaleDateString()}</p>
-                    </div>
-                    <div class="page-break"></div>
-                `;
-
-                sections.forEach(sec => {
-                    const secNotes = notes.filter(n => n.sectionId === sec.id).sort((a,b) => b.updatedAt - a.updatedAt);
-                    if (secNotes.length > 0) {
-                        html += `
-                            <div style="margin-top:20px;">
-                                <h2 style="font-size: 28px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Section: ${sec.name}</h2>
-                            </div>
-                        `;
+                // 2. Normal Mode: Sort by Section Order
+                const activeSection = sections.find(s => s.id === activeSectionId);
+                if (activeSection && activeSection.noteOrder && activeSection.noteOrder.length > 0) {
+                    // Create a map for O(1) lookup of order
+                    const orderMap = {};
+                    activeSection.noteOrder.forEach((id, index) => { orderMap[id] = index; });
+                    
+                    result.sort((a, b) => {
+                        const indexA = orderMap[a.id] !== undefined ? orderMap[a.id] : -1;
+                        const indexB = orderMap[b.id] !== undefined ? orderMap[b.id] : -1;
                         
-                        secNotes.forEach(n => {
-                            html += `
-                                <div style="margin-top: 30px;">
-                                    <h1>${n.title || 'Untitled'}</h1>
-                                    <div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(n.updatedAt).toLocaleString()}</div>
-                                    ${n.content}
-                                </div>
-                                <div class="page-break"></div>
-                            `;
-                        });
-                    }
-                });
-                
-                setPrintContent(html);
-            };
+                        // If both have order, sort by index
+                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                        // If one has order, it comes first (or last, depending on preference. Let's put unordered at top)
+                        if (indexA === -1 && indexB !== -1) return -1;
+                        if (indexA !== -1 && indexB === -1) return 1;
+                        // If neither has order, sort by date desc
+                        return b.updatedAt - a.updatedAt;
+                    });
+                } else {
+                    // Fallback sort
+                    result.sort((a,b) => b.updatedAt - a.updatedAt);
+                }
+                return result;
+            }, [notes, activeSectionId, sections, searchQuery]);
 
+            const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const json = JSON.parse(ev.target.result); if (json.notes && json.sections) { if(confirm("Merge backup?")) { setNotes([...json.notes, ...notes]); setSections([...json.sections, ...sections]); } } } catch {} }; reader.readAsText(file); };
+            const exportAll = () => { const blob = new Blob([JSON.stringify({ notes, sections, preferences: { theme, font: baseFont } })], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `onenote-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); };
+
+            useEffect(() => { if (printContent) { const timer = setTimeout(() => { window.print(); }, 100); return () => clearTimeout(timer); } }, [printContent]);
+            const printSingleNote = () => { if (!activeNote) return; setPrintContent(`<div class="print-doc"><h1>${activeNote.title || 'Untitled'}</h1><div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(activeNote.updatedAt).toLocaleString()}</div>${activeNote.content}</div>`); };
+            const printNotebook = () => { if (notes.length === 0) return alert("No notes."); let html = `<div style="text-align:center; padding-top: 50px; margin-bottom: 50px;"><h1 style="font-size: 32px; border:none;">Notebook Export</h1><p>Generated on ${new Date().toLocaleDateString()}</p></div><div class="page-break"></div>`; sections.forEach(sec => { const secNotes = notes.filter(n => n.sectionId === sec.id).sort((a,b) => b.updatedAt - a.updatedAt); if (secNotes.length > 0) { html += `<div style="margin-top:20px;"><h2 style="font-size: 28px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Section: ${sec.name}</h2></div>`; secNotes.forEach(n => { html += `<div style="margin-top: 30px;"><h1>${n.title || 'Untitled'}</h1><div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(n.updatedAt).toLocaleString()}</div>${n.content}</div><div class="page-break"></div>`; }); } }); setPrintContent(html); };
 
             return (
                 <div className={`flex h-screen w-full overflow-hidden relative transition-colors duration-300 ${themeStyles.bg} ${themeStyles.text} font-sans`}>
-                    
-                    {/* --- PRINT CONTAINER (Hidden normally, visible during print) --- */}
                     <div id="print-container" className="hidden" dangerouslySetInnerHTML={{ __html: printContent }}></div>
-
-                    {/* --- MAIN APP UI (Wrapped to be hidden during print) --- */}
                     <div className="flex w-full h-full app-ui">
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
-                        
-                        {/* MOBILE OVERLAY */}
-                        {showSidebar && (
-                            <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowSidebar(false)}></div>
-                        )}
-
-                        {/* SIDEBAR */}
-                        <div className={`
-                            fixed inset-y-0 left-0 z-40 w-full xs:w-80 md:relative md:w-72 md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none border-r ${themeStyles.sidebar}
-                            ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
-                            flex flex-col
-                        `}>
-                            {/* Header */}
+                        {showSidebar && <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowSidebar(false)}></div>}
+                        <div className={`fixed inset-y-0 left-0 z-40 w-full xs:w-80 md:relative md:w-72 md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none border-r ${themeStyles.sidebar} ${showSidebar ? 'translate-x-0' : '-translate-x-full'} flex flex-col`}>
                             <div className="p-4 space-y-4 border-b border-inherit">
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-8 h-8 bg-purple-700 rounded-md flex items-center justify-center text-white font-bold font-serif">N</div>
-                                        <h1 className={`font-bold text-lg tracking-tight ${themeStyles.accent}`}>Calm OneNote</h1>
-                                    </div>
-                                    <div className="flex gap-1">
-                                        <button onClick={createSection} className="p-2 rounded hover:bg-black/5" title="New Section"><FolderPlus size={18}/></button>
-                                        <button onClick={createNote} className="p-2 rounded hover:bg-black/5" title="New Page"><Plus size={18}/></button>
-                                        <button onClick={() => setShowSidebar(false)} className="p-2 md:hidden"><X size={18}/></button>
-                                    </div>
+                                    <div className="flex items-center gap-2"><div className="w-8 h-8 bg-purple-700 rounded-md flex items-center justify-center text-white font-bold font-serif">N</div><h1 className={`font-bold text-lg tracking-tight ${themeStyles.accent}`}>Calm OneNote</h1></div>
+                                    <div className="flex gap-1"><button onClick={createSection} className="p-2 rounded hover:bg-black/5" title="New Section"><FolderPlus size={18}/></button><button onClick={createNote} className="p-2 rounded hover:bg-black/5" title="New Page"><Plus size={18}/></button><button onClick={() => setShowSidebar(false)} className="p-2 md:hidden"><X size={18}/></button></div>
                                 </div>
-                                <div className={`flex items-center px-2 py-1.5 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
-                                    <Search size={14} className={themeStyles.muted} />
-                                    <input 
-                                        type="text" placeholder="Search notes..." 
-                                        className={`ml-2 w-full bg-transparent outline-none text-sm ${themeStyles.muted}`}
-                                        value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                    />
-                                </div>
+                                <div className={`flex items-center px-2 py-1.5 rounded-md ${themeStyles.input} border ${themeStyles.border}`}><Search size={14} className={themeStyles.muted} /><input type="text" placeholder="Search notes..." className={`ml-2 w-full bg-transparent outline-none text-sm ${themeStyles.muted}`} value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} /></div>
                             </div>
-
-                            {/* Sections List */}
                             <div className="flex-none overflow-x-auto border-b border-inherit bg-black/5 p-1 flex gap-1 snap-x scroll-pl-2 no-scrollbar">
-                                {sections.map(sec => (
-                                    <button
-                                        key={sec.id}
-                                        onClick={() => { setActiveSectionId(sec.id); setSearchQuery(''); }}
-                                        className={`
-                                            snap-start shrink-0 px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors border-t border-l border-r border-transparent relative top-px
-                                            ${activeSectionId === sec.id ? `${themeStyles.bg} ${themeStyles.accent} border-${themeStyles.border.split(' ')[1]}` : 'opacity-60 hover:opacity-100 hover:bg-black/5'}
-                                        `}
-                                    >
-                                        {sec.name}
-                                    </button>
-                                ))}
+                                {sections.map(sec => (<button key={sec.id} onClick={() => { setActiveSectionId(sec.id); setSearchQuery(''); }} className={`snap-start shrink-0 px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors border-t border-l border-r border-transparent relative top-px ${activeSectionId === sec.id ? `${themeStyles.bg} ${themeStyles.accent} border-${themeStyles.border.split(' ')[1]}` : 'opacity-60 hover:opacity-100 hover:bg-black/5'}`}>{sec.name}</button>))}
                             </div>
-
-                            {/* Notes List */}
                             <div className="flex-1 overflow-y-auto p-2 space-y-1">
                                 {filteredNotes.length === 0 && <div className="text-center text-xs opacity-50 py-8">Empty Section</div>}
                                 {filteredNotes.map(note => {
-                                    const div = document.createElement('div');
-                                    div.innerHTML = note.content;
-                                    const preview = div.innerText.substring(0, 50);
+                                    const div = document.createElement('div'); div.innerHTML = note.content; const preview = div.innerText.substring(0, 50);
                                     return (
                                         <div 
                                             key={note.id}
+                                            draggable={!searchQuery} // Disable drag if searching
+                                            onDragStart={(e) => handleDragStart(e, note.id)}
+                                            onDragOver={handleDragOver}
+                                            onDrop={(e) => handleDrop(e, note.id)}
                                             onClick={() => { setActiveNoteId(note.id); if(window.innerWidth<768) setShowSidebar(false); }}
-                                            className={`group p-3 rounded-md cursor-pointer transition-all ${activeNoteId === note.id ? themeStyles.itemActive : 'hover:bg-black/5'}`}
+                                            className={`group p-3 rounded-md cursor-pointer transition-all ${activeNoteId === note.id ? themeStyles.itemActive : 'hover:bg-black/5'} ${draggedNoteId === note.id ? 'opacity-50' : ''}`}
                                         >
                                             <div className="flex justify-between items-start">
-                                                <h3 className={`font-medium text-sm truncate pr-2 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>{note.title || 'Untitled Page'}</h3>
-                                                {activeNoteId === note.id && (
-                                                    <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
-                                                )}
+                                                <div className="flex items-center gap-2 overflow-hidden w-full">
+                                                    {!searchQuery && <GripVertical size={12} className="opacity-0 group-hover:opacity-20 cursor-grab shrink-0"/>}
+                                                    <h3 className={`font-medium text-sm truncate pr-2 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>{note.title || 'Untitled Page'}</h3>
+                                                </div>
+                                                {activeNoteId === note.id && (<button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12} /></button>)}
                                             </div>
-                                            <p className="text-xs truncate mt-1 opacity-60 h-4">{preview}</p>
+                                            <p className="text-xs truncate mt-1 opacity-60 h-4 pl-5">{preview}</p>
                                         </div>
                                     );
                                 })}
                             </div>
-                            <div className={`p-3 border-t ${themeStyles.border} flex justify-between items-center text-[10px] opacity-60`}>
-                                <div className="flex gap-2">
-                                    <button onClick={exportAll} className="hover:underline flex items-center gap-1"><Download size={10}/> Backup</button>
-                                    <label className="cursor-pointer hover:underline flex items-center gap-1"><Upload size={10}/> Import <input type="file" className="hidden" onChange={handleFileUpload}/></label>
-                                </div>
-                                <div className="flex gap-2">
-                                    <button onClick={printNotebook} className="hover:underline flex items-center gap-1 text-purple-600 font-medium">
-                                        <Printer size={10}/> PDF Notebook
-                                    </button>
-                                    {activeSectionId !== 'default' && <button onClick={() => deleteSection(activeSectionId)} className="text-red-500 hover:underline">Del Sec</button>}
-                                </div>
-                            </div>
+                            <div className={`p-3 border-t ${themeStyles.border} flex justify-between items-center text-[10px] opacity-60`}><div className="flex gap-2"><button onClick={exportAll} className="hover:underline flex items-center gap-1"><Download size={10}/> Backup</button><label className="cursor-pointer hover:underline flex items-center gap-1"><Upload size={10}/> Import <input type="file" className="hidden" onChange={handleFileUpload}/></label></div><div className="flex gap-2"><button onClick={printNotebook} className="hover:underline flex items-center gap-1 text-purple-600 font-medium"><Printer size={10}/> PDF Notebook</button>{activeSectionId !== 'default' && <button onClick={() => deleteSection(activeSectionId)} className="text-red-500 hover:underline">Del Sec</button>}</div></div>
                         </div>
-
-                        {/* MAIN EDITOR AREA */}
                         <div className="flex-1 flex flex-col h-full relative w-full">
-                            
-                            {/* --- DESKTOP TOOLBAR (Hidden on Mobile) --- */}
-                            <div className={`
-                                hidden md:flex h-14 items-center justify-between px-4 border-b ${themeStyles.border} ${themeStyles.toolbar}
-                                transition-all duration-300 z-10 sticky top-0
-                            `}>
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => setShowSidebar(!showSidebar)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}>
-                                        <Sidebar size={18} />
-                                    </button>
-                                    <span className={`text-xs uppercase tracking-wider opacity-30 flex items-center gap-1 ${saveStatus === 'saved' ? 'text-green-500' : ''}`}>
-                                        {saveStatus === 'saved' ? <Check size={12}/> : <Save size={12}/>} {saveStatus}
-                                    </span>
-                                </div>
-
+                            <div className={`hidden md:flex h-14 items-center justify-between px-4 border-b ${themeStyles.border} ${themeStyles.toolbar} transition-all duration-300 z-10 sticky top-0`}>
+                                <div className="flex items-center gap-2"><button onClick={() => setShowSidebar(!showSidebar)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}><Sidebar size={18} /></button><span className={`text-xs uppercase tracking-wider opacity-30 flex items-center gap-1 ${saveStatus === 'saved' ? 'text-green-500' : ''}`}>{saveStatus === 'saved' ? <Check size={12}/> : <Save size={12}/>} {saveStatus}</span></div>
                                 <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-linear-gradient pl-2">
-                                    {/* DYNAMIC TABLE TOOLS (Desktop) */}
-                                    {isTableContext && (
-                                        <div className="flex bg-purple-50 border border-purple-200 rounded-lg mr-2 overflow-hidden shrink-0 animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <button onClick={() => handleTableOp('addRow')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium" title="Add Row Below"><ArrowDown size={14}/> Row</button>
-                                            <div className="w-px bg-purple-200"></div>
-                                            <button onClick={() => handleTableOp('addCol')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium" title="Add Column Right"><ArrowRight size={14}/> Col</button>
-                                            <div className="w-px bg-purple-200"></div>
-                                            <button onClick={() => handleTableOp('delRow')} className="p-2 hover:bg-red-50 text-red-400" title="Delete Row"><Trash2 size={14}/></button>
-                                            <button onClick={() => handleTableOp('delCol')} className="p-2 hover:bg-red-50 text-red-400" title="Delete Column"><Layout size={14} className="rotate-90"/></button>
-                                            <button onClick={() => handleTableOp('deleteTable')} className="p-2 hover:bg-red-500 hover:text-white text-red-500" title="Delete Table"><X size={14}/></button>
-                                        </div>
-                                    )}
-
-                                    <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
-                                        <button onClick={() => exec('formatBlock', 'H1')} className="p-1.5 rounded hover:bg-black/10" title="Heading 1"><Heading1 size={16}/></button>
-                                        <button onClick={() => exec('formatBlock', 'H2')} className="p-1.5 rounded hover:bg-black/10" title="Heading 2"><Heading2 size={16}/></button>
-                                    </div>
-
-                                    <div className={`flex ${themeStyles.border} border rounded-lg mr-2 overflow-hidden shrink-0`}>
-                                        <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-black/5" title="Bold"><Bold size={16}/></button>
-                                        <button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-black/5" title="Italic"><Italic size={16}/></button>
-                                        <button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-black/5" title="Underline"><Underline size={16}/></button>
-                                        <button onMouseDown={(e) => { e.preventDefault(); exec('hiliteColor', 'yellow'); }} className="p-2 hover:bg-black/5 text-yellow-500" title="Highlight"><Highlighter size={16}/></button>
-                                    </div>
-
-                                    <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
-                                        <button onClick={insertCheckbox} className="p-1.5 rounded hover:bg-black/10 text-purple-600" title="Insert Checkbox"><CheckSquare size={16}/></button>
-                                        <button onClick={() => exec('insertUnorderedList')} className="p-1.5 rounded hover:bg-black/10" title="Bullet List"><List size={16}/></button>
-                                        <button onClick={insertImage} className="p-1.5 rounded hover:bg-black/10" title="Insert Image"><ImageIcon size={16}/></button>
-                                        <button onClick={insertTable} className="p-1.5 rounded hover:bg-black/10" title="Insert Table"><TableIcon size={16}/></button>
-                                    </div>
-
+                                    {isTableContext && (<div className="flex bg-purple-50 border border-purple-200 rounded-lg mr-2 overflow-hidden shrink-0 animate-in fade-in slide-in-from-top-2 duration-200"><button onClick={() => handleTableOp('addRow')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium"><ArrowDown size={14}/> Row</button><div className="w-px bg-purple-200"></div><button onClick={() => handleTableOp('addCol')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium"><ArrowRight size={14}/> Col</button><div className="w-px bg-purple-200"></div><button onClick={() => handleTableOp('delRow')} className="p-2 hover:bg-red-50 text-red-400"><Trash2 size={14}/></button><button onClick={() => handleTableOp('delCol')} className="p-2 hover:bg-red-50 text-red-400"><Layout size={14} className="rotate-90"/></button><button onClick={() => handleTableOp('deleteTable')} className="p-2 hover:bg-red-500 hover:text-white text-red-500"><X size={14}/></button></div>)}
+                                    <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5"><button onClick={() => exec('formatBlock', 'H1')} className="p-1.5 rounded hover:bg-black/10"><Heading1 size={16}/></button><button onClick={() => exec('formatBlock', 'H2')} className="p-1.5 rounded hover:bg-black/10"><Heading2 size={16}/></button></div>
+                                    <div className={`flex ${themeStyles.border} border rounded-lg mr-2 overflow-hidden shrink-0`}><button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-black/5"><Bold size={16}/></button><button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-black/5"><Italic size={16}/></button><button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-black/5"><Underline size={16}/></button><button onMouseDown={(e) => { e.preventDefault(); exec('hiliteColor', 'yellow'); }} className="p-2 hover:bg-black/5 text-yellow-500"><Highlighter size={16}/></button></div>
+                                    <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5"><button onClick={insertCheckbox} className="p-1.5 rounded hover:bg-black/10 text-purple-600"><CheckSquare size={16}/></button><button onClick={() => exec('insertUnorderedList')} className="p-1.5 rounded hover:bg-black/10"><List size={16}/></button><button onClick={insertImage} className="p-1.5 rounded hover:bg-black/10"><ImageIcon size={16}/></button><button onClick={insertTable} className="p-1.5 rounded hover:bg-black/10"><TableIcon size={16}/></button></div>
                                     <div className="w-px h-6 bg-current opacity-10 mx-1"></div>
-
-                                    <select value={baseFont} onChange={(e) => setBaseFont(e.target.value)} className="h-8 text-sm bg-transparent outline-none mr-2 w-20">
-                                        <option value="sans">Sans</option>
-                                        <option value="serif">Serif</option>
-                                        <option value="mono">Mono</option>
-                                    </select>
-
-                                    <button onClick={() => {
-                                        const modes = ['light', 'sepia', 'dim', 'dark'];
-                                        const next = modes[(modes.indexOf(theme) + 1) % modes.length];
-                                        setTheme(next);
-                                    }} className="p-2 rounded hover:bg-black/5" title="Toggle Theme">
-                                        {theme === 'light' ? <Sun size={18}/> : theme === 'sepia' ? <Coffee size={18}/> : <Moon size={18}/>}
-                                    </button>
-                                    
-                                    <button onClick={() => setIsReadOnly(!isReadOnly)} className={`p-2 rounded hover:bg-black/5 ${isReadOnly ? 'text-purple-500' : ''}`} title="Read Only"><Eye size={18}/></button>
-                                    <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded hover:bg-black/5 ${focusMode ? 'text-purple-500' : ''}`} title="Focus Mode"><div className={`w-3 h-3 rounded-full ${focusMode ? 'bg-purple-500' : 'bg-gray-300'}`} /></button>
-                                    <button onClick={printSingleNote} className="p-2 rounded hover:bg-black/5 text-stone-600" title="Save as PDF"><Printer size={18}/></button>
+                                    <select value={baseFont} onChange={(e) => setBaseFont(e.target.value)} className="h-8 text-sm bg-transparent outline-none mr-2 w-20"><option value="sans">Sans</option><option value="serif">Serif</option><option value="mono">Mono</option></select>
+                                    <button onClick={() => { const modes = ['light', 'sepia', 'dim', 'dark']; setTheme(modes[(modes.indexOf(theme) + 1) % modes.length]); }} className="p-2 rounded hover:bg-black/5">{theme === 'light' ? <Sun size={18}/> : theme === 'sepia' ? <Coffee size={18}/> : <Moon size={18}/>}</button>
+                                    <button onClick={() => setIsReadOnly(!isReadOnly)} className={`p-2 rounded hover:bg-black/5 ${isReadOnly ? 'text-purple-500' : ''}`}><Eye size={18}/></button><button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded hover:bg-black/5 ${focusMode ? 'text-purple-500' : ''}`}><div className={`w-3 h-3 rounded-full ${focusMode ? 'bg-purple-500' : 'bg-gray-300'}`} /></button><button onClick={printSingleNote} className="p-2 rounded hover:bg-black/5 text-stone-600"><Printer size={18}/></button>
                                 </div>
                             </div>
-
-                            {/* --- MOBILE TOOLBAR (Visible on Mobile) --- */}
-                            {activeNote && (
-                                <div className={`
-                                    md:hidden fixed bottom-0 left-0 right-0 h-14 border-t ${themeStyles.border} ${themeStyles.bg} flex items-center justify-between px-4 z-50 transition-transform duration-300
-                                    ${showMobileMenu ? 'translate-y-full' : 'translate-y-0'}
-                                `}>
-                                    <button onClick={() => setShowSidebar(true)} className={`p-2 rounded ${themeStyles.muted}`}><Menu size={20}/></button>
-                                    
-                                    {/* Quick Actions */}
-                                    <div className="flex gap-4">
-                                        <button onClick={insertCheckbox} className="p-2 rounded hover:bg-black/5 text-purple-600"><CheckSquare size={20}/></button>
-                                        <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 rounded hover:bg-black/5"><Bold size={20}/></button>
-                                        <button onClick={insertImage} className="p-2 rounded hover:bg-black/5"><ImageIcon size={20}/></button>
-                                        <button onClick={() => exec('insertUnorderedList')} className="p-2 rounded hover:bg-black/5"><List size={20}/></button>
-                                    </div>
-
-                                    <button onClick={() => setShowMobileMenu(true)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}><MoreVertical size={20}/></button>
-                                </div>
-                            )}
-
-                            {/* --- MOBILE FULL MENU (Bottom Sheet) --- */}
-                            {showMobileMenu && (
-                                <div className="fixed inset-0 z-[60] bg-black/50 md:hidden backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
-                                    <div className={`absolute bottom-0 left-0 right-0 ${themeStyles.bg} rounded-t-2xl p-4 animate-slide-up border-t ${themeStyles.border} shadow-2xl`} onClick={e => e.stopPropagation()}>
-                                        <div className="flex justify-between items-center mb-4">
-                                            <h3 className="font-bold text-sm opacity-50 uppercase tracking-wider">Formatting Tools</h3>
-                                            <button onClick={() => setShowMobileMenu(false)} className="p-1 rounded-full bg-black/5"><ChevronDown size={20}/></button>
-                                        </div>
-                                        
-                                        <div className="grid grid-cols-4 gap-2 mb-6">
-                                            <button onClick={() => {exec('formatBlock', 'H1'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading1 size={20}/><span className="text-[10px]">H1</span></button>
-                                            <button onClick={() => {exec('formatBlock', 'H2'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading2 size={20}/><span className="text-[10px]">H2</span></button>
-                                            <button onClick={insertTable} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><TableIcon size={20}/><span className="text-[10px]">Table</span></button>
-                                            <button onClick={() => {exec('hiliteColor', 'yellow'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-yellow-100 text-yellow-800"><Highlighter size={20}/><span className="text-[10px]">Highlight</span></button>
-                                            
-                                            <button onClick={() => {exec('italic');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Italic size={20}/><span className="text-[10px]">Italic</span></button>
-                                            <button onClick={() => {exec('underline');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Underline size={20}/><span className="text-[10px]">Underline</span></button>
-                                            <button onClick={() => { setBaseFont(baseFont === 'sans' ? 'serif' : 'sans'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Type size={20}/><span className="text-[10px]">Font</span></button>
-                                            <button onClick={() => {
-                                                const modes = ['light', 'sepia', 'dim', 'dark'];
-                                                const next = modes[(modes.indexOf(theme) + 1) % modes.length];
-                                                setTheme(next);
-                                            }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Sun size={20}/><span className="text-[10px]">Theme</span></button>
-                                            
-                                            <button onClick={() => {printSingleNote(); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Printer size={20}/><span className="text-[10px]">PDF</span></button>
-                                        </div>
-
-                                        {/* Mobile Table Tools (Only show if in table) */}
-                                        {isTableContext && (
-                                            <div className="bg-purple-50 p-3 rounded-lg mb-4 border border-purple-100">
-                                                <div className="text-[10px] font-bold text-purple-800 mb-2 uppercase">Table Actions</div>
-                                                <div className="flex justify-between gap-2">
-                                                    <button onClick={() => handleTableOp('addRow')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowDown size={18}/></button>
-                                                    <button onClick={() => handleTableOp('addCol')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowRight size={18}/></button>
-                                                    <button onClick={() => handleTableOp('delRow')} className="p-2 bg-white rounded shadow-sm text-red-400 flex-1 flex justify-center"><Trash2 size={18}/></button>
-                                                    <button onClick={() => handleTableOp('deleteTable')} className="p-2 bg-red-100 rounded shadow-sm text-red-500 flex-1 flex justify-center"><X size={18}/></button>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-
-                            {/* EDITOR */}
+                            {activeNote && (<div className={`md:hidden fixed bottom-0 left-0 right-0 h-14 border-t ${themeStyles.border} ${themeStyles.bg} flex items-center justify-between px-4 z-50 transition-transform duration-300 ${showMobileMenu ? 'translate-y-full' : 'translate-y-0'}`}><button onClick={() => setShowSidebar(true)} className={`p-2 rounded ${themeStyles.muted}`}><Menu size={20}/></button><div className="flex gap-4"><button onClick={insertCheckbox} className="p-2 rounded hover:bg-black/5 text-purple-600"><CheckSquare size={20}/></button><button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 rounded hover:bg-black/5"><Bold size={20}/></button><button onClick={insertImage} className="p-2 rounded hover:bg-black/5"><ImageIcon size={20}/></button><button onClick={() => exec('insertUnorderedList')} className="p-2 rounded hover:bg-black/5"><List size={20}/></button></div><button onClick={() => setShowMobileMenu(true)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}><MoreVertical size={20}/></button></div>)}
+                            {showMobileMenu && (<div className="fixed inset-0 z-[60] bg-black/50 md:hidden backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}><div className={`absolute bottom-0 left-0 right-0 ${themeStyles.bg} rounded-t-2xl p-4 animate-slide-up border-t ${themeStyles.border} shadow-2xl`} onClick={e => e.stopPropagation()}><div className="flex justify-between items-center mb-4"><h3 className="font-bold text-sm opacity-50 uppercase tracking-wider">Tools</h3><button onClick={() => setShowMobileMenu(false)} className="p-1 rounded-full bg-black/5"><ChevronDown size={20}/></button></div><div className="grid grid-cols-4 gap-2 mb-6"><button onClick={() => {exec('formatBlock', 'H1'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading1 size={20}/><span className="text-[10px]">H1</span></button><button onClick={() => {exec('formatBlock', 'H2'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading2 size={20}/><span className="text-[10px]">H2</span></button><button onClick={insertTable} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><TableIcon size={20}/><span className="text-[10px]">Table</span></button><button onClick={() => {exec('hiliteColor', 'yellow'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-yellow-100 text-yellow-800"><Highlighter size={20}/><span className="text-[10px]">High</span></button><button onClick={() => {exec('italic');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Italic size={20}/><span className="text-[10px]">Italic</span></button><button onClick={() => {exec('underline');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Underline size={20}/><span className="text-[10px]">Under</span></button><button onClick={() => { setBaseFont(baseFont === 'sans' ? 'serif' : 'sans'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Type size={20}/><span className="text-[10px]">Font</span></button><button onClick={() => {const modes = ['light', 'sepia', 'dim', 'dark']; setTheme(modes[(modes.indexOf(theme) + 1) % modes.length]);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Sun size={20}/><span className="text-[10px]">Theme</span></button><button onClick={() => {printSingleNote(); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Printer size={20}/><span className="text-[10px]">PDF</span></button></div>{isTableContext && (<div className="bg-purple-50 p-3 rounded-lg mb-4 border border-purple-100"><div className="text-[10px] font-bold text-purple-800 mb-2 uppercase">Table</div><div className="flex justify-between gap-2"><button onClick={() => handleTableOp('addRow')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowDown size={18}/></button><button onClick={() => handleTableOp('addCol')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowRight size={18}/></button><button onClick={() => handleTableOp('delRow')} className="p-2 bg-white rounded shadow-sm text-red-400 flex-1 flex justify-center"><Trash2 size={18}/></button><button onClick={() => handleTableOp('deleteTable')} className="p-2 bg-red-100 rounded shadow-sm text-red-500 flex-1 flex justify-center"><X size={18}/></button></div></div>)}</div></div>)}
                             <div className="flex-1 overflow-y-auto relative w-full scroll-smooth">
                                 {activeNote ? (
                                     <div className="max-w-4xl mx-auto px-6 md:px-12 py-8 pb-32 min-h-full">
-                                        {/* TITLE INPUT */}
-                                        <input
-                                            type="text"
-                                            value={activeNote.title || ''}
-                                            onChange={(e) => updateNoteTitle(e.target.value)}
-                                            placeholder="Page Title"
-                                            className={`w-full text-4xl font-bold bg-transparent outline-none mb-6 placeholder-opacity-50 ${theme === 'dark' ? 'placeholder-neutral-700' : 'placeholder-stone-300'}`}
-                                        />
-                                        
-                                        <RichTextEditor 
-                                            ref={editorRef}
-                                            key={activeNote.id} 
-                                            initialContent={activeNote.content}
-                                            onChange={updateNoteContent}
-                                            placeholder="Type something... Paste images... Use the toolbar..."
-                                            readOnly={isReadOnly}
-                                            fontClass={baseFont === 'serif' ? 'font-serif' : baseFont === 'mono' ? 'font-mono' : 'font-sans'}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Tab') { e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); }
-                                                
-                                                // Checklist Auto-Enter Logic
-                                                if (e.key === 'Enter') {
-                                                    const selection = window.getSelection();
-                                                    if (!selection.rangeCount) return;
-                                                    const range = selection.getRangeAt(0);
-                                                    let node = range.startContainer;
-
-                                                    // Traverse up to find if we are in a checklist line
-                                                    let currentLineHasCheckbox = false;
-
-                                                    // 1. Check immediate previous siblings for checkbox
-                                                    let scanNode = node.nodeType === 3 ? node : node.childNodes[range.startOffset - 1];
-                                                    
-                                                    if (!(node.nodeType === 1 && range.startOffset === 0)) {
-                                                        while (scanNode) {
-                                                            if (scanNode.nodeName === 'INPUT' && scanNode.type === 'checkbox') {
-                                                                currentLineHasCheckbox = true;
-                                                                break;
-                                                            }
-                                                            if (scanNode.nodeName === 'BR' || scanNode.nodeName === 'DIV' || scanNode.nodeName === 'P') break;
-                                                            scanNode = scanNode.previousSibling;
-                                                        }
-                                                    }
-
-                                                    // 2. If not found, check if we are inside a DIV/P wrapper that has a checkbox
-                                                    if (!currentLineHasCheckbox) {
-                                                        const parent = node.nodeType === 3 ? node.parentElement : node;
-                                                        if (parent && parent.getAttribute('contenteditable') !== 'true') { 
-                                                            const checkbox = parent.querySelector('input[type="checkbox"]');
-                                                            if (checkbox) currentLineHasCheckbox = true;
-                                                        }
-                                                    }
-
-                                                    if (currentLineHasCheckbox) {
-                                                        // FIX: Do NOT prevent default. Let the browser create the new line.
-                                                        // Then insert the checkbox on that new line.
-                                                        setTimeout(() => {
-                                                            const id = ID();
-                                                            // Insert just the checkbox (no div wrapper needed as browser created the block)
-                                                            const html = `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`;
-                                                            exec('insertHTML', html);
-                                                        }, 0);
-                                                    }
-                                                }
-                                            }}
-                                        />
+                                        <input type="text" value={activeNote.title || ''} onChange={(e) => updateNoteTitle(e.target.value)} placeholder="Page Title" className={`w-full text-4xl font-bold bg-transparent outline-none mb-6 placeholder-opacity-50 ${theme === 'dark' ? 'placeholder-neutral-700' : 'placeholder-stone-300'}`}/>
+                                        <RichTextEditor ref={editorRef} key={activeNote.id} initialContent={activeNote.content} onChange={updateNoteContent} placeholder="Start writing..." readOnly={isReadOnly} fontClass={baseFont === 'serif' ? 'font-serif' : baseFont === 'mono' ? 'font-mono' : 'font-sans'} onKeyDown={(e) => { if (e.key === 'Tab') { e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); } if (e.key === 'Enter') { const selection = window.getSelection(); if (!selection.rangeCount) return; const range = selection.getRangeAt(0); let node = range.startContainer; let currentLineHasCheckbox = false; let scanNode = node.nodeType === 3 ? node : node.childNodes[range.startOffset - 1]; if (!(node.nodeType === 1 && range.startOffset === 0)) { while (scanNode) { if (scanNode.nodeName === 'INPUT' && scanNode.type === 'checkbox') { currentLineHasCheckbox = true; break; } if (scanNode.nodeName === 'BR' || scanNode.nodeName === 'DIV' || scanNode.nodeName === 'P') break; scanNode = scanNode.previousSibling; } } if (!currentLineHasCheckbox) { const parent = node.nodeType === 3 ? node.parentElement : node; if (parent && parent.getAttribute('contenteditable') !== 'true') { const checkbox = parent.querySelector('input[type="checkbox"]'); if (checkbox) currentLineHasCheckbox = true; } } if (currentLineHasCheckbox) { setTimeout(() => { const id = ID(); const html = `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`; exec('insertHTML', html); }, 0); } } }} />
                                     </div>
                                 ) : (
-                                    <div className="flex flex-col items-center justify-center h-full opacity-40 p-4 text-center">
-                                        <FileText size={64} strokeWidth={1} className="text-purple-300 mb-4"/>
-                                        <h2 className="text-xl font-medium">No Page Selected</h2>
-                                        <p className="mt-2">Select a page from the sidebar or create a new one.</p>
-                                    </div>
+                                    <div className="flex flex-col items-center justify-center h-full opacity-40 p-4 text-center"><FileText size={64} strokeWidth={1} className="text-purple-300 mb-4"/><h2 className="text-xl font-medium">No Page Selected</h2><p className="mt-2">Select a page from the sidebar or create a new one.</p></div>
                                 )}
                             </div>
                         </div>
                     </div>
-
-                    {/* HISTORY MODAL */}
-                    {showHistoryModal && activeNote && (
-                        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-                            <div className="bg-white p-4 rounded max-w-sm w-full">
-                                <h3>History (Last 5 versions)</h3>
-                                {activeNote.versions.map((v, i) => (
-                                    <div key={i} className="border-b p-2 text-xs flex justify-between">
-                                        <span>{new Date(v.time).toLocaleTimeString()}</span>
-                                        <button onClick={() => {updateNoteContent(v.content); setShowHistoryModal(false)}} className="text-blue-500">Restore</button>
-                                    </div>
-                                ))}
-                                <button onClick={() => setShowHistoryModal(false)} className="mt-4 w-full border p-2 rounded">Close</button>
-                            </div>
-                        </div>
-                    )}
                 </div>
             );
         }
