@@ -347,8 +347,18 @@
                         setTheme(parsed.preferences?.theme || 'light');
                         setBaseFont(parsed.preferences?.font || 'sans');
                         
-                        // Migration: Ensure all sections have noteOrder array
-                        loadedSections = loadedSections.map(s => ({ ...s, noteOrder: s.noteOrder || [] }));
+                        // Backward Compatibility & Migration: Ensure valid noteOrder
+                        loadedSections = loadedSections.map(s => {
+                            let order = s.noteOrder || [];
+                            // If legacy data (no order), generate default order based on Date Desc (standard view)
+                            if (order.length === 0) {
+                                order = loadedNotes
+                                    .filter(n => n.sectionId === s.id)
+                                    .sort((a, b) => b.updatedAt - a.updatedAt)
+                                    .map(n => n.id);
+                            }
+                            return { ...s, noteOrder: order };
+                        });
 
                     } catch (e) { console.error(e); }
                 } else {
@@ -487,34 +497,45 @@
             const handleDrop = (e, targetNoteId) => {
                 e.preventDefault();
                 const sourceNoteId = e.dataTransfer.getData('text/plain');
-                
                 if (sourceNoteId === targetNoteId) return;
 
                 setSections(prevSections => prevSections.map(sec => {
                     if (sec.id !== activeSectionId) return sec;
 
-                    const newOrder = [...(sec.noteOrder || [])];
-                    const sourceIndex = newOrder.indexOf(sourceNoteId);
-                    const targetIndex = newOrder.indexOf(targetNoteId);
-
-                    // If items aren't in the order array yet (legacy data), rebuild array from current view
-                    if (sourceIndex === -1 || targetIndex === -1) return sec; 
-
-                    // Remove source
-                    newOrder.splice(sourceIndex, 1);
-                    // Insert at target (if moving down, target index shifts, but since we removed first, logic holds if we insert at target index)
-                    // Actually, if dragging down, target index has shifted down by 1 if source was above it. 
-                    // To simplify: remove then splice.
+                    // 1. Reconstruct a clean, complete order array based on actual notes in this section
+                    // This fixes bugs where drag-drop fails if the order array was stale or incomplete
+                    const sectionNoteIds = notes.filter(n => n.sectionId === sec.id).map(n => n.id);
+                    let cleanOrder = [...(sec.noteOrder || [])];
                     
-                    // Re-calculate target index after removal if needed, or better:
-                    // Simple Array Move logic:
-                    const finalOrder = [...(sec.noteOrder || [])];
-                    const fromIndex = finalOrder.indexOf(sourceNoteId);
-                    finalOrder.splice(fromIndex, 1); // remove
-                    const toIndex = finalOrder.indexOf(targetNoteId); // find new target index
-                    finalOrder.splice(toIndex, 0, sourceNoteId); // insert
+                    // Remove IDs that no longer exist
+                    cleanOrder = cleanOrder.filter(id => sectionNoteIds.includes(id));
+                    // Append IDs that are missing (newly created or legacy)
+                    sectionNoteIds.forEach(id => {
+                        if (!cleanOrder.includes(id)) cleanOrder.push(id);
+                    });
 
-                    return { ...sec, noteOrder: finalOrder };
+                    const oldSourceIndex = cleanOrder.indexOf(sourceNoteId);
+                    const oldTargetIndex = cleanOrder.indexOf(targetNoteId);
+
+                    if (oldSourceIndex === -1 || oldTargetIndex === -1) return { ...sec, noteOrder: cleanOrder };
+
+                    // 2. Perform the Move
+                    // Remove from old position
+                    cleanOrder.splice(oldSourceIndex, 1);
+                    
+                    // Find new index of target
+                    const newTargetIndex = cleanOrder.indexOf(targetNoteId);
+                    
+                    // Insert at new position
+                    // If moving down (original source < original target), we want to be AFTER the target
+                    // If moving up (original source > original target), we want to be BEFORE the target
+                    if (oldSourceIndex < oldTargetIndex) {
+                        cleanOrder.splice(newTargetIndex + 1, 0, sourceNoteId);
+                    } else {
+                        cleanOrder.splice(newTargetIndex, 0, sourceNoteId);
+                    }
+
+                    return { ...sec, noteOrder: cleanOrder };
                 }));
                 
                 setDraggedNoteId(null);
