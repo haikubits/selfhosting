@@ -807,10 +807,14 @@
                                                 }
 
                                                 if (currentLineHasCheckbox) {
-                                                    e.preventDefault();
-                                                    const id = ID();
-                                                    const html = `<div><input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;</div>`;
-                                                    exec('insertHTML', html);
+                                                    // FIX: Do NOT prevent default. Let the browser create the new line.
+                                                    // Then insert the checkbox on that new line.
+                                                    setTimeout(() => {
+                                                        const id = ID();
+                                                        // Insert just the checkbox (no div wrapper needed as browser created the block)
+                                                        const html = `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`;
+                                                        exec('insertHTML', html);
+                                                    }, 0);
                                                 }
                                             }
                                         }}
