@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Calm Notepad</title>
+    <title>Calm OneNote</title>
     
     <!-- 1. Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -21,6 +21,12 @@
                     },
                     screens: {
                         'xs': '400px', // Extra small breakpoint
+                    },
+                    colors: {
+                        onenote: {
+                            purple: '#7719aa',
+                            light: '#f0ebf8'
+                        }
                     }
                 }
             }
@@ -45,43 +51,55 @@
     </script>
 
     <style>
-        /* Hide scrollbar for Chrome/Safari/Opera */
-        .no-scrollbar::-webkit-scrollbar {
-            display: none;
-        }
-        /* Hide scrollbar for IE, Edge and Firefox */
-        .no-scrollbar {
-            -ms-overflow-style: none;  /* IE and Edge */
-            scrollbar-width: none;  /* Firefox */
-        }
+        /* Custom Scrollbar */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Custom Scrollbar for desktop hover */
         @media (min-width: 768px) {
-            ::-webkit-scrollbar {
-                width: 6px;
-                height: 6px;
-            }
-            ::-webkit-scrollbar-track {
-                background: transparent;
-            }
-            ::-webkit-scrollbar-thumb {
-                background: rgba(0,0,0,0.1);
-                border-radius: 4px;
-            }
-            ::-webkit-scrollbar-thumb:hover {
-                background: rgba(0,0,0,0.2);
-            }
-            .dark ::-webkit-scrollbar-thumb {
-                background: rgba(255,255,255,0.1);
-            }
+            ::-webkit-scrollbar { width: 6px; height: 6px; }
+            ::-webkit-scrollbar-track { background: transparent; }
+            ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
+            ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.2); }
+            .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
         }
 
-        /* Editor Placeholder */
+        /* Editor Styles */
         [contenteditable]:empty:before {
             content: attr(placeholder);
             color: #9ca3af;
             font-style: italic;
             cursor: text;
+        }
+
+        /* Checkbox Styling within ContentEditable */
+        .todo-checkbox {
+            cursor: pointer;
+            margin-right: 8px;
+            vertical-align: middle;
+            accent-color: #7719aa;
+        }
+
+        /* Table Styling */
+        .editor-table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+        .editor-table td, .editor-table th {
+            border: 1px solid #d1d5db;
+            padding: 8px;
+            min-width: 50px;
+        }
+        .dark .editor-table td, .dark .editor-table th {
+            border-color: #4b5563;
+        }
+
+        /* Image Styling */
+        .editor-image {
+            max-width: 100%;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
@@ -97,7 +115,10 @@
             Trash2, History, Sidebar, Type, 
             Moon, Sun, Coffee, Eye, EyeOff, FileText, 
             X, Save, RotateCcw, Menu,
-            Bold, Italic, Underline, Check
+            Bold, Italic, Underline, Check, 
+            List, ListOrdered, CheckSquare, Image as ImageIcon,
+            Heading1, Heading2, Highlighter, Table as TableIcon,
+            Folder, FolderPlus, ChevronDown, ChevronRight, MoreHorizontal
         } from 'lucide-react';
 
         const ID = () => '_' + Math.random().toString(36).substr(2, 9);
@@ -112,8 +133,8 @@
                 itemHover: 'hover:bg-stone-100',
                 accent: 'text-stone-900',
                 muted: 'text-stone-400',
-                input: 'bg-transparent',
-                border: 'border-stone-200'
+                border: 'border-stone-200',
+                toolbar: 'bg-white/80 backdrop-blur'
             },
             sepia: {
                 bg: 'bg-[#F4ECD8]',
@@ -123,8 +144,8 @@
                 itemHover: 'hover:bg-[#E4D9C0]',
                 accent: 'text-[#5C4B37]',
                 muted: 'text-[#9C8B74]',
-                input: 'bg-transparent',
-                border: 'border-[#D3C4A5]'
+                border: 'border-[#D3C4A5]',
+                toolbar: 'bg-[#F4ECD8]/80 backdrop-blur'
             },
             dim: {
                 bg: 'bg-slate-800',
@@ -134,8 +155,8 @@
                 itemHover: 'hover:bg-slate-800',
                 accent: 'text-slate-100',
                 muted: 'text-slate-500',
-                input: 'bg-slate-900',
-                border: 'border-slate-700'
+                border: 'border-slate-700',
+                toolbar: 'bg-slate-800/80 backdrop-blur'
             },
             dark: {
                 bg: 'bg-black',
@@ -145,450 +166,508 @@
                 itemHover: 'hover:bg-neutral-800',
                 accent: 'text-neutral-200',
                 muted: 'text-neutral-600',
-                input: 'bg-neutral-900',
-                border: 'border-neutral-800'
+                border: 'border-neutral-800',
+                toolbar: 'bg-black/80 backdrop-blur'
             }
         };
 
-        // Rich Text Editor Component
-        // Using a key prop (noteId) ensures this component remounts when switching notes,
-        // which safely resets the contentEditable state without cursor jumps.
-        const RichTextEditor = ({ initialContent, onChange, placeholder, readOnly, themeStyles, fontClass, onKeyDown }) => {
+        // --- UTILS FOR IMAGE COMPRESSION ---
+        const compressImage = (file) => {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800;
+                        const scaleSize = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scaleSize;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.7)); // Compress to 70% quality JPG
+                    }
+                }
+            });
+        };
+
+        const RichTextEditor = ({ initialContent, onChange, placeholder, readOnly, fontClass, onKeyDown }) => {
             const editorRef = useRef(null);
             
-            // Effect to set initial content on mount
             useEffect(() => {
                 if (editorRef.current) {
-                    editorRef.current.innerHTML = initialContent || '';
+                    // Check if content is truly different to avoid cursor jumps on small re-renders (though key prop handles mostly)
+                    if (editorRef.current.innerHTML !== initialContent) {
+                        editorRef.current.innerHTML = initialContent || '';
+                    }
+                    
+                    // Attach click listeners to checkboxes for toggle functionality
+                    const checkboxes = editorRef.current.querySelectorAll('input[type="checkbox"]');
+                    checkboxes.forEach(box => {
+                        box.onclick = (e) => {
+                             // Let the click happen, then trigger input event to save
+                             setTimeout(() => {
+                                 onChange(editorRef.current.innerHTML);
+                             }, 0);
+                        }
+                    });
                 }
-            }, []); // Empty dependency array as we rely on key prop for updates
+            }, []);
 
             const handleInput = (e) => {
-                const html = e.currentTarget.innerHTML;
-                onChange(html);
+                onChange(e.currentTarget.innerHTML);
             };
 
-            const handleKeyDownInternal = (e) => {
-                if (onKeyDown) onKeyDown(e);
-            }
+            const handlePaste = async (e) => {
+                const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                let hasImage = false;
+                
+                for (let index in items) {
+                    const item = items[index];
+                    if (item.kind === 'file' && item.type.startsWith('image/')) {
+                        e.preventDefault();
+                        hasImage = true;
+                        const file = item.getAsFile();
+                        const compressedBase64 = await compressImage(file);
+                        document.execCommand('insertHTML', false, `<img src="${compressedBase64}" class="editor-image" /> <br>`);
+                        onChange(editorRef.current.innerHTML);
+                    }
+                }
+            };
 
             return (
                 <div
                     ref={editorRef}
                     contentEditable={!readOnly}
                     onInput={handleInput}
-                    onKeyDown={handleKeyDownInternal}
+                    onKeyDown={onKeyDown}
+                    onPaste={handlePaste}
                     placeholder={placeholder}
                     className={`
                         w-full h-full min-h-[60vh] outline-none bg-transparent 
                         leading-relaxed text-lg md:text-xl pb-32
-                        selection:bg-blue-200 selection:text-blue-900
+                        selection:bg-purple-200 selection:text-purple-900
                         ${fontClass}
                         ${readOnly ? 'opacity-80' : ''}
                     `}
-                    style={{
-                        whiteSpace: 'pre-wrap', // Preserve formatting
-                        wordWrap: 'break-word'
-                    }}
+                    style={{ whiteSpace: 'pre-wrap', wordWrap: 'break-word' }}
                 />
             );
         };
 
         function App() {
-            // Data State
+            // Data
             const [notes, setNotes] = useState([]);
+            const [sections, setSections] = useState([]);
             const [activeNoteId, setActiveNoteId] = useState(null);
+            const [activeSectionId, setActiveSectionId] = useState('default');
             
-            // UI State
+            // UI
             const [searchQuery, setSearchQuery] = useState('');
             const [theme, setTheme] = useState('light');
-            const [baseFont, setBaseFont] = useState('sans'); // 'sans', 'serif', 'mono'
+            const [baseFont, setBaseFont] = useState('sans');
             const [showSidebar, setShowSidebar] = useState(true);
             const [focusMode, setFocusMode] = useState(false);
-            const [isReadOnly, setIsReadOnly] = useState(false); // Replaces isPreview
-            const [isTyping, setIsTyping] = useState(false);
+            const [isReadOnly, setIsReadOnly] = useState(false);
+            const [saveStatus, setSaveStatus] = useState('saved');
             const [showHistoryModal, setShowHistoryModal] = useState(false);
-            const [saveStatus, setSaveStatus] = useState('saved'); // 'saved', 'saving', 'unsaved'
-            
-            const typingTimeoutRef = useRef(null);
+
+            // Refs
             const saveTimeoutRef = useRef(null);
 
-            // Responsive Init
+            // Init
             useEffect(() => {
                 if (window.innerWidth < 768) setShowSidebar(false);
-            }, []);
-
-            // Load Data
-            useEffect(() => {
-                const savedData = localStorage.getItem('calm_notepad_data');
+                
+                const savedData = localStorage.getItem('calm_onenote_data');
                 if (savedData) {
                     try {
                         const parsed = JSON.parse(savedData);
                         setNotes(parsed.notes || []);
+                        setSections(parsed.sections || [{ id: 'default', name: 'Quick Notes' }]);
                         setActiveNoteId(parsed.activeNoteId || null);
                         setTheme(parsed.preferences?.theme || 'light');
                         setBaseFont(parsed.preferences?.font || 'sans');
+                        setActiveSectionId(parsed.activeSectionId || 'default');
                     } catch (e) { console.error(e); }
                 } else {
+                    // Onboarding Content
                     const welcomeId = ID();
                     const welcomeNote = {
                         id: welcomeId,
-                        title: 'Welcome',
-                        content: `<b>Welcome to Calm Notepad</b><br><br>This is a <i>rich text</i> environment.<br><br><ul><li>Select text and use the toolbar to format.</li><li>Press <b>Ctrl+S</b> to save instantly.</li><li>Use the sidebar to manage notes.</li></ul>`,
+                        sectionId: 'default',
+                        title: 'Getting Started',
+                        content: `<h1>Welcome to Calm OneNote</h1><div><br></div><div>This is a <b>browser-based</b> notepad inspired by the best features of OneNote, but kept calm and private.</div><div><br></div><h2>Features to try:</h2><div><br></div><div><input type="checkbox" class="todo-checkbox"> <b>Checklists:</b> Click the checkbox icon in the toolbar.</div><div><input type="checkbox" class="todo-checkbox"> <b>Images:</b> Paste screenshots directly here (Ctrl+V).</div><div><input type="checkbox" class="todo-checkbox"> <b>Sections:</b> Use the sidebar to create folders/sections.</div><div><input type="checkbox" class="todo-checkbox"> <b>Tables:</b> Insert simple tables for data.</div><div><br></div><div style="background-color: rgb(255, 255, 0);">You can also highlight text like this!</div>`,
                         updatedAt: Date.now(),
                         versions: []
                     };
                     setNotes([welcomeNote]);
+                    setSections([{ id: 'default', name: 'Quick Notes' }]);
                     setActiveNoteId(welcomeId);
                 }
             }, []);
 
-            // Save Function
-            const saveData = useCallback((notesToSave = notes, activeId = activeNoteId) => {
-                const data = { notes: notesToSave, activeNoteId: activeId, preferences: { theme, font: baseFont } };
-                localStorage.setItem('calm_notepad_data', JSON.stringify(data));
-                setSaveStatus('saved');
-                setTimeout(() => setSaveStatus('idle'), 2000);
-            }, [notes, activeNoteId, theme, baseFont]);
+            // Save
+            const saveData = useCallback(() => {
+                const data = { 
+                    notes, 
+                    sections,
+                    activeNoteId,
+                    activeSectionId,
+                    preferences: { theme, font: baseFont } 
+                };
+                try {
+                    localStorage.setItem('calm_onenote_data', JSON.stringify(data));
+                    setSaveStatus('saved');
+                    setTimeout(() => setSaveStatus('idle'), 2000);
+                } catch (e) {
+                    alert('Storage full! Delete some notes or images.');
+                }
+            }, [notes, sections, activeNoteId, activeSectionId, theme, baseFont]);
 
-            // Debounced Auto Save
             useEffect(() => {
                 if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
                 setSaveStatus('saving');
-                saveTimeoutRef.current = setTimeout(() => {
-                    saveData();
-                }, 1000);
-                return () => clearTimeout(saveTimeoutRef.current);
-            }, [notes, activeNoteId, theme, baseFont, saveData]);
+                saveTimeoutRef.current = setTimeout(saveData, 1000);
+            }, [notes, sections, theme, baseFont]);
 
-            // Global Keyboard Shortcuts (Ctrl+S)
+            // Shortcuts
             useEffect(() => {
-                const handleGlobalKeyDown = (e) => {
-                    // Save: Ctrl+S or Cmd+S
-                    if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+                const handleKey = (e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
                         e.preventDefault();
                         saveData();
-                        // Visual feedback
-                        const indicator = document.getElementById('save-indicator');
-                        if (indicator) {
-                            indicator.style.opacity = '1';
-                            indicator.style.transform = 'scale(1.1)';
-                            setTimeout(() => {
-                                indicator.style.opacity = '0.3';
-                                indicator.style.transform = 'scale(1)';
-                            }, 500);
-                        }
                     }
                 };
-
-                window.addEventListener('keydown', handleGlobalKeyDown);
-                return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+                window.addEventListener('keydown', handleKey);
+                return () => window.removeEventListener('keydown', handleKey);
             }, [saveData]);
 
-            // Formatting Actions
-            const execFormat = (command, value = null) => {
-                document.execCommand(command, false, value);
-                // Refocus editor logic if needed, usually browser keeps focus on button click if we use preventDefault
-            };
-
-            // CRUD
+            // Note Logic
             const createNote = () => {
-                const newNote = { id: ID(), title: '', content: '', updatedAt: Date.now(), versions: [] };
-                const newNotes = [newNote, ...notes];
-                setNotes(newNotes);
+                const newNote = { 
+                    id: ID(), 
+                    sectionId: activeSectionId,
+                    title: '', 
+                    content: '', 
+                    updatedAt: Date.now(), 
+                    versions: [] 
+                };
+                setNotes([newNote, ...notes]);
                 setActiveNoteId(newNote.id);
                 if (window.innerWidth < 768) setShowSidebar(false);
+            };
+
+            const updateNoteContent = (html) => {
+                setNotes(prev => prev.map(n => {
+                    if (n.id !== activeNoteId) return n;
+                    
+                    // Extract plain text title
+                    const tmp = document.createElement('div');
+                    tmp.innerHTML = html;
+                    const title = (tmp.innerText || '').split('\n')[0].substring(0, 50) || 'Untitled';
+                    
+                    // Versioning (simple)
+                    let versions = n.versions || [];
+                    const now = Date.now();
+                    const lastTime = versions.length > 0 ? versions[versions.length-1].time : 0;
+                    if (now - lastTime > 600000 && n.content !== html) { // 10 mins snapshot
+                         versions = [...versions, { content: n.content, time: now }].slice(-5);
+                    }
+
+                    return { ...n, content: html, title, versions, updatedAt: now };
+                }));
             };
 
             const deleteNote = (id) => {
                 if (confirm('Delete this note?')) {
                     const newNotes = notes.filter(n => n.id !== id);
                     setNotes(newNotes);
-                    if (activeNoteId === id) setActiveNoteId(newNotes[0]?.id || null);
+                    if (activeNoteId === id) setActiveNoteId(null);
                 }
             };
 
-            const updateNoteContent = (htmlContent) => {
-                setNotes(prev => prev.map(n => {
-                    if (n.id !== activeNoteId) return n;
-                    
-                    // Extract title from first line of text content (strip tags)
-                    const tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = htmlContent;
-                    const textContent = tempDiv.innerText || tempDiv.textContent || '';
-                    const title = textContent.split('\n')[0].substring(0, 40) || 'Untitled';
-
-                    // Versioning logic
-                    let versions = n.versions || [];
-                    const now = Date.now();
-                    const lastTime = versions.length > 0 ? versions[versions.length - 1].time : 0;
-                    if (now - lastTime > 300000 && n.content !== htmlContent) {
-                         versions = [...versions, { content: n.content, time: now }].slice(-10);
-                    }
-
-                    return { ...n, content: htmlContent, title, versions, updatedAt: now };
-                }));
-
-                setIsTyping(true);
-                if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1500);
+            // Section Logic
+            const createSection = () => {
+                const name = prompt("New Section Name:");
+                if (name) {
+                    const newSec = { id: ID(), name };
+                    setSections([...sections, newSec]);
+                    setActiveSectionId(newSec.id);
+                }
             };
 
-            // Helpers
-            const getActiveNote = () => notes.find(n => n.id === activeNoteId);
-            const filteredNotes = notes.filter(n => {
-                // Search in plain text, not HTML tags
-                const tempDiv = document.createElement('div');
-                tempDiv.innerHTML = n.content || '';
-                const textContent = (tempDiv.innerText || '').toLowerCase();
-                const title = (n.title || '').toLowerCase();
-                const query = searchQuery.toLowerCase();
-                return title.includes(query) || textContent.includes(query);
-            }).sort((a, b) => b.updatedAt - a.updatedAt);
+            const deleteSection = (id) => {
+                if (sections.length <= 1) return alert("Cannot delete the last section.");
+                if (confirm('Delete section and all its notes?')) {
+                    setSections(sections.filter(s => s.id !== id));
+                    setNotes(notes.filter(n => n.sectionId !== id));
+                    setActiveSectionId(sections[0].id);
+                }
+            };
 
-            const themeStyles = THEMES[theme];
-            const activeNote = getActiveNote();
+            // Formatting
+            const exec = (cmd, val = null) => document.execCommand(cmd, false, val);
             
-            // Stats
-            const tempDiv = document.createElement('div');
-            if (activeNote) tempDiv.innerHTML = activeNote.content;
-            const plainText = activeNote ? (tempDiv.innerText || '') : '';
-            const wordCount = plainText.split(/\s+/).filter(w => w.length).length;
+            const insertCheckbox = () => {
+                const id = ID();
+                // We insert an input. Note: Webkit sometimes struggles with inputs in contenteditable.
+                // We wrap it in a non-editable span to help stability, or just raw input.
+                const html = `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`;
+                exec('insertHTML', html);
+            };
+
+            const insertTable = () => {
+                const html = `
+                    <table class="editor-table">
+                        <tbody>
+                            <tr><td>header</td><td>header</td></tr>
+                            <tr><td>data</td><td>data</td></tr>
+                        </tbody>
+                    </table><br>`;
+                exec('insertHTML', html);
+            };
+
+            // Computed
+            const activeNote = notes.find(n => n.id === activeNoteId);
+            const themeStyles = THEMES[theme];
+            
+            // Filter notes by Search OR by Section
+            const filteredNotes = notes.filter(n => {
+                if (searchQuery) {
+                    const q = searchQuery.toLowerCase();
+                    return (n.title||'').toLowerCase().includes(q) || (n.content||'').toLowerCase().includes(q);
+                }
+                return n.sectionId === activeSectionId;
+            }).sort((a,b) => b.updatedAt - a.updatedAt);
 
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                    const text = ev.target.result;
                     try {
-                        const json = JSON.parse(text);
-                        if (json.notes) {
-                            setNotes([...json.notes, ...notes]);
-                            return;
+                        const json = JSON.parse(ev.target.result);
+                        if (json.notes && json.sections) {
+                            if(confirm("Merge backup?")) {
+                                setNotes([...json.notes, ...notes]);
+                                setSections([...json.sections, ...sections]); // Needs deduping ideally
+                            }
                         }
                     } catch {}
-                    // Treat import as text/html
-                    const newNote = { id: ID(), title: file.name, content: text.replace(/\n/g, '<br>'), updatedAt: Date.now(), versions: [] };
-                    setNotes([newNote, ...notes]);
-                    setActiveNoteId(newNote.id);
                 };
                 reader.readAsText(file);
             };
 
             const exportAll = () => {
-                const blob = new Blob([JSON.stringify({ notes, preferences: { theme, font: baseFont } })], { type: 'application/json' });
+                const blob = new Blob([JSON.stringify({ notes, sections, preferences: { theme, font: baseFont } })], { type: 'application/json' });
                 const a = document.createElement('a');
                 a.href = URL.createObjectURL(blob);
-                a.download = `backup-${new Date().toISOString().slice(0,10)}.json`;
+                a.download = `onenote-backup-${new Date().toISOString().slice(0,10)}.json`;
                 a.click();
-            };
-
-            const getFontClass = () => {
-                if (baseFont === 'serif') return 'font-serif';
-                if (baseFont === 'mono') return 'font-mono';
-                return 'font-sans';
             };
 
             return (
                 <div className={`flex h-screen w-full overflow-hidden relative transition-colors duration-300 ${themeStyles.bg} ${themeStyles.text} font-sans`}>
                     
-                    {/* OVERLAY FOR MOBILE SIDEBAR */}
+                    {/* MOBILE OVERLAY */}
                     {showSidebar && (
-                        <div 
-                            className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm"
-                            onClick={() => setShowSidebar(false)}
-                        ></div>
+                        <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowSidebar(false)}></div>
                     )}
 
                     {/* SIDEBAR */}
                     <div className={`
-                        fixed inset-y-0 left-0 z-40 w-full xs:w-80 md:relative md:w-80 md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none border-r ${themeStyles.sidebar}
+                        fixed inset-y-0 left-0 z-40 w-full xs:w-80 md:relative md:w-72 md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none border-r ${themeStyles.sidebar}
                         ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
                         flex flex-col
                     `}>
-                        <div className="p-4 space-y-4">
+                        {/* Header */}
+                        <div className="p-4 space-y-4 border-b border-inherit">
                             <div className="flex items-center justify-between">
-                                <h1 className={`font-bold text-lg tracking-tight ${themeStyles.accent}`}>Calm Notes</h1>
-                                <div className="flex gap-2">
-                                    <button onClick={createNote} className="p-2 rounded-full hover:bg-black/5 transition-colors"><Plus size={20} /></button>
-                                    <button onClick={() => setShowSidebar(false)} className="p-2 rounded-full hover:bg-black/5 md:hidden"><X size={20} /></button>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-8 h-8 bg-purple-700 rounded-md flex items-center justify-center text-white font-bold font-serif">N</div>
+                                    <h1 className={`font-bold text-lg tracking-tight ${themeStyles.accent}`}>Calm OneNote</h1>
+                                </div>
+                                <div className="flex gap-1">
+                                    <button onClick={createSection} className="p-2 rounded hover:bg-black/5" title="New Section"><FolderPlus size={18}/></button>
+                                    <button onClick={createNote} className="p-2 rounded hover:bg-black/5" title="New Page"><Plus size={18}/></button>
+                                    <button onClick={() => setShowSidebar(false)} className="p-2 md:hidden"><X size={18}/></button>
                                 </div>
                             </div>
-                            <div className={`flex items-center px-3 py-2 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
-                                <Search size={16} className={themeStyles.muted} />
+
+                            {/* Search */}
+                            <div className={`flex items-center px-2 py-1.5 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
+                                <Search size={14} className={themeStyles.muted} />
                                 <input 
-                                    type="text" 
-                                    placeholder="Search..." 
-                                    className={`ml-2 w-full bg-transparent outline-none text-base placeholder-opacity-50 ${themeStyles.muted}`}
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    type="text" placeholder="Search notes..." 
+                                    className={`ml-2 w-full bg-transparent outline-none text-sm ${themeStyles.muted}`}
+                                    value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                                 />
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-2 pb-2">
+                        {/* Sections List (Tabs) */}
+                        <div className="flex-none overflow-x-auto border-b border-inherit bg-black/5 p-1 flex gap-1 snap-x scroll-pl-2 no-scrollbar">
+                            {sections.map(sec => (
+                                <button
+                                    key={sec.id}
+                                    onClick={() => { setActiveSectionId(sec.id); setSearchQuery(''); }}
+                                    className={`
+                                        snap-start shrink-0 px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors border-t border-l border-r border-transparent relative top-px
+                                        ${activeSectionId === sec.id ? `${themeStyles.bg} ${themeStyles.accent} border-${themeStyles.border.split(' ')[1]}` : 'opacity-60 hover:opacity-100 hover:bg-black/5'}
+                                    `}
+                                >
+                                    {sec.name}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Notes List (Pages) */}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                            {filteredNotes.length === 0 && <div className="text-center text-xs opacity-50 py-8">Empty Section</div>}
+                            
                             {filteredNotes.map(note => {
-                                // Preview Text extraction
-                                const d = document.createElement('div');
-                                d.innerHTML = note.content;
-                                const preview = d.innerText.substring(0, 60).replace(/[\n]/g, ' ');
-                                
+                                // Strip html for preview
+                                const div = document.createElement('div');
+                                div.innerHTML = note.content;
+                                const preview = div.innerText.substring(0, 50);
+
                                 return (
                                     <div 
                                         key={note.id}
-                                        onClick={() => { setActiveNoteId(note.id); if(window.innerWidth < 768) setShowSidebar(false); }}
-                                        className={`p-4 mb-2 rounded-lg cursor-pointer transition-all ${activeNoteId === note.id ? themeStyles.itemActive : `bg-transparent ${themeStyles.itemHover}`}`}
+                                        onClick={() => { setActiveNoteId(note.id); if(window.innerWidth<768) setShowSidebar(false); }}
+                                        className={`group p-3 rounded-md cursor-pointer transition-all ${activeNoteId === note.id ? themeStyles.itemActive : 'hover:bg-black/5'}`}
                                     >
                                         <div className="flex justify-between items-start">
-                                            <h3 className={`font-medium text-base truncate pr-2 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>{note.title || 'Untitled'}</h3>
+                                            <h3 className={`font-medium text-sm truncate pr-2 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>
+                                                {note.title || 'Untitled Page'}
+                                            </h3>
                                             {activeNoteId === note.id && (
-                                                <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="text-red-400 hover:text-red-600">
-                                                    <Trash2 size={14} />
+                                                <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600">
+                                                    <Trash2 size={12} />
                                                 </button>
                                             )}
                                         </div>
-                                        <p className="text-sm truncate mt-1 opacity-70 h-5">{preview || 'Empty'}</p>
-                                        <div className="text-xs mt-2 opacity-40">{new Date(note.updatedAt).toLocaleDateString()}</div>
+                                        <p className="text-xs truncate mt-1 opacity-60 h-4">{preview}</p>
                                     </div>
                                 );
                             })}
                         </div>
-                        
-                        <div className={`p-4 border-t ${themeStyles.border} flex justify-between items-center text-xs opacity-60`}>
-                            <button onClick={exportAll} className="flex items-center gap-1 hover:underline"><Download size={14} /> Backup</button>
-                            <label className="flex items-center gap-1 cursor-pointer hover:underline">
-                                <Upload size={14} /> Import
-                                <input type="file" className="hidden" onChange={handleFileUpload} />
-                            </label>
+
+                        {/* Footer */}
+                        <div className={`p-3 border-t ${themeStyles.border} flex justify-between items-center text-[10px] opacity-60`}>
+                            <div className="flex gap-2">
+                                <button onClick={exportAll} className="hover:underline flex items-center gap-1"><Download size={10}/> Backup</button>
+                                <label className="cursor-pointer hover:underline flex items-center gap-1"><Upload size={10}/> Import <input type="file" className="hidden" onChange={handleFileUpload}/></label>
+                            </div>
+                            {activeSectionId !== 'default' && (
+                                <button onClick={() => deleteSection(activeSectionId)} className="text-red-500 hover:underline">Delete Section</button>
+                            )}
                         </div>
                     </div>
 
-                    {/* MAIN AREA */}
+                    {/* MAIN EDITOR AREA */}
                     <div className="flex-1 flex flex-col h-full relative w-full">
                         
                         {/* TOOLBAR */}
                         <div className={`
-                            h-14 min-h-[3.5rem] flex items-center justify-between px-3 md:px-8 border-b ${themeStyles.border}
-                            transition-all duration-300 select-none
-                            ${focusMode && isTyping ? 'opacity-0' : 'opacity-100'}
+                            h-14 flex items-center justify-between px-4 border-b ${themeStyles.border} ${themeStyles.toolbar}
+                            transition-all duration-300 z-10 sticky top-0
+                            ${focusMode ? 'opacity-0 hover:opacity-100' : 'opacity-100'}
                         `}>
-                            <div className="flex items-center gap-3 shrink-0">
+                            <div className="flex items-center gap-2">
                                 <button onClick={() => setShowSidebar(!showSidebar)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}>
                                     {showSidebar ? <X size={20} className="md:hidden" /> : <Menu size={20} />}
-                                    <span className="hidden md:inline ml-2"><Sidebar size={18} /></span>
+                                    <span className="hidden md:inline"><Sidebar size={18} /></span>
                                 </button>
-                                
-                                <span 
-                                    id="save-indicator" 
-                                    className={`text-xs uppercase tracking-wider opacity-30 flex items-center gap-1 hidden xs:flex transition-all duration-300 ${saveStatus === 'saved' ? 'text-green-500' : ''}`}
-                                >
-                                    {saveStatus === 'saved' ? <Check size={12} /> : <Save size={12} />}
-                                    {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
+                                <span className={`text-xs uppercase tracking-wider opacity-30 flex items-center gap-1 hidden xs:flex ${saveStatus === 'saved' ? 'text-green-500' : ''}`}>
+                                    {saveStatus === 'saved' ? <Check size={12}/> : <Save size={12}/>} {saveStatus}
                                 </span>
                             </div>
 
-                            {/* FORMATTING TOOLS */}
+                            {/* FORMATTING ICONS */}
                             <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-linear-gradient pl-2">
-                                
-                                {/* Rich Text Controls */}
-                                <div className={`flex ${themeStyles.border} border rounded-lg mr-2 overflow-hidden shrink-0`}>
-                                    <button onMouseDown={(e) => { e.preventDefault(); execFormat('bold'); }} className={`p-2 hover:bg-black/5 ${themeStyles.muted} active:bg-black/10`} title="Bold (Ctrl+B)"><Bold size={16}/></button>
-                                    <button onMouseDown={(e) => { e.preventDefault(); execFormat('italic'); }} className={`p-2 hover:bg-black/5 ${themeStyles.muted} active:bg-black/10`} title="Italic (Ctrl+I)"><Italic size={16}/></button>
-                                    <button onMouseDown={(e) => { e.preventDefault(); execFormat('underline'); }} className={`p-2 hover:bg-black/5 ${themeStyles.muted} active:bg-black/10`} title="Underline (Ctrl+U)"><Underline size={16}/></button>
+                                <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
+                                    <button onClick={() => exec('formatBlock', 'H1')} className="p-1.5 rounded hover:bg-black/10" title="Heading 1"><Heading1 size={16}/></button>
+                                    <button onClick={() => exec('formatBlock', 'H2')} className="p-1.5 rounded hover:bg-black/10" title="Heading 2"><Heading2 size={16}/></button>
                                 </div>
 
-                                {/* Font Selector */}
-                                <select 
-                                    value={baseFont} 
-                                    onChange={(e) => setBaseFont(e.target.value)}
-                                    className={`h-8 text-sm rounded border ${themeStyles.border} ${themeStyles.input} ${themeStyles.muted} px-2 mr-2 outline-none focus:ring-1 focus:ring-blue-500 bg-transparent`}
-                                >
+                                <div className={`flex ${themeStyles.border} border rounded-lg mr-2 overflow-hidden shrink-0`}>
+                                    <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-black/5" title="Bold"><Bold size={16}/></button>
+                                    <button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-black/5" title="Italic"><Italic size={16}/></button>
+                                    <button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-black/5" title="Underline"><Underline size={16}/></button>
+                                    <button onMouseDown={(e) => { e.preventDefault(); exec('hiliteColor', 'yellow'); }} className="p-2 hover:bg-black/5 text-yellow-500" title="Highlight"><Highlighter size={16}/></button>
+                                </div>
+
+                                <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
+                                    <button onClick={insertCheckbox} className="p-1.5 rounded hover:bg-black/10 text-purple-600" title="Insert Checkbox"><CheckSquare size={16}/></button>
+                                    <button onClick={() => exec('insertUnorderedList')} className="p-1.5 rounded hover:bg-black/10" title="Bullet List"><List size={16}/></button>
+                                    <button onClick={() => exec('insertOrderedList')} className="p-1.5 rounded hover:bg-black/10" title="Number List"><ListOrdered size={16}/></button>
+                                    <button onClick={insertTable} className="p-1.5 rounded hover:bg-black/10" title="Insert Table"><TableIcon size={16}/></button>
+                                </div>
+
+                                <div className="w-px h-6 bg-current opacity-10 mx-1"></div>
+
+                                {/* Font/Theme */}
+                                <select value={baseFont} onChange={(e) => setBaseFont(e.target.value)} className="h-8 text-sm bg-transparent outline-none mr-2 w-20">
                                     <option value="sans">Sans</option>
                                     <option value="serif">Serif</option>
                                     <option value="mono">Mono</option>
                                 </select>
 
-                                <div className="w-px h-6 bg-current opacity-10 mx-1"></div>
-
-                                {/* Theme & View Controls */}
-                                <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0">
-                                    <button onClick={() => setTheme('light')} className={`p-1.5 rounded ${theme === 'light' ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`}><Sun size={16}/></button>
-                                    <button onClick={() => setTheme('sepia')} className={`p-1.5 rounded ${theme === 'sepia' ? 'bg-[#F4ECD8] shadow-sm text-[#5C4B37]' : 'text-gray-400'}`}><Coffee size={16}/></button>
-                                    <button onClick={() => setTheme('dim')} className={`p-1.5 rounded ${theme === 'dim' ? 'bg-slate-700 shadow-sm text-white' : 'text-gray-400'}`}><Moon size={16}/></button>
-                                    <button onClick={() => setTheme('dark')} className={`p-1.5 rounded ${theme === 'dark' ? 'bg-black shadow-sm text-white' : 'text-gray-400'}`}><Moon size={16} fill="currentColor" /></button>
-                                </div>
+                                <button onClick={() => {
+                                    const modes = ['light', 'sepia', 'dim', 'dark'];
+                                    const next = modes[(modes.indexOf(theme) + 1) % modes.length];
+                                    setTheme(next);
+                                }} className="p-2 rounded hover:bg-black/5" title="Toggle Theme">
+                                    {theme === 'light' ? <Sun size={18}/> : theme === 'sepia' ? <Coffee size={18}/> : <Moon size={18}/>}
+                                </button>
                                 
-                                <button onClick={() => setIsReadOnly(!isReadOnly)} className={`p-2 shrink-0 rounded hover:bg-black/5 ${isReadOnly ? themeStyles.accent : themeStyles.muted}`} title="Read Only Mode">{isReadOnly ? <EyeOff size={20} /> : <Eye size={20} />}</button>
-                                <button onClick={() => setShowHistoryModal(true)} className={`p-2 shrink-0 rounded hover:bg-black/5 ${themeStyles.muted}`} title="History"><History size={20} /></button>
-                                <button onClick={() => setFocusMode(!focusMode)} className={`p-2 shrink-0 rounded hover:bg-black/5 ${focusMode ? 'text-blue-500' : themeStyles.muted}`} title="Focus Mode"><div className={`w-3 h-3 rounded-full ${focusMode ? 'bg-blue-500' : 'bg-gray-300'}`} /></button>
+                                <button onClick={() => setIsReadOnly(!isReadOnly)} className={`p-2 rounded hover:bg-black/5 ${isReadOnly ? 'text-purple-500' : ''}`}><Eye size={18}/></button>
+                                <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded hover:bg-black/5 ${focusMode ? 'text-purple-500' : ''}`}><div className={`w-3 h-3 rounded-full ${focusMode ? 'bg-purple-500' : 'bg-gray-300'}`} /></button>
                             </div>
                         </div>
 
-                        {/* EDITOR CANVAS */}
+                        {/* EDITOR */}
                         <div className="flex-1 overflow-y-auto relative w-full scroll-smooth">
                             {activeNote ? (
-                                <div className="max-w-3xl mx-auto px-4 sm:px-8 md:px-12 py-6 md:py-12 min-h-full">
+                                <div className="max-w-4xl mx-auto px-6 md:px-12 py-8 min-h-full">
                                     <RichTextEditor 
-                                        key={activeNote.id} // CRITICAL: Forces editor remount on note switch to prevent state bleed
+                                        key={activeNote.id} 
                                         initialContent={activeNote.content}
                                         onChange={updateNoteContent}
-                                        placeholder="Start writing..."
+                                        placeholder="Type something... Paste images... Use the toolbar..."
                                         readOnly={isReadOnly}
-                                        themeStyles={themeStyles}
-                                        fontClass={getFontClass()}
+                                        fontClass={baseFont === 'serif' ? 'font-serif' : baseFont === 'mono' ? 'font-mono' : 'font-sans'}
                                         onKeyDown={(e) => {
-                                            // Handle Tab key for indentation
-                                            if (e.key === 'Tab') {
-                                                e.preventDefault();
-                                                document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;');
-                                            }
+                                            if (e.key === 'Tab') { e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); }
                                         }}
                                     />
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center justify-center h-full opacity-40 p-4 text-center">
-                                    <FileText size={48} strokeWidth={1} />
-                                    <p className="mt-4 text-lg">Select a note or create new</p>
+                                    <FileText size={64} strokeWidth={1} className="text-purple-300 mb-4"/>
+                                    <h2 className="text-xl font-medium">No Page Selected</h2>
+                                    <p className="mt-2">Select a page from the sidebar or create a new one.</p>
                                 </div>
                             )}
                         </div>
-
-                        {/* MOBILE FOOTER STATS */}
-                        <div className={`
-                            h-8 border-t ${themeStyles.border} ${themeStyles.bg} flex items-center justify-between px-4 text-[10px] uppercase tracking-wider opacity-60
-                            transition-opacity duration-300 absolute bottom-0 w-full pointer-events-none
-                            ${focusMode && isTyping ? 'opacity-0' : 'opacity-100'}
-                        `}>
-                            <span>{wordCount} Words</span>
-                            <span>Rich Text</span>
-                        </div>
                     </div>
 
-                    {/* HISTORY MODAL */}
+                    {/* HISTORY MODAL (Simplified for brevity) */}
                     {showHistoryModal && activeNote && (
-                        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className={`${themeStyles.bg} ${themeStyles.text} w-full max-w-md rounded-xl shadow-2xl border ${themeStyles.border} flex flex-col max-h-[80vh]`}>
-                                <div className={`p-4 border-b ${themeStyles.border} flex justify-between items-center`}>
-                                    <h3 className="font-bold">History</h3>
-                                    <button onClick={() => setShowHistoryModal(false)} className="p-1 hover:bg-black/5 rounded"><X size={20}/></button>
-                                </div>
-                                <div className="overflow-y-auto p-2 space-y-2 flex-1">
-                                    {activeNote.versions?.length > 0 ? (
-                                        [...activeNote.versions].reverse().map((v, i) => (
-                                            <div key={i} className={`p-3 rounded border ${themeStyles.border} flex justify-between items-center bg-black/5`}>
-                                                <div className="text-xs overflow-hidden">
-                                                    <div className="opacity-50">{new Date(v.time).toLocaleString()}</div>
-                                                    {/* Preview stripped text */}
-                                                    <div className="truncate w-32 mt-1 font-mono">
-                                                        {v.content.replace(/<[^>]*>?/gm, '').slice(0, 20)}...
-                                                    </div>
-                                                </div>
-                                                <button onClick={() => { updateNoteContent(v.content); setShowHistoryModal(false); }} className="px-3 py-1 bg-blue-500 text-white text-xs rounded-full hover:bg-blue-600">Restore</button>
-                                            </div>
-                                        ))
-                                    ) : <div className="p-4 text-center opacity-50">No history available</div>}
-                                </div>
+                        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
+                            <div className="bg-white p-4 rounded max-w-sm w-full">
+                                <h3>History (Last 5 versions)</h3>
+                                {activeNote.versions.map((v, i) => (
+                                    <div key={i} className="border-b p-2 text-xs flex justify-between">
+                                        <span>{new Date(v.time).toLocaleTimeString()}</span>
+                                        <button onClick={() => {updateNoteContent(v.content); setShowHistoryModal(false)}} className="text-blue-500">Restore</button>
+                                    </div>
+                                ))}
+                                <button onClick={() => setShowHistoryModal(false)} className="mt-4 w-full border p-2 rounded">Close</button>
                             </div>
                         </div>
                     )}
