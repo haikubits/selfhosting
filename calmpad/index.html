@@ -772,6 +772,47 @@
                                         fontClass={baseFont === 'serif' ? 'font-serif' : baseFont === 'mono' ? 'font-mono' : 'font-sans'}
                                         onKeyDown={(e) => {
                                             if (e.key === 'Tab') { e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); }
+                                            
+                                            // Checklist Auto-Enter Logic
+                                            if (e.key === 'Enter') {
+                                                const selection = window.getSelection();
+                                                if (!selection.rangeCount) return;
+                                                const range = selection.getRangeAt(0);
+                                                let node = range.startContainer;
+
+                                                // Traverse up to find if we are in a checklist line
+                                                let currentLineHasCheckbox = false;
+
+                                                // 1. Check immediate previous siblings for checkbox
+                                                let scanNode = node.nodeType === 3 ? node : node.childNodes[range.startOffset - 1];
+                                                
+                                                if (!(node.nodeType === 1 && range.startOffset === 0)) {
+                                                    while (scanNode) {
+                                                        if (scanNode.nodeName === 'INPUT' && scanNode.type === 'checkbox') {
+                                                            currentLineHasCheckbox = true;
+                                                            break;
+                                                        }
+                                                        if (scanNode.nodeName === 'BR' || scanNode.nodeName === 'DIV' || scanNode.nodeName === 'P') break;
+                                                        scanNode = scanNode.previousSibling;
+                                                    }
+                                                }
+
+                                                // 2. If not found, check if we are inside a DIV/P wrapper that has a checkbox
+                                                if (!currentLineHasCheckbox) {
+                                                    const parent = node.nodeType === 3 ? node.parentElement : node;
+                                                    if (parent && parent.getAttribute('contenteditable') !== 'true') { 
+                                                        const checkbox = parent.querySelector('input[type="checkbox"]');
+                                                        if (checkbox) currentLineHasCheckbox = true;
+                                                    }
+                                                }
+
+                                                if (currentLineHasCheckbox) {
+                                                    e.preventDefault();
+                                                    const id = ID();
+                                                    const html = `<div><input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;</div>`;
+                                                    exec('insertHTML', html);
+                                                }
+                                            }
                                         }}
                                     />
                                 </div>
