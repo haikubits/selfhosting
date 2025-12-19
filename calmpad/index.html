@@ -605,7 +605,40 @@
 
             useEffect(() => { if (printContent) { const timer = setTimeout(() => { window.print(); }, 100); return () => clearTimeout(timer); } }, [printContent]);
             const printSingleNote = () => { if (!activeNote) return; setPrintContent(`<div class="print-doc"><h1>${activeNote.title || 'Untitled'}</h1><div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(activeNote.updatedAt).toLocaleString()}</div>${activeNote.content}</div>`); };
-            const printNotebook = () => { if (notes.length === 0) return alert("No notes."); let html = `<div style="text-align:center; padding-top: 50px; margin-bottom: 50px;"><h1 style="font-size: 32px; border:none;">Notebook Export</h1><p>Generated on ${new Date().toLocaleDateString()}</p></div><div class="page-break"></div>`; sections.forEach(sec => { const secNotes = notes.filter(n => n.sectionId === sec.id).sort((a,b) => b.updatedAt - a.updatedAt); if (secNotes.length > 0) { html += `<div style="margin-top:20px;"><h2 style="font-size: 28px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Section: ${sec.name}</h2></div>`; secNotes.forEach(n => { html += `<div style="margin-top: 30px;"><h1>${n.title || 'Untitled'}</h1><div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(n.updatedAt).toLocaleString()}</div>${n.content}</div><div class="page-break"></div>`; }); } }); setPrintContent(html); };
+            
+            // MODIFIED printNotebook to print ONLY the active section
+            const printNotebook = () => { 
+                const currentSection = sections.find(s => s.id === activeSectionId);
+                if (!currentSection) return;
+
+                const secNotes = notes.filter(n => n.sectionId === activeSectionId);
+                
+                if (secNotes.length === 0) return alert("No notes in this section."); 
+
+                // Sort based on section order (same logic as filteredNotes)
+                if (currentSection.noteOrder && currentSection.noteOrder.length > 0) {
+                    const orderMap = {};
+                    currentSection.noteOrder.forEach((id, index) => { orderMap[id] = index; });
+                    secNotes.sort((a, b) => {
+                        const indexA = orderMap[a.id] !== undefined ? orderMap[a.id] : -1;
+                        const indexB = orderMap[b.id] !== undefined ? orderMap[b.id] : -1;
+                        if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+                        if (indexA === -1 && indexB !== -1) return -1;
+                        if (indexA !== -1 && indexB === -1) return 1;
+                        return b.updatedAt - a.updatedAt;
+                    });
+                } else {
+                    secNotes.sort((a,b) => b.updatedAt - a.updatedAt);
+                }
+
+                let html = `<div style="text-align:center; padding-top: 50px; margin-bottom: 50px;"><h1 style="font-size: 32px; border:none;">${currentSection.name}</h1><p>Generated on ${new Date().toLocaleDateString()}</p></div><div class="page-break"></div>`; 
+                
+                secNotes.forEach(n => { 
+                    html += `<div style="margin-top: 30px;"><h1>${n.title || 'Untitled'}</h1><div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(n.updatedAt).toLocaleString()}</div>${n.content}</div><div class="page-break"></div>`; 
+                }); 
+                
+                setPrintContent(html); 
+            };
 
             return (
                 <div className={`flex h-screen w-full overflow-hidden relative transition-colors duration-300 ${themeStyles.bg} ${themeStyles.text} font-sans`}>
