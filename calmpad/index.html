@@ -133,6 +133,60 @@
             margin: 10px 0;
             box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
+
+        /* --- PRINT STYLES (PDF EXPORT) --- */
+        @media print {
+            /* Hide the main app UI */
+            .app-ui, .app-ui * {
+                display: none !important;
+            }
+
+            /* Show the print container */
+            #print-container, #print-container * {
+                display: block !important;
+                visibility: visible !important;
+            }
+
+            #print-container {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: white;
+                color: black;
+            }
+
+            /* Reset Page */
+            @page {
+                margin: 2cm;
+                size: auto;
+            }
+
+            body {
+                background: white !important;
+                color: black !important;
+            }
+
+            /* Styling the content for print */
+            h1 { font-size: 24pt; font-weight: bold; margin-bottom: 12pt; border-bottom: 2px solid #ccc; padding-bottom: 6pt; page-break-after: avoid; }
+            h2 { font-size: 18pt; font-weight: bold; margin-top: 18pt; margin-bottom: 10pt; color: #555; page-break-after: avoid; }
+            p { margin-bottom: 10pt; line-height: 1.5; font-size: 11pt; }
+            img { max-width: 100% !important; height: auto; page-break-inside: avoid; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 12pt; page-break-inside: auto; }
+            tr { page-break-inside: avoid; page-break-after: auto; }
+            td, th { border: 1px solid #ddd; padding: 6pt; }
+            
+            /* Page Breaks */
+            .page-break { 
+                page-break-after: always; 
+                display: block; 
+                height: 1px; 
+                border: none;
+                margin: 0;
+            }
+        }
     </style>
 </head>
 <body>
@@ -151,7 +205,8 @@
             List, ListOrdered, CheckSquare, Image as ImageIcon,
             Heading1, Heading2, Highlighter, Table as TableIcon,
             Folder, FolderPlus, ChevronDown, ChevronRight, MoreHorizontal,
-            ArrowDown, ArrowRight, Layout, Delete, MoreVertical
+            ArrowDown, ArrowRight, Layout, Delete, MoreVertical,
+            Printer // Printer Icon
         } from 'lucide-react';
 
         const ID = () => '_' + Math.random().toString(36).substr(2, 9);
@@ -302,6 +357,9 @@
             const [showHistoryModal, setShowHistoryModal] = useState(false);
             const [showMobileMenu, setShowMobileMenu] = useState(false); // Mobile Drawer State
             const [isTableContext, setIsTableContext] = useState(false);
+            
+            // Print Logic
+            const [printContent, setPrintContent] = useState(null);
 
             // Refs
             const saveTimeoutRef = useRef(null);
@@ -539,294 +597,373 @@
                 a.click();
             };
 
+            // --- NATIVE PRINT LOGIC ---
+            
+            // Watch for print content changes to trigger the browser dialog
+            useEffect(() => {
+                if (printContent) {
+                    // Small delay to allow DOM to render the print container
+                    const timer = setTimeout(() => {
+                        window.print();
+                        // Optional: Clear content after print interaction is done (browser dependent, usually safe to leave or clear)
+                        // setPrintContent(null); 
+                    }, 100);
+                    return () => clearTimeout(timer);
+                }
+            }, [printContent]);
+
+            const printSingleNote = () => {
+                if (!activeNote) return;
+                const html = `
+                    <div class="print-doc">
+                        <h1>${activeNote.title || 'Untitled'}</h1>
+                        <div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(activeNote.updatedAt).toLocaleString()}</div>
+                        ${activeNote.content}
+                    </div>
+                `;
+                setPrintContent(html);
+            };
+
+            const printNotebook = () => {
+                if (notes.length === 0) return alert("No notes to export.");
+                
+                let html = `
+                    <div style="text-align:center; padding-top: 50px; margin-bottom: 50px;">
+                        <h1 style="font-size: 32px; border:none;">Notebook Export</h1>
+                        <p>Generated on ${new Date().toLocaleDateString()}</p>
+                    </div>
+                    <div class="page-break"></div>
+                `;
+
+                sections.forEach(sec => {
+                    const secNotes = notes.filter(n => n.sectionId === sec.id).sort((a,b) => b.updatedAt - a.updatedAt);
+                    if (secNotes.length > 0) {
+                        html += `
+                            <div style="margin-top:20px;">
+                                <h2 style="font-size: 28px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">Section: ${sec.name}</h2>
+                            </div>
+                        `;
+                        
+                        secNotes.forEach(n => {
+                            html += `
+                                <div style="margin-top: 30px;">
+                                    <h1>${n.title || 'Untitled'}</h1>
+                                    <div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(n.updatedAt).toLocaleString()}</div>
+                                    ${n.content}
+                                </div>
+                                <div class="page-break"></div>
+                            `;
+                        });
+                    }
+                });
+                
+                setPrintContent(html);
+            };
+
+
             return (
                 <div className={`flex h-screen w-full overflow-hidden relative transition-colors duration-300 ${themeStyles.bg} ${themeStyles.text} font-sans`}>
-                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                     
-                    {/* MOBILE OVERLAY */}
-                    {showSidebar && (
-                        <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowSidebar(false)}></div>
-                    )}
+                    {/* --- PRINT CONTAINER (Hidden normally, visible during print) --- */}
+                    <div id="print-container" className="hidden" dangerouslySetInnerHTML={{ __html: printContent }}></div>
 
-                    {/* SIDEBAR */}
-                    <div className={`
-                        fixed inset-y-0 left-0 z-40 w-full xs:w-80 md:relative md:w-72 md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none border-r ${themeStyles.sidebar}
-                        ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
-                        flex flex-col
-                    `}>
-                        {/* Header */}
-                        <div className="p-4 space-y-4 border-b border-inherit">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-8 h-8 bg-purple-700 rounded-md flex items-center justify-center text-white font-bold font-serif">N</div>
-                                    <h1 className={`font-bold text-lg tracking-tight ${themeStyles.accent}`}>Calm OneNote</h1>
-                                </div>
-                                <div className="flex gap-1">
-                                    <button onClick={createSection} className="p-2 rounded hover:bg-black/5" title="New Section"><FolderPlus size={18}/></button>
-                                    <button onClick={createNote} className="p-2 rounded hover:bg-black/5" title="New Page"><Plus size={18}/></button>
-                                    <button onClick={() => setShowSidebar(false)} className="p-2 md:hidden"><X size={18}/></button>
-                                </div>
-                            </div>
-                            <div className={`flex items-center px-2 py-1.5 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
-                                <Search size={14} className={themeStyles.muted} />
-                                <input 
-                                    type="text" placeholder="Search notes..." 
-                                    className={`ml-2 w-full bg-transparent outline-none text-sm ${themeStyles.muted}`}
-                                    value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Sections List */}
-                        <div className="flex-none overflow-x-auto border-b border-inherit bg-black/5 p-1 flex gap-1 snap-x scroll-pl-2 no-scrollbar">
-                            {sections.map(sec => (
-                                <button
-                                    key={sec.id}
-                                    onClick={() => { setActiveSectionId(sec.id); setSearchQuery(''); }}
-                                    className={`
-                                        snap-start shrink-0 px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors border-t border-l border-r border-transparent relative top-px
-                                        ${activeSectionId === sec.id ? `${themeStyles.bg} ${themeStyles.accent} border-${themeStyles.border.split(' ')[1]}` : 'opacity-60 hover:opacity-100 hover:bg-black/5'}
-                                    `}
-                                >
-                                    {sec.name}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Notes List */}
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                            {filteredNotes.length === 0 && <div className="text-center text-xs opacity-50 py-8">Empty Section</div>}
-                            {filteredNotes.map(note => {
-                                const div = document.createElement('div');
-                                div.innerHTML = note.content;
-                                const preview = div.innerText.substring(0, 50);
-                                return (
-                                    <div 
-                                        key={note.id}
-                                        onClick={() => { setActiveNoteId(note.id); if(window.innerWidth<768) setShowSidebar(false); }}
-                                        className={`group p-3 rounded-md cursor-pointer transition-all ${activeNoteId === note.id ? themeStyles.itemActive : 'hover:bg-black/5'}`}
-                                    >
-                                        <div className="flex justify-between items-start">
-                                            <h3 className={`font-medium text-sm truncate pr-2 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>{note.title || 'Untitled Page'}</h3>
-                                            {activeNoteId === note.id && (
-                                                <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
-                                            )}
-                                        </div>
-                                        <p className="text-xs truncate mt-1 opacity-60 h-4">{preview}</p>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        <div className={`p-3 border-t ${themeStyles.border} flex justify-between items-center text-[10px] opacity-60`}>
-                            <div className="flex gap-2">
-                                <button onClick={exportAll} className="hover:underline flex items-center gap-1"><Download size={10}/> Backup</button>
-                                <label className="cursor-pointer hover:underline flex items-center gap-1"><Upload size={10}/> Import <input type="file" className="hidden" onChange={handleFileUpload}/></label>
-                            </div>
-                            {activeSectionId !== 'default' && <button onClick={() => deleteSection(activeSectionId)} className="text-red-500 hover:underline">Delete Section</button>}
-                        </div>
-                    </div>
-
-                    {/* MAIN EDITOR AREA */}
-                    <div className="flex-1 flex flex-col h-full relative w-full">
+                    {/* --- MAIN APP UI (Wrapped to be hidden during print) --- */}
+                    <div className="flex w-full h-full app-ui">
+                        <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
                         
-                        {/* --- DESKTOP TOOLBAR (Hidden on Mobile) --- */}
+                        {/* MOBILE OVERLAY */}
+                        {showSidebar && (
+                            <div className="fixed inset-0 bg-black/50 z-30 md:hidden backdrop-blur-sm" onClick={() => setShowSidebar(false)}></div>
+                        )}
+
+                        {/* SIDEBAR */}
                         <div className={`
-                            hidden md:flex h-14 items-center justify-between px-4 border-b ${themeStyles.border} ${themeStyles.toolbar}
-                            transition-all duration-300 z-10 sticky top-0
+                            fixed inset-y-0 left-0 z-40 w-full xs:w-80 md:relative md:w-72 md:translate-x-0 transition-transform duration-300 ease-in-out shadow-2xl md:shadow-none border-r ${themeStyles.sidebar}
+                            ${showSidebar ? 'translate-x-0' : '-translate-x-full'}
+                            flex flex-col
                         `}>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => setShowSidebar(!showSidebar)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}>
-                                    <Sidebar size={18} />
-                                </button>
-                                <span className={`text-xs uppercase tracking-wider opacity-30 flex items-center gap-1 ${saveStatus === 'saved' ? 'text-green-500' : ''}`}>
-                                    {saveStatus === 'saved' ? <Check size={12}/> : <Save size={12}/>} {saveStatus}
-                                </span>
-                            </div>
-
-                            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-linear-gradient pl-2">
-                                {/* DYNAMIC TABLE TOOLS (Desktop) */}
-                                {isTableContext && (
-                                    <div className="flex bg-purple-50 border border-purple-200 rounded-lg mr-2 overflow-hidden shrink-0 animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <button onClick={() => handleTableOp('addRow')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium" title="Add Row Below"><ArrowDown size={14}/> Row</button>
-                                        <div className="w-px bg-purple-200"></div>
-                                        <button onClick={() => handleTableOp('addCol')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium" title="Add Column Right"><ArrowRight size={14}/> Col</button>
-                                        <div className="w-px bg-purple-200"></div>
-                                        <button onClick={() => handleTableOp('delRow')} className="p-2 hover:bg-red-50 text-red-400" title="Delete Row"><Trash2 size={14}/></button>
-                                        <button onClick={() => handleTableOp('delCol')} className="p-2 hover:bg-red-50 text-red-400" title="Delete Column"><Layout size={14} className="rotate-90"/></button>
-                                        <button onClick={() => handleTableOp('deleteTable')} className="p-2 hover:bg-red-500 hover:text-white text-red-500" title="Delete Table"><X size={14}/></button>
+                            {/* Header */}
+                            <div className="p-4 space-y-4 border-b border-inherit">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-8 h-8 bg-purple-700 rounded-md flex items-center justify-center text-white font-bold font-serif">N</div>
+                                        <h1 className={`font-bold text-lg tracking-tight ${themeStyles.accent}`}>Calm OneNote</h1>
                                     </div>
-                                )}
-
-                                <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
-                                    <button onClick={() => exec('formatBlock', 'H1')} className="p-1.5 rounded hover:bg-black/10" title="Heading 1"><Heading1 size={16}/></button>
-                                    <button onClick={() => exec('formatBlock', 'H2')} className="p-1.5 rounded hover:bg-black/10" title="Heading 2"><Heading2 size={16}/></button>
-                                </div>
-
-                                <div className={`flex ${themeStyles.border} border rounded-lg mr-2 overflow-hidden shrink-0`}>
-                                    <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-black/5" title="Bold"><Bold size={16}/></button>
-                                    <button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-black/5" title="Italic"><Italic size={16}/></button>
-                                    <button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-black/5" title="Underline"><Underline size={16}/></button>
-                                    <button onMouseDown={(e) => { e.preventDefault(); exec('hiliteColor', 'yellow'); }} className="p-2 hover:bg-black/5 text-yellow-500" title="Highlight"><Highlighter size={16}/></button>
-                                </div>
-
-                                <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
-                                    <button onClick={insertCheckbox} className="p-1.5 rounded hover:bg-black/10 text-purple-600" title="Insert Checkbox"><CheckSquare size={16}/></button>
-                                    <button onClick={() => exec('insertUnorderedList')} className="p-1.5 rounded hover:bg-black/10" title="Bullet List"><List size={16}/></button>
-                                    <button onClick={insertImage} className="p-1.5 rounded hover:bg-black/10" title="Insert Image"><ImageIcon size={16}/></button>
-                                    <button onClick={insertTable} className="p-1.5 rounded hover:bg-black/10" title="Insert Table"><TableIcon size={16}/></button>
-                                </div>
-
-                                <div className="w-px h-6 bg-current opacity-10 mx-1"></div>
-
-                                <select value={baseFont} onChange={(e) => setBaseFont(e.target.value)} className="h-8 text-sm bg-transparent outline-none mr-2 w-20">
-                                    <option value="sans">Sans</option>
-                                    <option value="serif">Serif</option>
-                                    <option value="mono">Mono</option>
-                                </select>
-
-                                <button onClick={() => {
-                                    const modes = ['light', 'sepia', 'dim', 'dark'];
-                                    const next = modes[(modes.indexOf(theme) + 1) % modes.length];
-                                    setTheme(next);
-                                }} className="p-2 rounded hover:bg-black/5" title="Toggle Theme">
-                                    {theme === 'light' ? <Sun size={18}/> : theme === 'sepia' ? <Coffee size={18}/> : <Moon size={18}/>}
-                                </button>
-                                
-                                <button onClick={() => setIsReadOnly(!isReadOnly)} className={`p-2 rounded hover:bg-black/5 ${isReadOnly ? 'text-purple-500' : ''}`}><Eye size={18}/></button>
-                                <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded hover:bg-black/5 ${focusMode ? 'text-purple-500' : ''}`}><div className={`w-3 h-3 rounded-full ${focusMode ? 'bg-purple-500' : 'bg-gray-300'}`} /></button>
-                            </div>
-                        </div>
-
-                        {/* --- MOBILE TOOLBAR (Visible on Mobile) --- */}
-                        {activeNote && (
-                            <div className={`
-                                md:hidden fixed bottom-0 left-0 right-0 h-14 border-t ${themeStyles.border} ${themeStyles.bg} flex items-center justify-between px-4 z-50 transition-transform duration-300
-                                ${showMobileMenu ? 'translate-y-full' : 'translate-y-0'}
-                            `}>
-                                <button onClick={() => setShowSidebar(true)} className={`p-2 rounded ${themeStyles.muted}`}><Menu size={20}/></button>
-                                
-                                {/* Quick Actions */}
-                                <div className="flex gap-4">
-                                    <button onClick={insertCheckbox} className="p-2 rounded hover:bg-black/5 text-purple-600"><CheckSquare size={20}/></button>
-                                    <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 rounded hover:bg-black/5"><Bold size={20}/></button>
-                                    <button onClick={insertImage} className="p-2 rounded hover:bg-black/5"><ImageIcon size={20}/></button>
-                                    <button onClick={() => exec('insertUnorderedList')} className="p-2 rounded hover:bg-black/5"><List size={20}/></button>
-                                </div>
-
-                                <button onClick={() => setShowMobileMenu(true)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}><MoreVertical size={20}/></button>
-                            </div>
-                        )}
-
-                        {/* --- MOBILE FULL MENU (Bottom Sheet) --- */}
-                        {showMobileMenu && (
-                            <div className="fixed inset-0 z-[60] bg-black/50 md:hidden backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
-                                <div className={`absolute bottom-0 left-0 right-0 ${themeStyles.bg} rounded-t-2xl p-4 animate-slide-up border-t ${themeStyles.border} shadow-2xl`} onClick={e => e.stopPropagation()}>
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-bold text-sm opacity-50 uppercase tracking-wider">Formatting Tools</h3>
-                                        <button onClick={() => setShowMobileMenu(false)} className="p-1 rounded-full bg-black/5"><ChevronDown size={20}/></button>
+                                    <div className="flex gap-1">
+                                        <button onClick={createSection} className="p-2 rounded hover:bg-black/5" title="New Section"><FolderPlus size={18}/></button>
+                                        <button onClick={createNote} className="p-2 rounded hover:bg-black/5" title="New Page"><Plus size={18}/></button>
+                                        <button onClick={() => setShowSidebar(false)} className="p-2 md:hidden"><X size={18}/></button>
                                     </div>
-                                    
-                                    <div className="grid grid-cols-4 gap-2 mb-6">
-                                        <button onClick={() => {exec('formatBlock', 'H1'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading1 size={20}/><span className="text-[10px]">H1</span></button>
-                                        <button onClick={() => {exec('formatBlock', 'H2'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading2 size={20}/><span className="text-[10px]">H2</span></button>
-                                        <button onClick={insertTable} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><TableIcon size={20}/><span className="text-[10px]">Table</span></button>
-                                        <button onClick={() => {exec('hiliteColor', 'yellow'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-yellow-100 text-yellow-800"><Highlighter size={20}/><span className="text-[10px]">Highlight</span></button>
-                                        
-                                        <button onClick={() => {exec('italic');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Italic size={20}/><span className="text-[10px]">Italic</span></button>
-                                        <button onClick={() => {exec('underline');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Underline size={20}/><span className="text-[10px]">Underline</span></button>
-                                        <button onClick={() => { setBaseFont(baseFont === 'sans' ? 'serif' : 'sans'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Type size={20}/><span className="text-[10px]">Font</span></button>
-                                        <button onClick={() => {
-                                            const modes = ['light', 'sepia', 'dim', 'dark'];
-                                            const next = modes[(modes.indexOf(theme) + 1) % modes.length];
-                                            setTheme(next);
-                                        }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Sun size={20}/><span className="text-[10px]">Theme</span></button>
-                                    </div>
-
-                                    {/* Mobile Table Tools (Only show if in table) */}
-                                    {isTableContext && (
-                                        <div className="bg-purple-50 p-3 rounded-lg mb-4 border border-purple-100">
-                                            <div className="text-[10px] font-bold text-purple-800 mb-2 uppercase">Table Actions</div>
-                                            <div className="flex justify-between gap-2">
-                                                <button onClick={() => handleTableOp('addRow')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowDown size={18}/></button>
-                                                <button onClick={() => handleTableOp('addCol')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowRight size={18}/></button>
-                                                <button onClick={() => handleTableOp('delRow')} className="p-2 bg-white rounded shadow-sm text-red-400 flex-1 flex justify-center"><Trash2 size={18}/></button>
-                                                <button onClick={() => handleTableOp('deleteTable')} className="p-2 bg-red-100 rounded shadow-sm text-red-500 flex-1 flex justify-center"><X size={18}/></button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
-                            </div>
-                        )}
-
-                        {/* EDITOR */}
-                        <div className="flex-1 overflow-y-auto relative w-full scroll-smooth">
-                            {activeNote ? (
-                                <div className="max-w-4xl mx-auto px-6 md:px-12 py-8 pb-32 min-h-full">
-                                    <RichTextEditor 
-                                        ref={editorRef}
-                                        key={activeNote.id} 
-                                        initialContent={activeNote.content}
-                                        onChange={updateNoteContent}
-                                        placeholder="Type something... Paste images... Use the toolbar..."
-                                        readOnly={isReadOnly}
-                                        fontClass={baseFont === 'serif' ? 'font-serif' : baseFont === 'mono' ? 'font-mono' : 'font-sans'}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Tab') { e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); }
-                                            
-                                            // Checklist Auto-Enter Logic
-                                            if (e.key === 'Enter') {
-                                                const selection = window.getSelection();
-                                                if (!selection.rangeCount) return;
-                                                const range = selection.getRangeAt(0);
-                                                let node = range.startContainer;
-
-                                                // Traverse up to find if we are in a checklist line
-                                                let currentLineHasCheckbox = false;
-
-                                                // 1. Check immediate previous siblings for checkbox
-                                                let scanNode = node.nodeType === 3 ? node : node.childNodes[range.startOffset - 1];
-                                                
-                                                if (!(node.nodeType === 1 && range.startOffset === 0)) {
-                                                    while (scanNode) {
-                                                        if (scanNode.nodeName === 'INPUT' && scanNode.type === 'checkbox') {
-                                                            currentLineHasCheckbox = true;
-                                                            break;
-                                                        }
-                                                        if (scanNode.nodeName === 'BR' || scanNode.nodeName === 'DIV' || scanNode.nodeName === 'P') break;
-                                                        scanNode = scanNode.previousSibling;
-                                                    }
-                                                }
-
-                                                // 2. If not found, check if we are inside a DIV/P wrapper that has a checkbox
-                                                if (!currentLineHasCheckbox) {
-                                                    const parent = node.nodeType === 3 ? node.parentElement : node;
-                                                    if (parent && parent.getAttribute('contenteditable') !== 'true') { 
-                                                        const checkbox = parent.querySelector('input[type="checkbox"]');
-                                                        if (checkbox) currentLineHasCheckbox = true;
-                                                    }
-                                                }
-
-                                                if (currentLineHasCheckbox) {
-                                                    // FIX: Do NOT prevent default. Let the browser create the new line.
-                                                    // Then insert the checkbox on that new line.
-                                                    setTimeout(() => {
-                                                        const id = ID();
-                                                        // Insert just the checkbox (no div wrapper needed as browser created the block)
-                                                        const html = `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`;
-                                                        exec('insertHTML', html);
-                                                    }, 0);
-                                                }
-                                            }
-                                        }}
+                                <div className={`flex items-center px-2 py-1.5 rounded-md ${themeStyles.input} border ${themeStyles.border}`}>
+                                    <Search size={14} className={themeStyles.muted} />
+                                    <input 
+                                        type="text" placeholder="Search notes..." 
+                                        className={`ml-2 w-full bg-transparent outline-none text-sm ${themeStyles.muted}`}
+                                        value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
                                     />
                                 </div>
-                            ) : (
-                                <div className="flex flex-col items-center justify-center h-full opacity-40 p-4 text-center">
-                                    <FileText size={64} strokeWidth={1} className="text-purple-300 mb-4"/>
-                                    <h2 className="text-xl font-medium">No Page Selected</h2>
-                                    <p className="mt-2">Select a page from the sidebar or create a new one.</p>
+                            </div>
+
+                            {/* Sections List */}
+                            <div className="flex-none overflow-x-auto border-b border-inherit bg-black/5 p-1 flex gap-1 snap-x scroll-pl-2 no-scrollbar">
+                                {sections.map(sec => (
+                                    <button
+                                        key={sec.id}
+                                        onClick={() => { setActiveSectionId(sec.id); setSearchQuery(''); }}
+                                        className={`
+                                            snap-start shrink-0 px-3 py-1.5 text-xs font-medium rounded-t-md transition-colors border-t border-l border-r border-transparent relative top-px
+                                            ${activeSectionId === sec.id ? `${themeStyles.bg} ${themeStyles.accent} border-${themeStyles.border.split(' ')[1]}` : 'opacity-60 hover:opacity-100 hover:bg-black/5'}
+                                        `}
+                                    >
+                                        {sec.name}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Notes List */}
+                            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                                {filteredNotes.length === 0 && <div className="text-center text-xs opacity-50 py-8">Empty Section</div>}
+                                {filteredNotes.map(note => {
+                                    const div = document.createElement('div');
+                                    div.innerHTML = note.content;
+                                    const preview = div.innerText.substring(0, 50);
+                                    return (
+                                        <div 
+                                            key={note.id}
+                                            onClick={() => { setActiveNoteId(note.id); if(window.innerWidth<768) setShowSidebar(false); }}
+                                            className={`group p-3 rounded-md cursor-pointer transition-all ${activeNoteId === note.id ? themeStyles.itemActive : 'hover:bg-black/5'}`}
+                                        >
+                                            <div className="flex justify-between items-start">
+                                                <h3 className={`font-medium text-sm truncate pr-2 ${activeNoteId === note.id ? themeStyles.accent : ''}`}>{note.title || 'Untitled Page'}</h3>
+                                                {activeNoteId === note.id && (
+                                                    <button onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600"><Trash2 size={12} /></button>
+                                                )}
+                                            </div>
+                                            <p className="text-xs truncate mt-1 opacity-60 h-4">{preview}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className={`p-3 border-t ${themeStyles.border} flex justify-between items-center text-[10px] opacity-60`}>
+                                <div className="flex gap-2">
+                                    <button onClick={exportAll} className="hover:underline flex items-center gap-1"><Download size={10}/> Backup</button>
+                                    <label className="cursor-pointer hover:underline flex items-center gap-1"><Upload size={10}/> Import <input type="file" className="hidden" onChange={handleFileUpload}/></label>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={printNotebook} className="hover:underline flex items-center gap-1 text-purple-600 font-medium">
+                                        <Printer size={10}/> PDF Notebook
+                                    </button>
+                                    {activeSectionId !== 'default' && <button onClick={() => deleteSection(activeSectionId)} className="text-red-500 hover:underline">Del Sec</button>}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* MAIN EDITOR AREA */}
+                        <div className="flex-1 flex flex-col h-full relative w-full">
+                            
+                            {/* --- DESKTOP TOOLBAR (Hidden on Mobile) --- */}
+                            <div className={`
+                                hidden md:flex h-14 items-center justify-between px-4 border-b ${themeStyles.border} ${themeStyles.toolbar}
+                                transition-all duration-300 z-10 sticky top-0
+                            `}>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setShowSidebar(!showSidebar)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}>
+                                        <Sidebar size={18} />
+                                    </button>
+                                    <span className={`text-xs uppercase tracking-wider opacity-30 flex items-center gap-1 ${saveStatus === 'saved' ? 'text-green-500' : ''}`}>
+                                        {saveStatus === 'saved' ? <Check size={12}/> : <Save size={12}/>} {saveStatus}
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar mask-linear-gradient pl-2">
+                                    {/* DYNAMIC TABLE TOOLS (Desktop) */}
+                                    {isTableContext && (
+                                        <div className="flex bg-purple-50 border border-purple-200 rounded-lg mr-2 overflow-hidden shrink-0 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <button onClick={() => handleTableOp('addRow')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium" title="Add Row Below"><ArrowDown size={14}/> Row</button>
+                                            <div className="w-px bg-purple-200"></div>
+                                            <button onClick={() => handleTableOp('addCol')} className="p-2 hover:bg-purple-100 text-purple-700 text-xs flex items-center gap-1 font-medium" title="Add Column Right"><ArrowRight size={14}/> Col</button>
+                                            <div className="w-px bg-purple-200"></div>
+                                            <button onClick={() => handleTableOp('delRow')} className="p-2 hover:bg-red-50 text-red-400" title="Delete Row"><Trash2 size={14}/></button>
+                                            <button onClick={() => handleTableOp('delCol')} className="p-2 hover:bg-red-50 text-red-400" title="Delete Column"><Layout size={14} className="rotate-90"/></button>
+                                            <button onClick={() => handleTableOp('deleteTable')} className="p-2 hover:bg-red-500 hover:text-white text-red-500" title="Delete Table"><X size={14}/></button>
+                                        </div>
+                                    )}
+
+                                    <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
+                                        <button onClick={() => exec('formatBlock', 'H1')} className="p-1.5 rounded hover:bg-black/10" title="Heading 1"><Heading1 size={16}/></button>
+                                        <button onClick={() => exec('formatBlock', 'H2')} className="p-1.5 rounded hover:bg-black/10" title="Heading 2"><Heading2 size={16}/></button>
+                                    </div>
+
+                                    <div className={`flex ${themeStyles.border} border rounded-lg mr-2 overflow-hidden shrink-0`}>
+                                        <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 hover:bg-black/5" title="Bold"><Bold size={16}/></button>
+                                        <button onMouseDown={(e) => { e.preventDefault(); exec('italic'); }} className="p-2 hover:bg-black/5" title="Italic"><Italic size={16}/></button>
+                                        <button onMouseDown={(e) => { e.preventDefault(); exec('underline'); }} className="p-2 hover:bg-black/5" title="Underline"><Underline size={16}/></button>
+                                        <button onMouseDown={(e) => { e.preventDefault(); exec('hiliteColor', 'yellow'); }} className="p-2 hover:bg-black/5 text-yellow-500" title="Highlight"><Highlighter size={16}/></button>
+                                    </div>
+
+                                    <div className="flex bg-black/5 rounded-lg p-1 mr-2 shrink-0 gap-0.5">
+                                        <button onClick={insertCheckbox} className="p-1.5 rounded hover:bg-black/10 text-purple-600" title="Insert Checkbox"><CheckSquare size={16}/></button>
+                                        <button onClick={() => exec('insertUnorderedList')} className="p-1.5 rounded hover:bg-black/10" title="Bullet List"><List size={16}/></button>
+                                        <button onClick={insertImage} className="p-1.5 rounded hover:bg-black/10" title="Insert Image"><ImageIcon size={16}/></button>
+                                        <button onClick={insertTable} className="p-1.5 rounded hover:bg-black/10" title="Insert Table"><TableIcon size={16}/></button>
+                                    </div>
+
+                                    <div className="w-px h-6 bg-current opacity-10 mx-1"></div>
+
+                                    <select value={baseFont} onChange={(e) => setBaseFont(e.target.value)} className="h-8 text-sm bg-transparent outline-none mr-2 w-20">
+                                        <option value="sans">Sans</option>
+                                        <option value="serif">Serif</option>
+                                        <option value="mono">Mono</option>
+                                    </select>
+
+                                    <button onClick={() => {
+                                        const modes = ['light', 'sepia', 'dim', 'dark'];
+                                        const next = modes[(modes.indexOf(theme) + 1) % modes.length];
+                                        setTheme(next);
+                                    }} className="p-2 rounded hover:bg-black/5" title="Toggle Theme">
+                                        {theme === 'light' ? <Sun size={18}/> : theme === 'sepia' ? <Coffee size={18}/> : <Moon size={18}/>}
+                                    </button>
+                                    
+                                    <button onClick={() => setIsReadOnly(!isReadOnly)} className={`p-2 rounded hover:bg-black/5 ${isReadOnly ? 'text-purple-500' : ''}`} title="Read Only"><Eye size={18}/></button>
+                                    <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded hover:bg-black/5 ${focusMode ? 'text-purple-500' : ''}`} title="Focus Mode"><div className={`w-3 h-3 rounded-full ${focusMode ? 'bg-purple-500' : 'bg-gray-300'}`} /></button>
+                                    <button onClick={printSingleNote} className="p-2 rounded hover:bg-black/5 text-stone-600" title="Save as PDF"><Printer size={18}/></button>
+                                </div>
+                            </div>
+
+                            {/* --- MOBILE TOOLBAR (Visible on Mobile) --- */}
+                            {activeNote && (
+                                <div className={`
+                                    md:hidden fixed bottom-0 left-0 right-0 h-14 border-t ${themeStyles.border} ${themeStyles.bg} flex items-center justify-between px-4 z-50 transition-transform duration-300
+                                    ${showMobileMenu ? 'translate-y-full' : 'translate-y-0'}
+                                `}>
+                                    <button onClick={() => setShowSidebar(true)} className={`p-2 rounded ${themeStyles.muted}`}><Menu size={20}/></button>
+                                    
+                                    {/* Quick Actions */}
+                                    <div className="flex gap-4">
+                                        <button onClick={insertCheckbox} className="p-2 rounded hover:bg-black/5 text-purple-600"><CheckSquare size={20}/></button>
+                                        <button onMouseDown={(e) => { e.preventDefault(); exec('bold'); }} className="p-2 rounded hover:bg-black/5"><Bold size={20}/></button>
+                                        <button onClick={insertImage} className="p-2 rounded hover:bg-black/5"><ImageIcon size={20}/></button>
+                                        <button onClick={() => exec('insertUnorderedList')} className="p-2 rounded hover:bg-black/5"><List size={20}/></button>
+                                    </div>
+
+                                    <button onClick={() => setShowMobileMenu(true)} className={`p-2 rounded hover:bg-black/5 ${themeStyles.muted}`}><MoreVertical size={20}/></button>
                                 </div>
                             )}
+
+                            {/* --- MOBILE FULL MENU (Bottom Sheet) --- */}
+                            {showMobileMenu && (
+                                <div className="fixed inset-0 z-[60] bg-black/50 md:hidden backdrop-blur-sm" onClick={() => setShowMobileMenu(false)}>
+                                    <div className={`absolute bottom-0 left-0 right-0 ${themeStyles.bg} rounded-t-2xl p-4 animate-slide-up border-t ${themeStyles.border} shadow-2xl`} onClick={e => e.stopPropagation()}>
+                                        <div className="flex justify-between items-center mb-4">
+                                            <h3 className="font-bold text-sm opacity-50 uppercase tracking-wider">Formatting Tools</h3>
+                                            <button onClick={() => setShowMobileMenu(false)} className="p-1 rounded-full bg-black/5"><ChevronDown size={20}/></button>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-4 gap-2 mb-6">
+                                            <button onClick={() => {exec('formatBlock', 'H1'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading1 size={20}/><span className="text-[10px]">H1</span></button>
+                                            <button onClick={() => {exec('formatBlock', 'H2'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Heading2 size={20}/><span className="text-[10px]">H2</span></button>
+                                            <button onClick={insertTable} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><TableIcon size={20}/><span className="text-[10px]">Table</span></button>
+                                            <button onClick={() => {exec('hiliteColor', 'yellow'); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-yellow-100 text-yellow-800"><Highlighter size={20}/><span className="text-[10px]">Highlight</span></button>
+                                            
+                                            <button onClick={() => {exec('italic');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Italic size={20}/><span className="text-[10px]">Italic</span></button>
+                                            <button onClick={() => {exec('underline');}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Underline size={20}/><span className="text-[10px]">Underline</span></button>
+                                            <button onClick={() => { setBaseFont(baseFont === 'sans' ? 'serif' : 'sans'); setShowMobileMenu(false); }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Type size={20}/><span className="text-[10px]">Font</span></button>
+                                            <button onClick={() => {
+                                                const modes = ['light', 'sepia', 'dim', 'dark'];
+                                                const next = modes[(modes.indexOf(theme) + 1) % modes.length];
+                                                setTheme(next);
+                                            }} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Sun size={20}/><span className="text-[10px]">Theme</span></button>
+                                            
+                                            <button onClick={() => {printSingleNote(); setShowMobileMenu(false);}} className="flex flex-col items-center gap-1 p-3 rounded-lg bg-black/5"><Printer size={20}/><span className="text-[10px]">PDF</span></button>
+                                        </div>
+
+                                        {/* Mobile Table Tools (Only show if in table) */}
+                                        {isTableContext && (
+                                            <div className="bg-purple-50 p-3 rounded-lg mb-4 border border-purple-100">
+                                                <div className="text-[10px] font-bold text-purple-800 mb-2 uppercase">Table Actions</div>
+                                                <div className="flex justify-between gap-2">
+                                                    <button onClick={() => handleTableOp('addRow')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowDown size={18}/></button>
+                                                    <button onClick={() => handleTableOp('addCol')} className="p-2 bg-white rounded shadow-sm text-purple-700 flex-1 flex justify-center"><ArrowRight size={18}/></button>
+                                                    <button onClick={() => handleTableOp('delRow')} className="p-2 bg-white rounded shadow-sm text-red-400 flex-1 flex justify-center"><Trash2 size={18}/></button>
+                                                    <button onClick={() => handleTableOp('deleteTable')} className="p-2 bg-red-100 rounded shadow-sm text-red-500 flex-1 flex justify-center"><X size={18}/></button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* EDITOR */}
+                            <div className="flex-1 overflow-y-auto relative w-full scroll-smooth">
+                                {activeNote ? (
+                                    <div className="max-w-4xl mx-auto px-6 md:px-12 py-8 pb-32 min-h-full">
+                                        <RichTextEditor 
+                                            ref={editorRef}
+                                            key={activeNote.id} 
+                                            initialContent={activeNote.content}
+                                            onChange={updateNoteContent}
+                                            placeholder="Type something... Paste images... Use the toolbar..."
+                                            readOnly={isReadOnly}
+                                            fontClass={baseFont === 'serif' ? 'font-serif' : baseFont === 'mono' ? 'font-mono' : 'font-sans'}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Tab') { e.preventDefault(); exec('insertHTML', '&nbsp;&nbsp;&nbsp;&nbsp;'); }
+                                                
+                                                // Checklist Auto-Enter Logic
+                                                if (e.key === 'Enter') {
+                                                    const selection = window.getSelection();
+                                                    if (!selection.rangeCount) return;
+                                                    const range = selection.getRangeAt(0);
+                                                    let node = range.startContainer;
+
+                                                    // Traverse up to find if we are in a checklist line
+                                                    let currentLineHasCheckbox = false;
+
+                                                    // 1. Check immediate previous siblings for checkbox
+                                                    let scanNode = node.nodeType === 3 ? node : node.childNodes[range.startOffset - 1];
+                                                    
+                                                    if (!(node.nodeType === 1 && range.startOffset === 0)) {
+                                                        while (scanNode) {
+                                                            if (scanNode.nodeName === 'INPUT' && scanNode.type === 'checkbox') {
+                                                                currentLineHasCheckbox = true;
+                                                                break;
+                                                            }
+                                                            if (scanNode.nodeName === 'BR' || scanNode.nodeName === 'DIV' || scanNode.nodeName === 'P') break;
+                                                            scanNode = scanNode.previousSibling;
+                                                        }
+                                                    }
+
+                                                    // 2. If not found, check if we are inside a DIV/P wrapper that has a checkbox
+                                                    if (!currentLineHasCheckbox) {
+                                                        const parent = node.nodeType === 3 ? node.parentElement : node;
+                                                        if (parent && parent.getAttribute('contenteditable') !== 'true') { 
+                                                            const checkbox = parent.querySelector('input[type="checkbox"]');
+                                                            if (checkbox) currentLineHasCheckbox = true;
+                                                        }
+                                                    }
+
+                                                    if (currentLineHasCheckbox) {
+                                                        // FIX: Do NOT prevent default. Let the browser create the new line.
+                                                        // Then insert the checkbox on that new line.
+                                                        setTimeout(() => {
+                                                            const id = ID();
+                                                            // Insert just the checkbox (no div wrapper needed as browser created the block)
+                                                            const html = `<input type="checkbox" class="todo-checkbox" id="${id}"> &nbsp;`;
+                                                            exec('insertHTML', html);
+                                                        }, 0);
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-full opacity-40 p-4 text-center">
+                                        <FileText size={64} strokeWidth={1} className="text-purple-300 mb-4"/>
+                                        <h2 className="text-xl font-medium">No Page Selected</h2>
+                                        <p className="mt-2">Select a page from the sidebar or create a new one.</p>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
 
