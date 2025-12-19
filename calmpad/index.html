@@ -137,17 +137,14 @@
         /* --- PRINT STYLES (PDF EXPORT) --- */
         @media print {
             /* Hide the main app UI */
-            .app-ui, .app-ui * {
+            .app-ui {
                 display: none !important;
             }
 
             /* Show the print container */
-            #print-container, #print-container * {
+            #print-container {
                 display: block !important;
                 visibility: visible !important;
-            }
-
-            #print-container {
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -156,6 +153,12 @@
                 padding: 0;
                 background: white;
                 color: black;
+                z-index: 9999;
+            }
+
+            /* Ensure descendants are visible but do NOT force block display */
+            #print-container * {
+                visibility: visible !important;
             }
 
             /* Reset Page */
@@ -167,6 +170,7 @@
             body {
                 background: white !important;
                 color: black !important;
+                overflow: visible !important;
             }
 
             /* Styling the content for print */
@@ -176,12 +180,13 @@
             img { max-width: 100% !important; height: auto; page-break-inside: avoid; }
             
             /* FORCE TABLE LAYOUT FOR PRINT */
-            table { 
+            table, .editor-table { 
                 width: 100% !important; 
                 border-collapse: collapse !important; 
                 margin-bottom: 12pt; 
                 page-break-inside: auto; 
-                display: table !important; /* Ensure it stays a table */
+                display: table !important; /* Critical: Ensure it renders as table */
+                table-layout: auto !important; /* Allow auto width for print */
             }
             tbody {
                 display: table-row-group !important;
@@ -189,13 +194,13 @@
             tr { 
                 page-break-inside: avoid; 
                 page-break-after: auto; 
-                display: table-row !important; /* Prevent stacking */
+                display: table-row !important;
             }
             td, th { 
                 border: 1px solid #ddd !important; 
                 padding: 6pt !important; 
-                display: table-cell !important; /* Prevent stacking */
-                width: auto !important; /* Allow natural width */
+                display: table-cell !important;
+                width: auto !important;
             }
             
             /* Page Breaks */
