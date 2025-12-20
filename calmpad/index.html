@@ -145,20 +145,108 @@
 
         /* --- PRINT STYLES (PDF EXPORT) --- */
         @media print {
-            .app-ui { display: none !important; }
-            #print-container { display: block !important; visibility: visible !important; position: absolute; top: 0; left: 0; width: 100%; margin: 0; padding: 0; background: white; color: black; z-index: 9999; }
-            #print-container * { visibility: visible !important; }
-            @page { margin: 2cm; size: auto; }
-            body { background: white !important; color: black !important; overflow: visible !important; }
-            h1 { font-size: 24pt; font-weight: bold; margin-bottom: 12pt; border-bottom: 2px solid #ccc; padding-bottom: 6pt; page-break-after: avoid; }
-            h2 { font-size: 18pt; font-weight: bold; margin-top: 18pt; margin-bottom: 10pt; color: #555; page-break-after: avoid; }
-            p { margin-bottom: 10pt; line-height: 1.5; font-size: 11pt; }
-            img { max-width: 100% !important; height: auto; page-break-inside: avoid; }
-            table, .editor-table { width: 100% !important; border-collapse: collapse !important; margin-bottom: 12pt; page-break-inside: auto; display: table !important; table-layout: auto !important; }
+            /* 1. RESET ROOT LAYOUT - CRITICAL FOR MULTI-PAGE */
+            html, body, #root, .app-root-wrapper {
+                height: auto !important;
+                overflow: visible !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: block !important;
+                position: static !important;
+            }
+
+            /* 2. HIDE APP UI */
+            .app-ui {
+                display: none !important;
+                height: 0 !important;
+                width: 0 !important;
+                overflow: hidden !important;
+            }
+
+            /* 3. SHOW PRINT CONTAINER */
+            #print-container {
+                display: block !important;
+                visibility: visible !important;
+                position: static !important; /* Static allows natural flow */
+                width: 100%;
+                margin: 0;
+                padding: 0;
+                background: white;
+                color: black;
+                z-index: 9999;
+            }
+
+            /* Ensure descendants are visible */
+            #print-container * {
+                visibility: visible !important;
+            }
+
+            /* 4. PAGE SETUP */
+            @page {
+                margin: 2cm;
+                size: auto;
+            }
+
+            /* 5. CONTENT STYLING */
+            h1 { 
+                font-size: 24pt; 
+                font-weight: bold; 
+                margin-bottom: 12pt; 
+                border-bottom: 2px solid #ccc; 
+                padding-bottom: 6pt; 
+                page-break-after: avoid; 
+                color: black !important;
+            }
+            h2 { 
+                font-size: 18pt; 
+                font-weight: bold; 
+                margin-top: 18pt; 
+                margin-bottom: 10pt; 
+                color: #555 !important; 
+                page-break-after: avoid; 
+            }
+            p, div { 
+                margin-bottom: 10pt; 
+                line-height: 1.5; 
+                font-size: 11pt; 
+                color: black !important;
+            }
+            
+            /* Images */
+            img { 
+                max-width: 100% !important; 
+                height: auto; 
+                page-break-inside: avoid; 
+            }
+            
+            /* Tables */
+            table, .editor-table { 
+                width: 100% !important; 
+                border-collapse: collapse !important; 
+                margin-bottom: 12pt; 
+                page-break-inside: auto; 
+                display: table !important;
+                table-layout: auto !important; 
+            }
             tbody { display: table-row-group !important; }
             tr { page-break-inside: avoid; page-break-after: auto; display: table-row !important; }
-            td, th { border: 1px solid #ddd !important; padding: 6pt !important; display: table-cell !important; width: auto !important; }
-            .page-break { page-break-after: always; display: block; height: 1px; border: none; margin: 0; }
+            td, th { 
+                border: 1px solid #ddd !important; 
+                padding: 6pt !important; 
+                display: table-cell !important; 
+                width: auto !important; 
+            }
+            
+            /* Page Breaks */
+            .page-break { 
+                page-break-after: always; 
+                display: block; 
+                height: 1px; 
+                border: none; 
+                margin: 0; 
+                clear: both;
+            }
         }
     </style>
 </head>
@@ -603,7 +691,17 @@
             const handleFileUpload = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = (ev) => { try { const json = JSON.parse(ev.target.result); if (json.notes && json.sections) { if(confirm("Merge backup?")) { setNotes([...json.notes, ...notes]); setSections([...json.sections, ...sections]); } } } catch {} }; reader.readAsText(file); };
             const exportAll = () => { const blob = new Blob([JSON.stringify({ notes, sections, preferences: { theme, font: baseFont } })], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `onenote-backup-${new Date().toISOString().slice(0,10)}.json`; a.click(); };
 
-            useEffect(() => { if (printContent) { const timer = setTimeout(() => { window.print(); }, 100); return () => clearTimeout(timer); } }, [printContent]);
+            // --- NATIVE PRINT LOGIC ---
+            useEffect(() => { 
+                if (printContent) { 
+                    const timer = setTimeout(() => { 
+                        window.print(); 
+                        setPrintContent(null); // Clean up state after print triggers
+                    }, 500); // 500ms delay to ensure rendering completes
+                    return () => clearTimeout(timer); 
+                } 
+            }, [printContent]);
+
             const printSingleNote = () => { if (!activeNote) return; setPrintContent(`<div class="print-doc"><h1>${activeNote.title || 'Untitled'}</h1><div style="font-size: 10px; color: #666; margin-bottom: 20px;">${new Date(activeNote.updatedAt).toLocaleString()}</div>${activeNote.content}</div>`); };
             
             // MODIFIED printNotebook to print ONLY the active section
@@ -641,7 +739,7 @@
             };
 
             return (
-                <div className={`flex h-screen w-full overflow-hidden relative transition-colors duration-300 ${themeStyles.bg} ${themeStyles.text} font-sans`}>
+                <div className={`flex h-screen w-full overflow-hidden relative transition-colors duration-300 ${themeStyles.bg} ${themeStyles.text} font-sans app-root-wrapper`}>
                     <div id="print-container" className="hidden" dangerouslySetInnerHTML={{ __html: printContent }}></div>
                     <div className="flex w-full h-full app-ui">
                         <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
