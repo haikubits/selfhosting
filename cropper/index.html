@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passport Photo Tool</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Custom utilities that might not be in Tailwind default config */
+        .touch-none {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans selection:bg-blue-200">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect } = React;
+
+        // --- ICONS (Inline SVGs to replace lucide-react dependency) ---
+        const Upload = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        );
+        const Scissors = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><line x1="20" y1="4" x2="8.12" y2="15.88"/><line x1="14.47" y1="14.48" x2="20" y2="20"/><line x1="8.12" y1="8.12" x2="12" y2="12"/></svg>
+        );
+        const Download = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        );
+        const RefreshCw = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        );
+        const Check = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="20 6 9 17 4 12"/></svg>
+        );
+        const AlertCircle = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        );
+        const ArrowLeft = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        );
+        const Paintbrush = ({ size = 24, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18.375 2.625a3.875 3.875 0 0 0-5.5 0l-9 9a3.875 3.875 0 0 0 0 5.5l3 3a3.875 3.875 0 0 0 5.5 0l9-9a3.875 3.875 0 0 0 0-5.5l-3-3Z"/><path d="M14 6l4 4"/><path d="M8 20l-2 2"/></svg>
+        );
+
+        // --- CONSTANTS ---
+        const STEPS = {
+            UPLOAD: 'upload',
+            CROP: 'crop',
+            EDIT: 'edit',
+            COMPRESS: 'compress'
+        };
+
+        const MAX_FILE_SIZE_KB = 100;
+        const OUTPUT_SIZE = 600; // 600x600 px
+
+        // --- MAIN APP COMPONENT ---
+        function PassportPhotoTool() {
+            const [step, setStep] = useState(STEPS.UPLOAD);
+            const [originalImage, setOriginalImage] = useState(null);
+            const [croppedImage, setCroppedImage] = useState(null); // Data URL
+            const [editedImage, setEditedImage] = useState(null); // Data URL after painting
+            
+            const handleImageUpload = (file) => {
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        setOriginalImage(e.target.result);
+                        setStep(STEPS.CROP);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const reset = () => {
+                setOriginalImage(null);
+                setCroppedImage(null);
+                setEditedImage(null);
+                setStep(STEPS.UPLOAD);
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
+                        <div className="max-w-3xl mx-auto px-4 h-16 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold">
+                                    ID
+                                </div>
+                                <h1 className="font-bold text-lg hidden sm:block">Passport Photo Maker</h1>
+                            </div>
+                            
+                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                                {step !== STEPS.UPLOAD && (
+                                    <button 
+                                        onClick={reset}
+                                        className="flex items-center gap-1 hover:text-red-600 transition-colors px-3 py-1 rounded-md hover:bg-red-50"
+                                    >
+                                        <RefreshCw size={14} /> Start Over
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-3xl mx-auto px-4 py-8 w-full flex-grow">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
+                            
+                            {/* Progress Bar */}
+                            <div className="flex border-b border-gray-100">
+                                {[
+                                    { id: STEPS.UPLOAD, label: '1. Upload' },
+                                    { id: STEPS.CROP, label: '2. Crop' },
+                                    { id: STEPS.EDIT, label: '3. Clean Up' },
+                                    { id: STEPS.COMPRESS, label: '4. Save' }
+                                ].map((s, idx) => {
+                                    const isActive = s.id === step;
+                                    const isPast = Object.values(STEPS).indexOf(step) > idx;
+                                    return (
+                                        <div 
+                                            key={s.id} 
+                                            className={`flex-1 py-3 text-center text-xs sm:text-sm font-medium transition-colors
+                                                ${isActive ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600' : ''}
+                                                ${isPast ? 'text-green-600' : 'text-gray-400'}
+                                            `}
+                                        >
+                                            {s.label}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="p-6 sm:p-8">
+                                {step === STEPS.UPLOAD && (
+                                    <UploadStep onUpload={handleImageUpload} />
+                                )}
+                                
+                                {step === STEPS.CROP && originalImage && (
+                                    <CropStep 
+                                        imageSrc={originalImage} 
+                                        onComplete={(img) => {
+                                            setCroppedImage(img);
+                                            setStep(STEPS.EDIT);
+                                        }} 
+                                    />
+                                )}
+
+                                {step === STEPS.EDIT && croppedImage && (
+                                    <EditStep 
+                                        imageSrc={croppedImage}
+                                        onComplete={(img) => {
+                                            setEditedImage(img);
+                                            setStep(STEPS.COMPRESS);
+                                        }}
+                                        onBack={() => setStep(STEPS.CROP)}
+                                    />
+                                )}
+
+                                {step === STEPS.COMPRESS && editedImage && (
+                                    <CompressStep 
+                                        imageSrc={editedImage} 
+                                        onBack={() => setStep(STEPS.EDIT)}
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Instructions Panel */}
+                        <div className="mt-8 bg-blue-50 rounded-xl p-6 border border-blue-100 text-sm text-blue-800">
+                            <h3 className="font-semibold mb-2 flex items-center gap-2">
+                                <AlertCircle size={16} /> 
+                                Digital Photo Criteria Checklist
+                            </h3>
+                            <ul className="grid sm:grid-cols-2 gap-2 list-disc list-inside opacity-80">
+                                <li>Format: JPEG/JPG only</li>
+                                <li>Dimensions: Square (1:1 Aspect Ratio)</li>
+                                <li>Size: Under 100 KB (Critical!)</li>
+                                <li>Background: Plain White, No Shadows</li>
+                            </ul>
+                        </div>
+                    </main>
+                </div>
+            );
+        }
+
+        // --- SUB-COMPONENTS ---
+
+        // STEP 1: UPLOAD
+        function UploadStep({ onUpload }) {
+            const fileInputRef = useRef(null);
+            const [dragActive, setDragActive] = useState(false);
+
+            const handleDrag = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.type === "dragenter" || e.type === "dragover") {
+                    setDragActive(true);
+                } else if (e.type === "dragleave") {
+                    setDragActive(false);
+                }
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setDragActive(false);
+                if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                    onUpload(e.dataTransfer.files[0]);
+                }
+            };
+
+            const handleChange = (e) => {
+                if (e.target.files && e.target.files[0]) {
+                    onUpload(e.target.files[0]);
+                }
+            };
+
+            return (
+                <div className="flex flex-col items-center justify-center h-[400px] text-center">
+                    <div 
+                        className={`
+                            w-full max-w-md p-10 rounded-2xl border-2 border-dashed transition-all cursor-pointer
+                            ${dragActive ? 'border-blue-500 bg-blue-50 scale-105' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'}
+                        `}
+                        onDragEnter={handleDrag}
+                        onDragLeave={handleDrag}
+                        onDragOver={handleDrag}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                    >
+                        <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Upload size={32} />
+                        </div>
+                        <h3 className="text-xl font-semibold mb-2">Upload your photo</h3>
+                        <p className="text-gray-500 text-sm mb-6">
+                            Drag & drop or click to select.<br/> 
+                            Use the best photo (1000037892.jpg) recommended.
+                        </p>
+                        <button className="bg-blue-600 text-white px-6 py-2.5 rounded-full font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                            Select Photo
+                        </button>
+                        <input 
+                            ref={fileInputRef}
+                            type="file" 
+                            accept="image/jpeg, image/png, image/jpg" 
+                            className="hidden" 
+                            onChange={handleChange}
+                        />
+                    </div>
+                </div>
+            );
+        }
+
+        // STEP 2: CROP
+        function CropStep({ imageSrc, onComplete }) {
+            const [scale, setScale] = useState(1);
+            const [position, setPosition] = useState({ x: 0, y: 0 });
+            const [dragging, setDragging] = useState(false);
+            const [startPos, setStartPos] = useState({ x: 0, y: 0 });
+            
+            const containerRef = useRef(null);
+            const imageRef = useRef(null);
+
+            useEffect(() => {
+                // Preload logic if needed
+            }, [imageSrc]);
+
+            const handlePointerDown = (e) => {
+                setDragging(true);
+                setStartPos({ x: e.clientX - position.x, y: e.clientY - position.y });
+                // Capture pointer for smoother dragging outside bounds
+                if(e.target.setPointerCapture) {
+                    e.target.setPointerCapture(e.pointerId);
+                }
+            };
+
+            const handlePointerMove = (e) => {
+                if (!dragging) return;
+                setPosition({
+                    x: e.clientX - startPos.x,
+                    y: e.clientY - startPos.y
+                });
+            };
+
+            const handlePointerUp = (e) => {
+                setDragging(false);
+                 if(e.target.releasePointerCapture) {
+                    e.target.releasePointerCapture(e.pointerId);
+                }
+            };
+
+            const handleCrop = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = OUTPUT_SIZE;
+                canvas.height = OUTPUT_SIZE;
+                const ctx = canvas.getContext('2d');
+                
+                // Fill white first (safety)
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                const img = imageRef.current;
+                const containerRect = containerRef.current.getBoundingClientRect();
+                const visualSize = containerRect.width; // 300px usually
+                const ratio = OUTPUT_SIZE / visualSize; // 2x usually
+
+                ctx.save();
+                ctx.translate(canvas.width / 2, canvas.height / 2);
+                ctx.scale(scale, scale);
+                ctx.translate(position.x * ratio, position.y * ratio);
+                
+                ctx.drawImage(
+                    img, 
+                    -img.naturalWidth / 2, 
+                    -img.naturalHeight / 2
+                );
+                
+                ctx.restore();
+
+                onComplete(canvas.toDataURL('image/jpeg', 1.0));
+            };
+
+            return (
+                <div className="flex flex-col items-center">
+                    <h3 className="text-lg font-semibold mb-4">Crop to Square</h3>
+                    <p className="text-sm text-gray-500 mb-6 text-center max-w-md">
+                        Drag the image to center your face. Use the slider to zoom.
+                        Ensure your head fills about 70-80% of the square.
+                    </p>
+
+                    <div className="relative overflow-hidden rounded-lg shadow-lg border-2 border-blue-500 bg-gray-100 select-none touch-none"
+                        style={{ width: '300px', height: '300px', cursor: dragging ? 'grabbing' : 'grab' }}
+                        onPointerDown={handlePointerDown}
+                        onPointerMove={handlePointerMove}
+                        onPointerUp={handlePointerUp}
+                        onPointerLeave={handlePointerUp}
+                        ref={containerRef}
+                    >
+                        <img 
+                            ref={imageRef}
+                            src={imageSrc} 
+                            alt="Crop target"
+                            className="max-w-none origin-center absolute top-1/2 left-1/2"
+                            style={{ 
+                                transform: `translate(-50%, -50%) translate(${position.x}px, ${position.y}px) scale(${scale})`,
+                                height: '400px', 
+                                width: 'auto'
+                            }}
+                            draggable={false}
+                        />
+                        
+                        {/* GUIDES */}
+                        <div className="absolute inset-0 pointer-events-none opacity-30">
+                            <div className="absolute top-1/3 left-0 right-0 h-px bg-white shadow-sm"></div>
+                            <div className="absolute top-2/3 left-0 right-0 h-px bg-white shadow-sm"></div>
+                            <div className="absolute left-1/3 top-0 bottom-0 w-px bg-white shadow-sm"></div>
+                            <div className="absolute left-2/3 top-0 bottom-0 w-px bg-white shadow-sm"></div>
+                        </div>
+                    </div>
+
+                    <div className="w-full max-w-xs mt-8 space-y-6">
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-500 font-medium">
+                                <span>Zoom Out</span>
+                                <span>Zoom In</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="0.2" 
+                                max="3" 
+                                step="0.05"
+                                value={scale} 
+                                onChange={(e) => setScale(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+                        
+                        <button 
+                            onClick={handleCrop}
+                            className="w-full py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-sm"
+                        >
+                            <Scissors size={18} /> Crop & Continue
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
+        // STEP 3: EDIT
+        function EditStep({ imageSrc, onComplete, onBack }) {
+            const canvasRef = useRef(null);
+            const [isDrawing, setIsDrawing] = useState(false);
+            const [brushSize, setBrushSize] = useState(30);
+            
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                const ctx = canvas.getContext('2d');
+                const img = new Image();
+                img.src = imageSrc;
+                img.onload = () => {
+                    ctx.drawImage(img, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
+                };
+            }, [imageSrc]);
+
+            const getCoords = (e) => {
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                
+                let clientX = e.clientX;
+                let clientY = e.clientY;
+                
+                if (e.touches && e.touches[0]) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                }
+
+                return {
+                    x: (clientX - rect.left) * scaleX,
+                    y: (clientY - rect.top) * scaleY
+                };
+            };
+
+            const startDrawing = (e) => {
+                e.preventDefault(); 
+                setIsDrawing(true);
+                const ctx = canvasRef.current.getContext('2d');
+                const { x, y } = getCoords(e);
+                
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = brushSize;
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            };
+
+            const draw = (e) => {
+                if (!isDrawing) return;
+                e.preventDefault();
+                const ctx = canvasRef.current.getContext('2d');
+                const { x, y } = getCoords(e);
+                
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            };
+
+            const stopDrawing = () => {
+                setIsDrawing(false);
+            };
+
+            const handleFinish = () => {
+                onComplete(canvasRef.current.toDataURL('image/jpeg', 1.0));
+            };
+
+            return (
+                <div className="flex flex-col items-center">
+                    <div className="flex items-center justify-between w-full max-w-lg mb-4">
+                        <h3 className="text-lg font-semibold">Clean Up Background</h3>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
+                            White Paint Brush
+                        </span>
+                    </div>
+                    
+                    <p className="text-sm text-gray-500 mb-6 text-center max-w-md">
+                        Use your finger or mouse to paint over any shadows on the wall or imperfections.
+                        The goal is a plain white background.
+                    </p>
+
+                    <div className="relative shadow-lg border border-gray-200 cursor-crosshair touch-none rounded-sm overflow-hidden">
+                        <canvas 
+                            ref={canvasRef}
+                            width={OUTPUT_SIZE}
+                            height={OUTPUT_SIZE}
+                            className="w-[300px] h-[300px] bg-white"
+                            onMouseDown={startDrawing}
+                            onMouseMove={draw}
+                            onMouseUp={stopDrawing}
+                            onMouseLeave={stopDrawing}
+                            onTouchStart={startDrawing}
+                            onTouchMove={draw}
+                            onTouchEnd={stopDrawing}
+                        />
+                    </div>
+
+                    <div className="w-full max-w-xs mt-6 space-y-6">
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-500 font-medium">
+                                <span className="flex items-center gap-1"><Paintbrush size={12}/> Brush Size</span>
+                                <span>{brushSize}px</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="10" 
+                                max="100" 
+                                value={brushSize} 
+                                onChange={(e) => setBrushSize(parseInt(e.target.value))}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={onBack}
+                                className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                            >
+                                Back
+                            </button>
+                            <button 
+                                onClick={handleFinish}
+                                className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                            >
+                                Next <ArrowLeft size={18} className="rotate-180"/>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // STEP 4: COMPRESS
+        function CompressStep({ imageSrc, onBack }) {
+            const [quality, setQuality] = useState(0.85);
+            const [fileSize, setFileSize] = useState(0); // in KB
+            const [finalBlob, setFinalBlob] = useState(null);
+
+            useEffect(() => {
+                const img = new Image();
+                img.src = imageSrc;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+
+                    canvas.toBlob((blob) => {
+                        setFileSize(blob.size / 1024);
+                        setFinalBlob(blob);
+                    }, 'image/jpeg', quality);
+                };
+            }, [imageSrc, quality]);
+
+            const handleDownload = () => {
+                if (!finalBlob) return;
+                const url = URL.createObjectURL(finalBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'Photo.jpg';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            const isSizeOk = fileSize < MAX_FILE_SIZE_KB && fileSize > 10;
+
+            return (
+                <div className="flex flex-col items-center">
+                    <h3 className="text-lg font-semibold mb-4">Final Compression</h3>
+                    
+                    <div className="flex gap-8 mb-8 items-start">
+                        <div className="flex flex-col items-center gap-2">
+                            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Preview</span>
+                            <img src={imageSrc} alt="Final" className="w-32 h-32 rounded-lg shadow-md border border-gray-200" />
+                        </div>
+                        
+                        <div className="flex flex-col gap-4 py-2">
+                            <div>
+                                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">File Size</span>
+                                <div className={`text-3xl font-bold ${isSizeOk ? 'text-green-600' : 'text-red-500'}`}>
+                                    {fileSize.toFixed(1)} KB
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    Limit: {MAX_FILE_SIZE_KB} KB
+                                </div>
+                            </div>
+
+                            <div className={`flex items-center gap-2 text-sm font-medium ${isSizeOk ? 'text-green-700' : 'text-red-600'}`}>
+                                {isSizeOk ? <Check size={18} /> : <AlertCircle size={18} />}
+                                {isSizeOk ? 'Ready to submit' : 'File is too large'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="w-full max-w-xs space-y-6">
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-xs text-gray-500 font-medium">
+                                <span>Low Quality</span>
+                                <span>{Math.round(quality * 100)}%</span>
+                                <span>High Quality</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="0.1" 
+                                max="1.0" 
+                                step="0.05"
+                                value={quality} 
+                                onChange={(e) => setQuality(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={onBack}
+                                className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
+                            >
+                                Back
+                            </button>
+                            <button 
+                                onClick={handleDownload}
+                                disabled={!isSizeOk}
+                                className={`flex-1 py-3 text-white rounded-lg font-semibold transition-all flex items-center justify-center gap-2 shadow-md
+                                    ${isSizeOk ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed opacity-70'}
+                                `}
+                            >
+                                <Download size={18} /> Download Photo.jpg
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // --- RENDER ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<PassportPhotoTool />);
+    </script>
+</body>
+</html>
