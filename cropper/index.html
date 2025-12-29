@@ -47,18 +47,11 @@
         const AlertCircle = ({ size = 24, className = "" }) => (
             <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         );
-        const ArrowLeft = ({ size = 24, className = "" }) => (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-        );
-        const Paintbrush = ({ size = 24, className = "" }) => (
-            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18.375 2.625a3.875 3.875 0 0 0-5.5 0l-9 9a3.875 3.875 0 0 0 0 5.5l3 3a3.875 3.875 0 0 0 5.5 0l9-9a3.875 3.875 0 0 0 0-5.5l-3-3Z"/><path d="M14 6l4 4"/><path d="M8 20l-2 2"/></svg>
-        );
 
         // --- CONSTANTS ---
         const STEPS = {
             UPLOAD: 'upload',
             CROP: 'crop',
-            EDIT: 'edit',
             COMPRESS: 'compress'
         };
 
@@ -70,7 +63,6 @@
             const [step, setStep] = useState(STEPS.UPLOAD);
             const [originalImage, setOriginalImage] = useState(null);
             const [croppedImage, setCroppedImage] = useState(null); // Data URL
-            const [editedImage, setEditedImage] = useState(null); // Data URL after painting
             
             const handleImageUpload = (file) => {
                 if (file) {
@@ -86,7 +78,6 @@
             const reset = () => {
                 setOriginalImage(null);
                 setCroppedImage(null);
-                setEditedImage(null);
                 setStep(STEPS.UPLOAD);
             };
 
@@ -122,8 +113,7 @@
                                 {[
                                     { id: STEPS.UPLOAD, label: '1. Upload' },
                                     { id: STEPS.CROP, label: '2. Crop' },
-                                    { id: STEPS.EDIT, label: '3. Clean Up' },
-                                    { id: STEPS.COMPRESS, label: '4. Save' }
+                                    { id: STEPS.COMPRESS, label: '3. Save' }
                                 ].map((s, idx) => {
                                     const isActive = s.id === step;
                                     const isPast = Object.values(STEPS).indexOf(step) > idx;
@@ -151,26 +141,15 @@
                                         imageSrc={originalImage} 
                                         onComplete={(img) => {
                                             setCroppedImage(img);
-                                            setStep(STEPS.EDIT);
+                                            setStep(STEPS.COMPRESS);
                                         }} 
                                     />
                                 )}
 
-                                {step === STEPS.EDIT && croppedImage && (
-                                    <EditStep 
-                                        imageSrc={croppedImage}
-                                        onComplete={(img) => {
-                                            setEditedImage(img);
-                                            setStep(STEPS.COMPRESS);
-                                        }}
-                                        onBack={() => setStep(STEPS.CROP)}
-                                    />
-                                )}
-
-                                {step === STEPS.COMPRESS && editedImage && (
+                                {step === STEPS.COMPRESS && croppedImage && (
                                     <CompressStep 
-                                        imageSrc={editedImage} 
-                                        onBack={() => setStep(STEPS.EDIT)}
+                                        imageSrc={croppedImage} 
+                                        onBack={() => setStep(STEPS.CROP)}
                                     />
                                 )}
                             </div>
@@ -392,141 +371,6 @@
                         >
                             <Scissors size={18} /> Crop & Continue
                         </button>
-                    </div>
-                </div>
-            );
-        }
-
-        // STEP 3: EDIT
-        function EditStep({ imageSrc, onComplete, onBack }) {
-            const canvasRef = useRef(null);
-            const [isDrawing, setIsDrawing] = useState(false);
-            const [brushSize, setBrushSize] = useState(30);
-            
-            useEffect(() => {
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                const img = new Image();
-                img.src = imageSrc;
-                img.onload = () => {
-                    ctx.drawImage(img, 0, 0, OUTPUT_SIZE, OUTPUT_SIZE);
-                };
-            }, [imageSrc]);
-
-            const getCoords = (e) => {
-                const canvas = canvasRef.current;
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width;
-                const scaleY = canvas.height / rect.height;
-                
-                let clientX = e.clientX;
-                let clientY = e.clientY;
-                
-                if (e.touches && e.touches[0]) {
-                    clientX = e.touches[0].clientX;
-                    clientY = e.touches[0].clientY;
-                }
-
-                return {
-                    x: (clientX - rect.left) * scaleX,
-                    y: (clientY - rect.top) * scaleY
-                };
-            };
-
-            const startDrawing = (e) => {
-                e.preventDefault(); 
-                setIsDrawing(true);
-                const ctx = canvasRef.current.getContext('2d');
-                const { x, y } = getCoords(e);
-                
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = '#FFFFFF';
-                ctx.lineWidth = brushSize;
-                ctx.lineTo(x, y);
-                ctx.stroke();
-            };
-
-            const draw = (e) => {
-                if (!isDrawing) return;
-                e.preventDefault();
-                const ctx = canvasRef.current.getContext('2d');
-                const { x, y } = getCoords(e);
-                
-                ctx.lineTo(x, y);
-                ctx.stroke();
-            };
-
-            const stopDrawing = () => {
-                setIsDrawing(false);
-            };
-
-            const handleFinish = () => {
-                onComplete(canvasRef.current.toDataURL('image/jpeg', 1.0));
-            };
-
-            return (
-                <div className="flex flex-col items-center">
-                    <div className="flex items-center justify-between w-full max-w-lg mb-4">
-                        <h3 className="text-lg font-semibold">Clean Up Background</h3>
-                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">
-                            White Paint Brush
-                        </span>
-                    </div>
-                    
-                    <p className="text-sm text-gray-500 mb-6 text-center max-w-md">
-                        Use your finger or mouse to paint over any shadows on the wall or imperfections.
-                        The goal is a plain white background.
-                    </p>
-
-                    <div className="relative shadow-lg border border-gray-200 cursor-crosshair touch-none rounded-sm overflow-hidden">
-                        <canvas 
-                            ref={canvasRef}
-                            width={OUTPUT_SIZE}
-                            height={OUTPUT_SIZE}
-                            className="w-[300px] h-[300px] bg-white"
-                            onMouseDown={startDrawing}
-                            onMouseMove={draw}
-                            onMouseUp={stopDrawing}
-                            onMouseLeave={stopDrawing}
-                            onTouchStart={startDrawing}
-                            onTouchMove={draw}
-                            onTouchEnd={stopDrawing}
-                        />
-                    </div>
-
-                    <div className="w-full max-w-xs mt-6 space-y-6">
-                        <div className="space-y-2">
-                            <div className="flex justify-between text-xs text-gray-500 font-medium">
-                                <span className="flex items-center gap-1"><Paintbrush size={12}/> Brush Size</span>
-                                <span>{brushSize}px</span>
-                            </div>
-                            <input 
-                                type="range" 
-                                min="10" 
-                                max="100" 
-                                value={brushSize} 
-                                onChange={(e) => setBrushSize(parseInt(e.target.value))}
-                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                            />
-                        </div>
-
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={onBack}
-                                className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                            >
-                                Back
-                            </button>
-                            <button 
-                                onClick={handleFinish}
-                                className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
-                            >
-                                Next <ArrowLeft size={18} className="rotate-180"/>
-                            </button>
-                        </div>
                     </div>
                 </div>
             );
