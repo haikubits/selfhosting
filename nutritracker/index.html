@@ -372,6 +372,27 @@
                 if (calculated > 0) setUserSettings(prev => ({ ...prev, bmr: calculated }));
             };
 
+            const exportCalorieData = (data) => {
+                const exportData = Object.entries(data)
+                    .filter(([dateKey, dayData]) => dayData?.foods?.length > 0)
+                    .map(([dateKey, dayData]) => ({
+                        Date: dateKey,
+                        TotalCalorieIntake: dayData.foods?.reduce((acc, curr) => acc + (Number(curr.calories) || 0), 0) || 0,
+                        TotalProteinIntake: dayData.foods?.reduce((acc, curr) => acc + (Number(curr.protein) || 0), 0) || 0
+                    }))
+                    .sort((a, b) => a.Date.localeCompare(b.Date));
+                
+                const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `nutritrack-export-${formatDateKey(new Date())}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+
             const renderCalendar = () => {
                 const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
                 const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
@@ -425,6 +446,9 @@
                                 {syncStatus === 'syncing' && <span className="text-xs text-blue-500 font-medium px-2 py-1 bg-blue-900/20 rounded">Syncing...</span>}
                                 {syncStatus === 'locked' && <span className="text-xs text-orange-500 font-medium px-2 py-1 bg-orange-900/20 rounded flex items-center gap-1"><Lock size={10}/> Locked</span>}
                                 <button onClick={jumpToToday} className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors">Today</button>
+                                <button onClick={() => exportCalorieData(data)} className="p-2 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors" title="Export Data">
+                                    <Download size={20} />
+                                </button>
                                 <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors relative">
                                     <Settings size={20} />
                                     {!firebaseConfig && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>}
