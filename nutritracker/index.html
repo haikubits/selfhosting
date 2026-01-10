@@ -190,6 +190,7 @@
             
             // Debounce ref for saving
             const saveTimeoutRef = useRef(null);
+            const fileInputRef = useRef(null);
 
             // --- INITIALIZATION ---
             useEffect(() => {
@@ -393,6 +394,46 @@
                 URL.revokeObjectURL(url);
             };
 
+            const importCalorieData = (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const importedData = JSON.parse(e.target.result);
+                        if (!Array.isArray(importedData)) {
+                            alert('Invalid format: Expected a JSON array');
+                            return;
+                        }
+                        
+                        setData(prev => {
+                            const newData = { ...prev };
+                            importedData.forEach(item => {
+                                if (item.Date && (item.TotalCalorieIntake !== undefined || item.TotalProteinIntake !== undefined)) {
+                                    const existingDay = newData[item.Date] || { foods: [], exercises: [] };
+                                    existingDay.foods = existingDay.foods || [];
+                                    existingDay.foods.push({
+                                        id: generateId(),
+                                        name: 'Imported Entry',
+                                        calories: item.TotalCalorieIntake || 0,
+                                        protein: item.TotalProteinIntake || 0
+                                    });
+                                    newData[item.Date] = existingDay;
+                                }
+                            });
+                            return newData;
+                        });
+                        
+                        alert(`Successfully imported ${importedData.length} entries`);
+                    } catch (err) {
+                        alert('Failed to parse JSON file: ' + err.message);
+                    }
+                };
+                reader.readAsText(file);
+                event.target.value = ''; // Reset input
+            };
+
             const renderCalendar = () => {
                 const daysInMonth = getDaysInMonth(currentDate.getFullYear(), currentDate.getMonth());
                 const firstDay = getFirstDayOfMonth(currentDate.getFullYear(), currentDate.getMonth());
@@ -449,6 +490,16 @@
                                 <button onClick={() => exportCalorieData(data)} className="p-2 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors" title="Export Data">
                                     <Download size={20} />
                                 </button>
+                                <button onClick={() => fileInputRef.current?.click()} className="p-2 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors" title="Import Data">
+                                    <Upload size={20} />
+                                </button>
+                                <input 
+                                    type="file" 
+                                    ref={fileInputRef} 
+                                    onChange={importCalorieData} 
+                                    accept=".json" 
+                                    className="hidden" 
+                                />
                                 <button onClick={() => setIsSettingsOpen(true)} className="p-2 hover:bg-gray-800 rounded-md text-gray-400 hover:text-white transition-colors relative">
                                     <Settings size={20} />
                                     {!firebaseConfig && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full"></span>}
