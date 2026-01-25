@@ -112,6 +112,11 @@
                 <button id="btnNew" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="New Project (Cmd+N)">
                     <i class="fas fa-plus"></i>
                 </button>
+
+                <!-- SAVE BUTTON ADDED HERE -->
+                <button id="btnSave" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Save As (Cmd+S)">
+                    <i class="fas fa-save"></i>
+                </button>
                 
                 <div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-1 hidden sm:block"></div>
                 
@@ -124,7 +129,6 @@
                 
                 <div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-1 hidden sm:block"></div>
                 
-                <!-- Export button now always visible -->
                 <button id="btnExport" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Export ZIP">
                     <i class="fas fa-download"></i>
                 </button>
@@ -138,7 +142,6 @@
         </header>
 
         <!-- MAIN LAYOUT -->
-        <!-- Added min-h-0 to prevent flex overflow issues -->
         <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
             
             <!-- SIDEBAR (Projects/History) -->
@@ -167,7 +170,6 @@
                 </div>
 
                 <!-- Editor Pane -->
-                <!-- Added relative and h-full for absolute positioning child -->
                 <div id="editorPane" class="flex-1 relative overflow-hidden h-full">
                     <textarea id="codeEditor"></textarea>
                 </div>
@@ -365,6 +367,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             btnRun: document.getElementById('btnRun'),
             btnStop: document.getElementById('btnStop'),
             btnNew: document.getElementById('btnNew'),
+            btnSave: document.getElementById('btnSave'), // Added
             btnTheme: document.getElementById('btnTheme'),
             btnExport: document.getElementById('btnExport'),
             btnSettings: document.getElementById('btnSettings'),
@@ -901,6 +904,23 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             els.btnNew.onclick = () => createNewProject();
             els.btnExport.onclick = exportZip;
             
+            // SAVE BUTTON EVENT LISTENER
+            els.btnSave.onclick = () => {
+                const project = getCurrentProject();
+                const newName = prompt("Enter file name to save:", project.title);
+                if (newName && newName.trim() !== "") {
+                    project.title = newName.trim();
+                    // Force update code from editor before saving
+                    project.code = editor.getValue();
+                    project.stdin = els.stdinInput.value;
+                    project.argv = els.argvInput.value;
+                    saveData();
+                    renderProjectList();
+                    updateProjectSelect();
+                    showToast(`Saved as "${project.title}"`);
+                }
+            };
+            
             els.btnClear.onclick = () => { els.outputContainer.innerHTML = ''; };
 
             els.projectSelect.onchange = (e) => window.loadProject(e.target.value);
@@ -968,8 +988,10 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 }
                 if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                     e.preventDefault();
-                    saveCurrentProjectState();
-                    showToast("Saved");
+                    // Ctrl+S now triggers the same explicit save dialog if preferred, 
+                    // OR keeps the silent auto-save behavior. 
+                    // Let's trigger the explicit save dialog to match the requested "Save" UX.
+                    els.btnSave.click(); 
                 }
                 if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
                     e.preventDefault();
