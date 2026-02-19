@@ -1,0 +1,941 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ubuntu Web OS</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&family=Ubuntu+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        :root {
+            --ubuntu-orange: #E95420;
+            --ubuntu-aubergine: #772953;
+            --ubuntu-warm-grey: #AEA79F;
+            --yaru-dark-bg: #3E3E3E;
+            --yaru-header: #2C2C2C;
+            --terminal-bg: #300a24;
+        }
+        
+        body {
+            font-family: 'Ubuntu', sans-serif;
+            overflow: hidden;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        /* Allow text selection in inputs/textareas */
+        input, textarea {
+            user-select: text;
+            -webkit-user-select: text;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .desktop-bg {
+            background: linear-gradient(135deg, #772953 0%, #E95420 100%);
+            background-size: cover;
+        }
+
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Window Styling */
+        .window {
+            position: absolute;
+            background-color: #fafafa;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            transition: opacity 0.2s, width 0.2s, height 0.2s; /* Smooth resize */
+        }
+        
+        .window.dark-theme {
+            background-color: #333;
+            color: white;
+            border: 1px solid #444;
+        }
+
+        .window-header {
+            background: linear-gradient(to bottom, #3e3e3e, #333);
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 10px;
+            cursor: default; 
+            touch-action: none; /* Prevents scrolling when dragging header */
+        }
+
+        .window-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .control-dot {
+            width: 14px; /* Larger for touch */
+            height: 14px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 8px;
+            color: rgba(0,0,0,0.4);
+            cursor: pointer;
+        }
+
+        .close-dot { background: #E95420; }
+        .min-dot { background: #dedede; }
+        .max-dot { background: #dedede; }
+
+        .app-icon {
+            transition: all 0.2s;
+        }
+        .app-icon:hover {
+            background: rgba(255,255,255,0.1);
+        }
+        .app-icon:active {
+            transform: scale(0.95);
+        }
+        .app-icon.active::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            height: 6px;
+            width: 6px;
+            background: #E95420;
+            border-radius: 50%;
+        }
+
+        /* Terminal Specifics */
+        .terminal-body {
+            font-family: 'Ubuntu Mono', monospace;
+            background-color: var(--terminal-bg);
+            color: white;
+            padding: 10px;
+            height: 100%;
+            overflow-y: auto;
+        }
+        .caret {
+            display: inline-block;
+            width: 8px;
+            height: 16px;
+            background: white;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* File Manager Grid */
+        .file-grid-item:hover {
+            background-color: rgba(233, 84, 32, 0.1);
+            border-radius: 4px;
+        }
+        .file-grid-item.selected {
+            background-color: rgba(233, 84, 32, 0.3);
+            border-radius: 4px;
+        }
+
+        /* Boot Screen */
+        #boot-screen {
+            z-index: 9999;
+            background: black;
+        }
+        
+        .loader {
+            border: 4px solid #333;
+            border-top: 4px solid #E95420;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="h-screen w-screen overflow-hidden text-sm">
+
+    <!-- Boot / Login Screen -->
+    <div id="boot-screen" class="fixed inset-0 flex flex-col items-center justify-center text-white">
+        <div class="mb-8 flex flex-col items-center">
+            <i class="fab fa-ubuntu text-6xl mb-4 text-orange-600"></i>
+            <h1 class="text-2xl font-light">Ubuntu Web</h1>
+        </div>
+        
+        <div id="boot-options" class="flex flex-col gap-4 w-64 p-4">
+            <button onclick="bootSystem('default')" class="bg-zinc-800 hover:bg-zinc-700 py-3 px-4 rounded border border-zinc-700 transition w-full text-left">
+                <i class="fas fa-power-off mr-2"></i> Try Ubuntu
+            </button>
+            <div class="relative w-full">
+                <input type="file" id="json-upload" class="hidden" accept=".json" onchange="handleFileUpload(event)">
+                <button onclick="document.getElementById('json-upload').click()" class="w-full bg-zinc-800 hover:bg-zinc-700 py-3 px-4 rounded border border-zinc-700 transition text-left">
+                    <i class="fas fa-upload mr-2"></i> Load from JSON
+                </button>
+            </div>
+        </div>
+        <div id="boot-loading" class="hidden flex-col items-center">
+            <div class="loader mb-4"></div>
+            <p>Booting system...</p>
+        </div>
+    </div>
+
+    <!-- Main Desktop -->
+    <div id="desktop" class="hidden h-full w-full desktop-bg flex flex-col relative">
+        
+        <!-- Top Bar -->
+        <div class="h-7 bg-zinc-900 text-gray-200 flex justify-between items-center px-3 select-none z-50 shadow-md">
+            <div class="text-xs font-bold hover:bg-zinc-700 px-2 py-1 rounded cursor-pointer flex items-center gap-2">
+                 <i class="fab fa-ubuntu text-sm md:hidden"></i>
+                 <span class="hidden md:inline">Activities</span>
+            </div>
+            <div class="absolute left-1/2 transform -translate-x-1/2 text-xs font-medium" id="clock">
+                Oct 28 12:00
+            </div>
+            <div class="flex items-center gap-3 text-xs">
+                <div class="hover:bg-zinc-700 px-2 py-1 rounded cursor-pointer" title="Save OS State" onclick="saveSystemState()">
+                    <i class="fas fa-download text-orange-500"></i> <span class="hidden md:inline ml-1">Save</span>
+                </div>
+                <div class="flex gap-3 px-2 py-1">
+                    <i class="fas fa-network-wired"></i>
+                    <i class="fas fa-volume-up"></i>
+                    <i class="fas fa-power-off"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workspace -->
+        <div class="flex-1 flex overflow-hidden relative" id="workspace">
+            
+            <!-- Dock -->
+            <div class="w-16 h-full glass-panel flex flex-col items-center py-4 gap-4 z-40">
+                <!-- App Icons -->
+                <div class="app-icon w-10 h-10 rounded bg-orange-600/20 flex items-center justify-center cursor-pointer relative shadow-lg" onclick="openApp('file-manager')">
+                    <i class="fas fa-folder text-2xl text-orange-500"></i>
+                </div>
+                <div class="app-icon w-10 h-10 rounded bg-gray-600/20 flex items-center justify-center cursor-pointer relative shadow-lg" onclick="openApp('text-editor')">
+                    <i class="fas fa-file-alt text-2xl text-gray-300"></i>
+                </div>
+                <div class="app-icon w-10 h-10 rounded bg-black/40 flex items-center justify-center cursor-pointer relative shadow-lg" onclick="openApp('terminal')">
+                    <i class="fas fa-terminal text-2xl text-gray-400"></i>
+                </div>
+                 <div class="mt-auto app-icon w-10 h-10 rounded bg-gray-600/20 flex items-center justify-center cursor-pointer relative shadow-lg" onclick="openApp('settings')">
+                    <i class="fas fa-cog text-2xl text-gray-300"></i>
+                </div>
+            </div>
+
+            <!-- Desktop Area (Icons) -->
+            <div id="desktop-icons" class="absolute top-0 left-16 p-4 flex flex-col gap-4 z-0">
+                <!-- Populated by JS -->
+            </div>
+
+            <!-- Windows Container -->
+            <div id="windows-container" class="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+                <!-- Windows injected here -->
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-10 right-5 bg-zinc-800 text-white px-4 py-2 rounded shadow-lg transform translate-y-32 transition-transform duration-300 z-50 border-l-4 border-orange-500 max-w-xs">
+        Notification
+    </div>
+
+    <script>
+        /* -------------------------------------------------------------------------- */
+        /* SYSTEM KERNEL                                */
+        /* -------------------------------------------------------------------------- */
+
+        // Default Factory State
+        const DEFAULT_STATE = {
+            system: {
+                version: "22.04 LTS",
+                user: "guest"
+            },
+            fileSystem: {
+                "root": {
+                    type: "folder",
+                    children: {
+                        "home": {
+                            type: "folder",
+                            children: {
+                                "guest": {
+                                    type: "folder",
+                                    children: {
+                                        "Desktop": {
+                                            type: "folder",
+                                            children: {
+                                                "welcome.txt": { type: "file", content: "Welcome to JSON-buntu!\n\nThis entire OS is a JSON object.\nTry saving it using the download icon in the top right!" }
+                                            }
+                                        },
+                                        "Documents": {
+                                            type: "folder",
+                                            children: {
+                                                "project_ideas.txt": { type: "file", content: "- Build a React App\n- Learn Rust\n- Sleep more" }
+                                            }
+                                        },
+                                        "Downloads": {
+                                            type: "folder",
+                                            children: {}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        // Global State Wrapper
+        let OS = {
+            state: null,
+            windows: [], 
+            nextWindowId: 1,
+            zIndex: 100,
+            clipboard: null,
+            currentPath: ['root', 'home', 'guest'] 
+        };
+
+        /* -------------------------------------------------------------------------- */
+        /* BOOT SEQUENCE                               */
+        /* -------------------------------------------------------------------------- */
+
+        function bootSystem(mode, uploadedJson = null) {
+            const bootScreen = document.getElementById('boot-screen');
+            const bootOptions = document.getElementById('boot-options');
+            const bootLoading = document.getElementById('boot-loading');
+            const desktop = document.getElementById('desktop');
+
+            bootOptions.classList.add('hidden');
+            bootLoading.classList.remove('hidden');
+            bootLoading.classList.add('flex');
+
+            setTimeout(() => {
+                // Initialize State
+                if (mode === 'default') {
+                    OS.state = JSON.parse(JSON.stringify(DEFAULT_STATE));
+                } else if (mode === 'upload' && uploadedJson) {
+                    OS.state = uploadedJson;
+                }
+
+                // Render Desktop
+                initializeDesktop();
+                
+                // Switch Screens
+                bootScreen.classList.add('hidden');
+                desktop.classList.remove('hidden');
+
+                showToast(`Welcome back, ${OS.state.system.user}`);
+            }, 1000);
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const json = JSON.parse(e.target.result);
+                    bootSystem('upload', json);
+                } catch (err) {
+                    alert("Invalid JSON file!");
+                    location.reload();
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function initializeDesktop() {
+            startClock();
+            renderDesktopIcons();
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* FILE SYSTEM                                 */
+        /* -------------------------------------------------------------------------- */
+
+        function getFSNode(pathArray) {
+            // Fix: Wrap OS.state.fileSystem in a virtual node so the loop works for the top-level 'root'
+            let current = { children: OS.state.fileSystem };
+            for (let part of pathArray) {
+                if (current.children && current.children[part]) {
+                    current = current.children[part];
+                } else {
+                    return null;
+                }
+            }
+            return current;
+        }
+
+        function createFile(pathArray, fileName, content = "") {
+            const dir = getFSNode(pathArray);
+            if (dir && dir.type === 'folder') {
+                dir.children[fileName] = { type: 'file', content: content };
+                return true;
+            }
+            return false;
+        }
+
+        function createFolder(pathArray, folderName) {
+            const dir = getFSNode(pathArray);
+            if (dir && dir.type === 'folder') {
+                dir.children[folderName] = { type: 'folder', children: {} };
+                return true;
+            }
+            return false;
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* WINDOW MANAGER                                 */
+        /* -------------------------------------------------------------------------- */
+
+        function openWindow(title, appType, data = {}) {
+            const id = OS.nextWindowId++;
+            const winObj = { id, title, appType, data, minimized: false, maximized: false };
+            OS.windows.push(winObj);
+            renderWindow(winObj);
+            return id;
+        }
+
+        function closeWindow(id) {
+            OS.windows = OS.windows.filter(w => w.id !== id);
+            const el = document.getElementById(`window-${id}`);
+            if (el) el.remove();
+        }
+
+        function focusWindow(id) {
+            OS.zIndex++;
+            const el = document.getElementById(`window-${id}`);
+            if (el) {
+                el.style.zIndex = OS.zIndex;
+            }
+        }
+
+        function renderWindow(win) {
+            const container = document.getElementById('windows-container');
+            const el = document.createElement('div');
+            el.id = `window-${win.id}`;
+            el.className = 'window pointer-events-auto';
+            
+            // Responsive Size Logic
+            const isMobile = window.innerWidth < 640;
+            const width = isMobile ? '90vw' : '600px';
+            const height = isMobile ? '60vh' : '400px';
+            
+            el.style.width = width;
+            el.style.height = height;
+
+            if (win.appType === 'terminal') {
+                el.classList.add('dark-theme');
+            }
+
+            // Staggered Position
+            // Center on mobile, cascade on desktop
+            if (isMobile) {
+                el.style.left = '5vw';
+                el.style.top = '10vh';
+            } else {
+                el.style.left = `${100 + (OS.windows.length * 20)}px`;
+                el.style.top = `${50 + (OS.windows.length * 20)}px`;
+            }
+            
+            el.style.zIndex = ++OS.zIndex;
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'window-header';
+            header.innerHTML = `
+                <div class="window-controls">
+                    <div class="control-dot close-dot" onclick="closeWindow(${win.id})"><i class="fas fa-times"></i></div>
+                    <div class="control-dot min-dot" onclick="minimizeWindow(${win.id})"><i class="fas fa-minus"></i></div>
+                    <div class="control-dot max-dot"><i class="fas fa-expand"></i></div>
+                </div>
+                <div class="text-xs font-bold text-gray-300 select-none truncate px-2">${win.title}</div>
+                <div style="width: 40px"></div>
+            `;
+            
+            // Content Area
+            const content = document.createElement('div');
+            content.className = 'flex-1 overflow-hidden relative flex flex-col';
+            content.id = `window-content-${win.id}`;
+
+            // Inject App Content
+            if (win.appType === 'terminal') {
+                renderTerminal(content, win);
+            } else if (win.appType === 'file-manager') {
+                renderFileManager(content, win);
+            } else if (win.appType === 'text-editor') {
+                renderTextEditor(content, win);
+            } else if (win.appType === 'settings') {
+                renderSettings(content, win);
+            }
+
+            el.appendChild(header);
+            el.appendChild(content);
+            container.appendChild(el);
+
+            // Drag Logic (Mouse & Touch)
+            makeDraggable(el, header);
+            
+            // Focus on click
+            el.addEventListener('mousedown', () => focusWindow(win.id));
+            el.addEventListener('touchstart', () => focusWindow(win.id), {passive: true});
+        }
+
+        // Updated for Touch and Mouse unification
+        function makeDraggable(element, handle) {
+            let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
+            
+            handle.onmousedown = dragMouseDown;
+            handle.ontouchstart = dragMouseDown;
+
+            function dragMouseDown(e) {
+                // Determine event type
+                const isTouch = e.type === 'touchstart';
+                
+                // If touch, don't preventDefault immediately if we want clicks to pass through, 
+                // BUT for dragging a header, we usually want to prevent scrolling.
+                if (isTouch) {
+                   // e.preventDefault(); // Prevents click events on buttons inside header if any
+                } else {
+                    e.preventDefault();
+                }
+
+                // Get initial coordinates
+                pos3 = isTouch ? e.touches[0].clientX : e.clientX;
+                pos4 = isTouch ? e.touches[0].clientY : e.clientY;
+                
+                // Stop scrolling on mobile while dragging
+                document.body.style.overflow = 'hidden'; 
+
+                document.onmouseup = closeDragElement;
+                document.onmousemove = elementDrag;
+                
+                // Touch listeners
+                document.ontouchend = closeDragElement;
+                document.ontouchmove = elementDrag;
+                
+                focusWindow(parseInt(element.id.split('-')[1]));
+            }
+
+            function elementDrag(e) {
+                const isTouch = e.type === 'touchmove';
+                
+                // Prevent scrolling page while dragging window
+                if(e.cancelable) e.preventDefault();
+
+                const clientX = isTouch ? e.touches[0].clientX : e.clientX;
+                const clientY = isTouch ? e.touches[0].clientY : e.clientY;
+
+                pos1 = pos3 - clientX;
+                pos2 = pos4 - clientY;
+                pos3 = clientX;
+                pos4 = clientY;
+                
+                // Boundary check (rudimentary)
+                let newTop = element.offsetTop - pos2;
+                let newLeft = element.offsetLeft - pos1;
+                
+                // Prevent dragging completely off screen
+                if (newTop < 0) newTop = 0;
+                
+                element.style.top = newTop + "px";
+                element.style.left = newLeft + "px";
+            }
+
+            function closeDragElement() {
+                document.onmouseup = null;
+                document.onmousemove = null;
+                document.ontouchend = null;
+                document.ontouchmove = null;
+                
+                // Restore scrolling
+                document.body.style.overflow = 'hidden'; 
+            }
+        }
+
+        /* -------------------------------------------------------------------------- */
+        /* APPLICATIONS                                */
+        /* -------------------------------------------------------------------------- */
+
+        function openApp(type, data = {}) {
+            let title = "Application";
+            if (type === 'terminal') title = 'Terminal';
+            if (type === 'file-manager') title = 'Files';
+            if (type === 'text-editor') title = data.filename ? data.filename : 'Untitled Document';
+            if (type === 'settings') title = 'Settings';
+            
+            openWindow(title, type, data);
+        }
+
+        // --- TERMINAL ---
+        function renderTerminal(container, win) {
+            container.innerHTML = `
+                <div class="terminal-body" id="term-body-${win.id}" onclick="document.getElementById('term-input-${win.id}').focus()">
+                    <div class="mb-2">Welcome to Ubuntu 22.04 LTS</div>
+                    <div id="term-history-${win.id}"></div>
+                    <div class="flex">
+                        <span class="text-green-400 font-bold mr-2 whitespace-nowrap">guest@ubuntu:~$</span>
+                        <input type="text" class="bg-transparent border-none outline-none text-white flex-1 font-mono min-w-0" id="term-input-${win.id}" autocomplete="off">
+                    </div>
+                </div>
+            `;
+
+            const input = container.querySelector('input');
+            const history = container.querySelector(`#term-history-${win.id}`);
+            let cwd = [...OS.currentPath]; 
+
+            // Focus timeout for mobile keyboard
+            setTimeout(() => input.focus(), 100);
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const cmdLine = input.value.trim();
+                    const parts = cmdLine.split(' ');
+                    const cmd = parts[0];
+                    const args = parts.slice(1);
+
+                    const line = document.createElement('div');
+                    line.innerHTML = `<span class="text-green-400 font-bold mr-2">guest@ubuntu:${getPathString(cwd)}$</span> <span class="break-all">${cmdLine}</span>`;
+                    history.appendChild(line);
+                    
+                    let output = "";
+                    
+                    if (cmd === 'ls') {
+                        const dir = getFSNode(cwd);
+                        if (dir && dir.children) {
+                            output = Object.keys(dir.children).map(k => {
+                                const isDir = dir.children[k].type === 'folder';
+                                return `<span class="${isDir ? 'text-blue-400 font-bold' : ''} mr-4 inline-block">${k}</span>`;
+                            }).join('');
+                        } else {
+                            output = `ls: cannot access '${cwd[cwd.length-1]}': No such directory`;
+                        }
+                    } else if (cmd === 'pwd') {
+                        output = '/' + cwd.slice(1).join('/'); // Remove 'root' from display
+                    } else if (cmd === 'cd') {
+                        if (!args[0]) {
+                            cwd = ['root', 'home', 'guest'];
+                        } else if (args[0] === '..') {
+                            if (cwd.length > 1) cwd.pop();
+                        } else {
+                            const newPath = [...cwd, args[0]];
+                            if (getFSNode(newPath)) {
+                                cwd = newPath;
+                            } else {
+                                output = `bash: cd: ${args[0]}: No such file or directory`;
+                            }
+                        }
+                    } else if (cmd === 'cat') {
+                         if (!args[0]) {
+                             output = "Usage: cat [filename]";
+                         } else {
+                             const target = getFSNode([...cwd, args[0]]);
+                             if (target && target.type === 'file') {
+                                 output = target.content.replace(/\n/g, '<br>');
+                             } else {
+                                 output = `cat: ${args[0]}: No such file`;
+                             }
+                         }
+                    } else if (cmd === 'clear') {
+                        history.innerHTML = '';
+                        input.value = '';
+                        return;
+                    } else if (cmd === 'mkdir') {
+                         if (args[0]) {
+                             const success = createFolder(cwd, args[0]);
+                             if (success) {
+                                 renderDesktopIcons(); 
+                             } else {
+                                 output = `mkdir: cannot create directory '${args[0]}': Error`;
+                             }
+                         }
+                    } else if (cmd === 'touch') {
+                         if (args[0]) {
+                             const success = createFile(cwd, args[0], "");
+                             if (success) {
+                                 renderDesktopIcons();
+                             } else {
+                                 output = `touch: cannot touch '${args[0]}': Error`;
+                             }
+                         }
+                    } else if (cmd === 'help') {
+                        output = "Supported commands: ls, cd, pwd, cat, mkdir, touch, clear";
+                    } else if (cmd !== "") {
+                        output = `${cmd}: command not found`;
+                    }
+
+                    if (output) {
+                        const outDiv = document.createElement('div');
+                        outDiv.className = "text-gray-300 mb-1 whitespace-pre-wrap break-all";
+                        outDiv.innerHTML = output;
+                        history.appendChild(outDiv);
+                    }
+
+                    input.value = '';
+                    
+                    const termBody = document.getElementById(`term-body-${win.id}`);
+                    termBody.scrollTop = termBody.scrollHeight;
+                }
+            });
+
+            function getPathString(p) {
+                if (p.length === 3 && p[2] === 'guest') return '~';
+                return '/' + p.slice(1).join('/'); 
+            }
+        }
+
+        // --- FILE MANAGER ---
+        function renderFileManager(container, win) {
+            win.currentDir = win.data.path || ['root', 'home', 'guest'];
+
+            function updateView() {
+                container.innerHTML = `
+                    <div class="bg-zinc-100 border-b border-gray-300 p-2 flex gap-2 items-center">
+                        <button class="px-2 py-1 hover:bg-gray-300 rounded text-gray-600" id="fm-up-${win.id}">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                        <div class="bg-white border border-gray-300 rounded px-3 py-1 text-sm flex-1 text-gray-600 truncate">
+                             /${win.currentDir.slice(1).join('/')}
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-auto p-4 bg-white">
+                        <div class="grid grid-cols-3 md:grid-cols-4 gap-4" id="fm-grid-${win.id}">
+                            <!-- Items -->
+                        </div>
+                    </div>
+                `;
+
+                const grid = container.querySelector(`#fm-grid-${win.id}`);
+                const upBtn = container.querySelector(`#fm-up-${win.id}`);
+                
+                upBtn.onclick = () => {
+                    if (win.currentDir.length > 1) {
+                        win.currentDir.pop();
+                        updateView();
+                    }
+                };
+
+                const node = getFSNode(win.currentDir);
+                if (node && node.children) {
+                    Object.keys(node.children).forEach(key => {
+                        const item = node.children[key];
+                        const el = document.createElement('div');
+                        el.className = 'file-grid-item flex flex-col items-center p-2 cursor-pointer text-center';
+                        
+                        let iconClass = item.type === 'folder' ? 'fa-folder text-orange-500' : 'fa-file-alt text-gray-400';
+                        
+                        el.innerHTML = `
+                            <i class="fas ${iconClass} text-4xl mb-2"></i>
+                            <span class="text-xs break-all leading-tight line-clamp-2">${key}</span>
+                        `;
+                        
+                        // Handle double tap / double click
+                        let lastTap = 0;
+                        el.addEventListener('touchend', function(e) {
+                            const currentTime = new Date().getTime();
+                            const tapLength = currentTime - lastTap;
+                            if (tapLength < 500 && tapLength > 0) {
+                                executeOpen();
+                                e.preventDefault();
+                            }
+                            lastTap = currentTime;
+                        });
+
+                        el.ondblclick = executeOpen;
+
+                        function executeOpen() {
+                            if (item.type === 'folder') {
+                                win.currentDir.push(key);
+                                updateView();
+                            } else {
+                                openApp('text-editor', { path: [...win.currentDir, key], filename: key });
+                            }
+                        }
+                        
+                        grid.appendChild(el);
+                    });
+                }
+            }
+            updateView();
+        }
+
+        // --- TEXT EDITOR ---
+        function renderTextEditor(container, win) {
+            const fileNode = win.data.path ? getFSNode(win.data.path) : null;
+            const initialContent = fileNode ? fileNode.content : "";
+
+            container.innerHTML = `
+                <div class="bg-zinc-100 border-b border-gray-300 p-1 flex gap-2">
+                    <button class="bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1 text-xs rounded shadow-sm" id="editor-save-${win.id}">Save</button>
+                </div>
+                <textarea class="flex-1 w-full h-full p-2 outline-none resize-none font-mono text-gray-800 text-base" spellcheck="false">${initialContent}</textarea>
+            `;
+
+            const textarea = container.querySelector('textarea');
+            const saveBtn = container.querySelector(`#editor-save-${win.id}`);
+
+            saveBtn.onclick = () => {
+                if (win.data.path) {
+                    // Update existing
+                    const node = getFSNode(win.data.path);
+                    if (node) {
+                        node.content = textarea.value;
+                        showToast("File saved");
+                    }
+                } else {
+                    // Save as new (Simplified: saves to desktop)
+                    createFile(['root', 'home', 'guest', 'Desktop'], 'untitled.txt', textarea.value);
+                    win.data.path = ['root', 'home', 'guest', 'Desktop', 'untitled.txt'];
+                    win.title = 'untitled.txt';
+                    document.querySelector(`#window-${win.id} .window-header .text-xs`).innerText = 'untitled.txt';
+                    renderDesktopIcons();
+                    showToast("Saved to Desktop");
+                }
+            };
+        }
+
+         // --- SETTINGS ---
+        function renderSettings(container, win) {
+            container.innerHTML = `
+                <div class="p-6 bg-gray-100 h-full flex flex-col gap-6 overflow-y-auto">
+                    <div>
+                        <h2 class="text-lg font-bold mb-2">About System</h2>
+                        <div class="bg-white p-4 rounded shadow-sm">
+                            <p><strong>OS:</strong> Ubuntu Web 22.04</p>
+                            <p><strong>Memory:</strong> Virtual JSON Heap</p>
+                            <p><strong>User:</strong> ${OS.state.system.user}</p>
+                        </div>
+                    </div>
+                     <div>
+                        <h2 class="text-lg font-bold mb-2">Appearance</h2>
+                        <div class="bg-white p-4 rounded shadow-sm flex gap-2">
+                            <div class="w-12 h-12 rounded-full cursor-pointer border-2 border-white shadow-md" style="background: linear-gradient(135deg, #772953 0%, #E95420 100%)" onclick="changeWallpaper('default')"></div>
+                             <div class="w-12 h-12 rounded-full cursor-pointer border-2 border-white shadow-md bg-blue-900" onclick="changeWallpaper('blue')"></div>
+                             <div class="w-12 h-12 rounded-full cursor-pointer border-2 border-white shadow-md bg-gray-800" onclick="changeWallpaper('dark')"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function changeWallpaper(type) {
+             const desktop = document.getElementById('desktop');
+             if(type === 'default') desktop.style.background = "linear-gradient(135deg, #772953 0%, #E95420 100%)";
+             if(type === 'blue') desktop.style.background = "linear-gradient(135deg, #0f2027, #203a43, #2c5364)";
+             if(type === 'dark') desktop.style.background = "#222";
+        }
+
+
+        /* -------------------------------------------------------------------------- */
+        /* SYSTEM TRAY                                 */
+        /* -------------------------------------------------------------------------- */
+
+        function renderDesktopIcons() {
+            const container = document.getElementById('desktop-icons');
+            container.innerHTML = '';
+            
+            const desktopNode = getFSNode(['root', 'home', 'guest', 'Desktop']);
+            if (desktopNode && desktopNode.children) {
+                Object.keys(desktopNode.children).forEach(key => {
+                    const item = desktopNode.children[key];
+                    const el = document.createElement('div');
+                    el.className = 'flex flex-col items-center gap-1 w-20 cursor-pointer p-2 rounded hover:bg-white/20 transition';
+                    
+                    let iconClass = item.type === 'folder' ? 'fa-folder text-orange-500' : 'fa-file-alt text-gray-200';
+                    
+                    el.innerHTML = `
+                        <i class="fas ${iconClass} text-3xl drop-shadow-md"></i>
+                        <span class="text-white text-xs text-center drop-shadow-md break-all leading-tight line-clamp-2">${key}</span>
+                    `;
+
+                    // Double Tap Logic for Desktop
+                    let lastTap = 0;
+                    el.addEventListener('touchend', function(e) {
+                        const currentTime = new Date().getTime();
+                        const tapLength = currentTime - lastTap;
+                        if (tapLength < 500 && tapLength > 0) {
+                            executeOpen();
+                            e.preventDefault();
+                        }
+                        lastTap = currentTime;
+                    });
+
+                    el.ondblclick = executeOpen;
+
+                    function executeOpen() {
+                         if (item.type === 'folder') {
+                                openApp('file-manager', { path: ['root', 'home', 'guest', 'Desktop', key]});
+                            } else {
+                                openApp('text-editor', { path: ['root', 'home', 'guest', 'Desktop', key], filename: key });
+                            }
+                    }
+                    
+                    container.appendChild(el);
+                });
+            }
+        }
+
+        function startClock() {
+            const update = () => {
+                const now = new Date();
+                const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                const dateStr = `${months[now.getMonth()]} ${now.getDate()} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+                document.getElementById('clock').innerText = dateStr;
+            };
+            setInterval(update, 1000);
+            update();
+        }
+
+        function saveSystemState() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(OS.state, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "my_ubuntu_state.json");
+            document.body.appendChild(downloadAnchorNode); 
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+            showToast("System State Downloaded");
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.remove('translate-y-32');
+            setTimeout(() => {
+                toast.classList.add('translate-y-32');
+            }, 3000);
+        }
+
+    </script>
+</body>
+</html>
