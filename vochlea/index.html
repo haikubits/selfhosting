@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aura Studio | Voice-to-Instrument Engine</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for high-performance Web Audio -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* Slate 900 */
+            color: #f8fafc;
+            overflow: hidden; /* Prevent scrolling, app-like feel */
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1e293b; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+        /* Aura Glow Animations */
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 20px 0px rgba(139, 92, 246, 0.4); transform: scale(1); }
+            50% { box-shadow: 0 0 40px 10px rgba(139, 92, 246, 0.7); transform: scale(1.02); }
+            100% { box-shadow: 0 0 20px 0px rgba(139, 92, 246, 0.4); transform: scale(1); }
+        }
+
+        .aura-active {
+            animation: pulse-glow 2s infinite ease-in-out;
+            border-color: #8b5cf6 !important; /* Violet 500 */
+        }
+
+        canvas {
+            filter: drop-shadow(0 0 10px rgba(139, 92, 246, 0.5));
+        }
+
+        /* Range Slider Styling */
+        input[type=range] {
+            -webkit-appearance: none;
+            width: 100%;
+            background: transparent;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 16px;
+            width: 16px;
+            border-radius: 50%;
+            background: #8b5cf6;
+            cursor: pointer;
+            margin-top: -6px;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: #334155;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col">
+
+    <!-- Navbar -->
+    <header class="h-16 border-b border-slate-800 bg-slate-900/80 backdrop-blur flex items-center justify-between px-6 z-10 shrink-0">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded bg-gradient-to-br from-violet-500 to-fuchsia-600 flex items-center justify-center shadow-lg shadow-violet-500/30">
+                <i data-lucide="mic-2" class="w-5 h-5 text-white"></i>
+            </div>
+            <h1 class="text-xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">Aura Studio</h1>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-violet-500/20 text-violet-400 ml-2 border border-violet-500/30">v1.0 MVP</span>
+        </div>
+        
+        <div class="flex items-center gap-4">
+            <div class="flex items-center gap-2 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                <i data-lucide="cpu" class="w-4 h-4 text-emerald-400"></i>
+                <span class="text-xs font-medium text-slate-300">Local DSP Active</span>
+            </div>
+            <button id="btn-start" class="bg-violet-600 hover:bg-violet-500 text-white px-5 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 shadow-lg shadow-violet-600/20">
+                <i data-lucide="play" class="w-4 h-4 fill-current"></i> Initialize Engine
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- Left Panel: Engine Controls -->
+        <aside class="w-80 border-r border-slate-800 bg-slate-900 flex flex-col overflow-y-auto z-10">
+            <div class="p-6 flex flex-col gap-6">
+                
+                <!-- Status Card -->
+                <div id="status-card" class="bg-slate-800 border border-slate-700 rounded-xl p-4 transition-all duration-300">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Engine Status</span>
+                        <div id="status-indicator" class="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]"></div>
+                    </div>
+                    <p id="status-text" class="text-sm font-medium text-slate-300">Waiting for initialization...</p>
+                </div>
+
+                <!-- Instrument Morphing -->
+                <div class="flex flex-col gap-3 border-t border-slate-800 pt-5">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="layers" class="w-4 h-4"></i> Aura Morph
+                    </h2>
+                    
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="preset-btn bg-violet-600 border border-violet-500 text-white rounded-lg p-3 text-sm font-medium transition-colors text-left" data-preset="synth">
+                            <i data-lucide="waveform" class="w-5 h-5 mb-1 text-violet-300"></i> Lead Synth
+                        </button>
+                        <button class="preset-btn bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 rounded-lg p-3 text-sm font-medium transition-colors text-left" data-preset="bass">
+                            <i data-lucide="speaker" class="w-5 h-5 mb-1 text-slate-400"></i> Deep Bass
+                        </button>
+                        <button class="preset-btn bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 rounded-lg p-3 text-sm font-medium transition-colors text-left" data-preset="pad">
+                            <i data-lucide="cloud" class="w-5 h-5 mb-1 text-slate-400"></i> Choir Pad
+                        </button>
+                        <button class="preset-btn bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 rounded-lg p-3 text-sm font-medium transition-colors text-left" data-preset="pluck">
+                            <i data-lucide="music-notes" class="w-5 h-5 mb-1 text-slate-400"></i> Pluck
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scale Snapping -->
+                <div class="flex flex-col gap-3 border-t border-slate-800 pt-5">
+                    <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="magnet" class="w-4 h-4"></i> Auto-Tune (Scale Snap)
+                    </h2>
+                    <div class="flex gap-2">
+                        <select id="scale-root" class="bg-slate-800 border border-slate-700 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block w-full p-2.5 outline-none">
+                            <option value="C">C</option>
+                            <option value="C#">C# / Db</option>
+                            <option value="D">D</option>
+                            <option value="D#">D# / Eb</option>
+                            <option value="E">E</option>
+                            <option value="F">F</option>
+                            <option value="F#">F# / Gb</option>
+                            <option value="G">G</option>
+                            <option value="G#">G# / Ab</option>
+                            <option value="A" selected>A</option>
+                            <option value="A#">A# / Bb</option>
+                            <option value="B">B</option>
+                        </select>
+                        <select id="scale-type" class="bg-slate-800 border border-slate-700 text-white text-sm rounded-lg focus:ring-violet-500 focus:border-violet-500 block w-full p-2.5 outline-none">
+                            <option value="minor" selected>Minor</option>
+                            <option value="major">Major</option>
+                            <option value="pentatonic">Pentatonic</option>
+                            <option value="chromatic">Chromatic (Off)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Microphone Sensitivity -->
+                <div class="flex flex-col gap-3 border-t border-slate-800 pt-5">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="sliders-horizontal" class="w-4 h-4"></i> Input Threshold
+                        </h2>
+                        <span id="threshold-val" class="text-xs text-slate-500">0.02</span>
+                    </div>
+                    <input type="range" id="threshold-slider" min="0.01" max="0.1" step="0.01" value="0.02">
+                    <p class="text-[10px] text-slate-500 leading-tight">Increase if background noise is triggering notes. Decrease if your voice isn't being picked up.</p>
+                </div>
+
+            </div>
+        </aside>
+
+        <!-- Center Panel: Visualizer & Feedback -->
+        <section class="flex-1 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdHRlcm4gaWQ9InNtYWxsR3JpZCIgd2lkdGg9IjEwIiBoZWlnaHQ9IjEwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNMTAgMEwwIDBMMCAxMCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMDMpIiBzdHJva2Utd2lkdGg9IjAuNSIvPjwvcGF0dGVybj48cmVjdCB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIGZpbGw9InVybCgjc21hbGxHcmlkKSIvPjxwYXRoIGQ9Ik00MCAwTDAgMEwwIDQwIiBmaWxsPSJub25lIiBzdHJva2U9InJnYmEoMjU1LDI1NSwyNTUsMC4wNikiIHN0cm9rZS13aWR0aD0iMSIvPjwvcGF0dGVybj48L2RlZnM+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0idXJsKCNncmlkKSIvPjwvc3ZnPg==')] relative flex flex-col">
+            
+            <!-- Real-time Pitch Display -->
+            <div class="absolute top-8 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                <div class="text-xs font-bold tracking-[0.2em] text-violet-400 mb-2">DETECTED NOTE</div>
+                <div id="note-display" class="text-7xl font-black text-slate-700 transition-colors duration-100 drop-shadow-lg">--</div>
+                <div id="freq-display" class="text-sm font-mono text-slate-500 mt-2">0.0 Hz</div>
+            </div>
+
+            <!-- Canvas Visualizer -->
+            <div class="flex-1 flex items-center justify-center p-8">
+                <div class="relative w-full max-w-2xl aspect-video rounded-2xl border border-slate-800/50 bg-slate-900/50 backdrop-blur-sm overflow-hidden flex items-center justify-center">
+                    
+                    <!-- Placeholder before start -->
+                    <div id="canvas-placeholder" class="absolute inset-0 flex flex-col items-center justify-center text-slate-500 z-10">
+                        <i data-lucide="mic" class="w-12 h-12 mb-4 opacity-50"></i>
+                        <p class="text-sm font-medium">Click "Initialize Engine" to activate your microphone.</p>
+                        <p class="text-xs mt-2 opacity-70">Sing a clear, sustained note to trigger the synthesizer.</p>
+                    </div>
+
+                    <canvas id="visualizer" class="w-full h-full opacity-0 transition-opacity duration-1000"></canvas>
+                </div>
+            </div>
+
+            <!-- Master Output Controls (Bottom Bar) -->
+            <div class="h-16 border-t border-slate-800 bg-slate-900/90 backdrop-blur px-6 flex items-center justify-between shrink-0">
+                <div class="flex items-center gap-4">
+                    <i data-lucide="volume-2" class="w-5 h-5 text-slate-400"></i>
+                    <div class="w-48">
+                        <input type="range" id="master-vol" min="-60" max="0" step="1" value="-10">
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-6 text-sm font-medium text-slate-400">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Reverb
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> Compressor
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Error/Message Modal -->
+    <div id="message-modal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 hidden flex items-center justify-center">
+        <div class="bg-slate-800 border border-slate-700 p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
+            <div class="w-16 h-16 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/30">
+                <i data-lucide="alert-circle" class="w-8 h-8"></i>
+            </div>
+            <h3 id="modal-title" class="text-xl font-bold text-white mb-2">Error</h3>
+            <p id="modal-desc" class="text-slate-300 text-sm mb-6">Something went wrong.</p>
+            <button id="modal-close" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg font-medium transition-colors w-full">Dismiss</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // --- Application State ---
+        let isRunning = false;
+        let mic = null;
+        let analyser = null;
+        let synth = null;
+        let reverb = null;
+        let compressor = null;
+        
+        let currentNote = null;
+        let volumeThreshold = 0.02; // RMS threshold to trigger a note
+        let animationFrameId = null;
+
+        // UI Elements
+        const btnStart = document.getElementById('btn-start');
+        const statusCard = document.getElementById('status-card');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const noteDisplay = document.getElementById('note-display');
+        const freqDisplay = document.getElementById('freq-display');
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+        const canvasPlaceholder = document.getElementById('canvas-placeholder');
+        const presetBtns = document.querySelectorAll('.preset-btn');
+        const thresholdSlider = document.getElementById('threshold-slider');
+        const thresholdVal = document.getElementById('threshold-val');
+        const masterVol = document.getElementById('master-vol');
+        
+        const scaleRootSelect = document.getElementById('scale-root');
+        const scaleTypeSelect = document.getElementById('scale-type');
+
+        // Resize Canvas
+        function resizeCanvas() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- Core Audio Engine Setup (Tone.js) ---
+        async function initAudioEngine() {
+            try {
+                // 1. Start Tone Context (Must be triggered by user interaction)
+                await Tone.start();
+                
+                // 2. Setup Input (Microphone)
+                mic = new Tone.UserMedia();
+                await mic.open();
+
+                // 3. Setup Analyzer for Pitch Detection & Visualization
+                analyser = new Tone.Analyser("waveform", 2048);
+                mic.connect(analyser);
+
+                // 4. Setup Output Chain (Master Bus)
+                compressor = new Tone.Compressor(-30, 3);
+                reverb = new Tone.Reverb({ decay: 2.5, preDelay: 0.1, wet: 0.3 });
+                await reverb.generate(); // Process impulse response
+
+                Tone.Destination.volume.value = parseInt(masterVol.value);
+
+                // 5. Initialize Default Synth
+                setInstrument('synth');
+
+                // Update UI
+                isRunning = true;
+                btnStart.innerHTML = '<i data-lucide="square" class="w-4 h-4 fill-current"></i> Stop Engine';
+                btnStart.classList.replace('bg-violet-600', 'bg-red-600');
+                btnStart.classList.replace('hover:bg-violet-500', 'hover:bg-red-500');
+                btnStart.classList.replace('shadow-violet-600/20', 'shadow-red-600/20');
+                
+                statusCard.classList.add('aura-active');
+                statusIndicator.classList.replace('bg-red-500', 'bg-emerald-500');
+                statusIndicator.classList.replace('shadow-[0_0_8px_rgba(239,68,68,0.6)]', 'shadow-[0_0_8px_rgba(16,185,129,0.8)]');
+                statusText.innerText = "Listening... Sing into mic.";
+                
+                canvasPlaceholder.style.display = 'none';
+                canvas.classList.remove('opacity-0');
+                
+                lucide.createIcons();
+
+                // Start Detection Loop
+                detectPitchLoop();
+
+            } catch (err) {
+                console.error("Audio Initialization Error:", err);
+                showModal("Microphone Access Denied", "Aura Studio requires microphone permissions to convert your voice to MIDI. Please allow access in your browser settings.");
+                stopAudioEngine();
+            }
+        }
+
+        function stopAudioEngine() {
+            isRunning = false;
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            if (mic) mic.close();
+            if (synth) {
+                synth.releaseAll();
+                synth.dispose();
+            }
+            if (currentNote) currentNote = null;
+
+            // Update UI
+            btnStart.innerHTML = '<i data-lucide="play" class="w-4 h-4 fill-current"></i> Initialize Engine';
+            btnStart.classList.replace('bg-red-600', 'bg-violet-600');
+            btnStart.classList.replace('hover:bg-red-500', 'hover:bg-violet-500');
+            btnStart.classList.replace('shadow-red-600/20', 'shadow-violet-600/20');
+            
+            statusCard.classList.remove('aura-active');
+            statusIndicator.classList.replace('bg-emerald-500', 'bg-red-500');
+            statusIndicator.classList.replace('shadow-[0_0_8px_rgba(16,185,129,0.8)]', 'shadow-[0_0_8px_rgba(239,68,68,0.6)]');
+            statusText.innerText = "Engine offline.";
+            
+            noteDisplay.innerText = "--";
+            noteDisplay.classList.replace('text-white', 'text-slate-700');
+            freqDisplay.innerText = "0.0 Hz";
+            
+            canvasPlaceholder.style.display = 'flex';
+            canvas.classList.add('opacity-0');
+            
+            lucide.createIcons();
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- Synthesizer Definitions ---
+        function setInstrument(type) {
+            // Clean up old synth
+            if (synth) {
+                synth.releaseAll();
+                synth.disconnect();
+                synth.dispose();
+            }
+
+            switch(type) {
+                case 'synth':
+                    synth = new Tone.PolySynth(Tone.Synth, {
+                        oscillator: { type: "sawtooth" },
+                        envelope: { attack: 0.05, decay: 0.1, sustain: 0.9, release: 0.1 }
+                    });
+                    break;
+                case 'bass':
+                    synth = new Tone.PolySynth(Tone.FMSynth, {
+                        harmonicity: 0.5,
+                        modulationIndex: 1.2,
+                        oscillator: { type: "square" },
+                        envelope: { attack: 0.01, decay: 0.2, sustain: 0.8, release: 0.1 },
+                        modulation: { type: "triangle" },
+                        modulationEnvelope: { attack: 0.01, decay: 0.1, sustain: 0.8, release: 0.1 }
+                    });
+                    // Down-tune logic applied in MIDI conversion
+                    break;
+                case 'pad':
+                    synth = new Tone.PolySynth(Tone.Synth, {
+                        oscillator: { type: "sine" },
+                        envelope: { attack: 0.5, decay: 0.5, sustain: 1, release: 1.5 }
+                    });
+                    break;
+                case 'pluck':
+                    synth = new Tone.PolySynth(Tone.PluckSynth, {
+                        attackNoise: 1,
+                        dampening: 4000,
+                        resonance: 0.9
+                    });
+                    break;
+            }
+
+            // Connect to Master Bus
+            synth.chain(compressor, reverb, Tone.Destination);
+            
+            // Update UI Buttons
+            presetBtns.forEach(btn => {
+                if (btn.dataset.preset === type) {
+                    btn.classList.replace('bg-slate-800', 'bg-violet-600');
+                    btn.classList.replace('border-slate-700', 'border-violet-500');
+                    btn.classList.replace('text-slate-300', 'text-white');
+                    btn.querySelector('i').classList.replace('text-slate-400', 'text-violet-300');
+                } else {
+                    btn.classList.replace('bg-violet-600', 'bg-slate-800');
+                    btn.classList.replace('border-violet-500', 'border-slate-700');
+                    btn.classList.replace('text-white', 'text-slate-300');
+                    btn.querySelector('i').classList.replace('text-violet-300', 'text-slate-400');
+                }
+            });
+        }
+
+        // --- Mathematical Pitch Detection (Autocorrelation) ---
+        // Runs incredibly fast on the client side without ML overhead
+        function autoCorrelate(buf, sampleRate) {
+            let SIZE = buf.length;
+            let rms = 0;
+
+            for (let i = 0; i < SIZE; i++) {
+                let val = buf[i];
+                rms += val * val;
+            }
+            rms = Math.sqrt(rms / SIZE);
+            
+            // Volume threshold check
+            if (rms < volumeThreshold) return -1;
+
+            let r1 = 0, r2 = SIZE - 1, thres = 0.2;
+            for (let i = 0; i < SIZE / 2; i++)
+                if (Math.abs(buf[i]) < thres) { r1 = i; break; }
+            for (let i = 1; i < SIZE / 2; i++)
+                if (Math.abs(buf[SIZE - i]) < thres) { r2 = SIZE - i; break; }
+
+            buf = buf.slice(r1, r2);
+            SIZE = buf.length;
+
+            let c = new Array(SIZE).fill(0);
+            for (let i = 0; i < SIZE; i++)
+                for (let j = 0; j < SIZE - i; j++)
+                    c[i] = c[i] + buf[j] * buf[j + i];
+
+            let d = 0; while (c[d] > c[d + 1]) d++;
+            let maxval = -1, maxpos = -1;
+            for (let i = d; i < SIZE; i++) {
+                if (c[i] > maxval) { maxval = c[i]; maxpos = i; }
+            }
+            let T0 = maxpos;
+
+            let x1 = c[T0 - 1], x2 = c[T0], x3 = c[T0 + 1];
+            let a = (x1 + x3 - 2 * x2) / 2;
+            let b = (x3 - x1) / 2;
+            if (a) T0 = T0 - b / (2 * a);
+
+            return sampleRate / T0;
+        }
+
+        // --- Music Theory / Scale Logic ---
+        const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const SCALES = {
+            'major': [0, 2, 4, 5, 7, 9, 11],
+            'minor': [0, 2, 3, 5, 7, 8, 10],
+            'pentatonic': [0, 3, 5, 7, 10],
+            'chromatic': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        };
+
+        function freqToMidi(freq) {
+            return Math.round(12 * Math.log2(freq / 440) + 69);
+        }
+
+        function midiToNoteString(midi) {
+            const octave = Math.floor(midi / 12) - 1;
+            const noteIndex = midi % 12;
+            return NOTES[noteIndex] + octave;
+        }
+
+        // Quantize a raw MIDI note to the nearest note in the selected scale
+        function snapToScale(rawMidi) {
+            const rootNoteStr = scaleRootSelect.value;
+            const scaleType = scaleTypeSelect.value;
+            
+            if (scaleType === 'chromatic') return rawMidi;
+
+            const rootIndex = NOTES.indexOf(rootNoteStr);
+            const scaleIntervals = SCALES[scaleType];
+            
+            // Generate all valid MIDI notes for the selected scale across octaves
+            let validMidiNotes = [];
+            for (let octave = 2; octave <= 6; octave++) {
+                const baseMidi = (octave + 1) * 12 + rootIndex; 
+                scaleIntervals.forEach(interval => {
+                    validMidiNotes.push(baseMidi + interval);
+                });
+            }
+
+            // Find closest valid note
+            let closest = validMidiNotes[0];
+            let minDiff = Math.abs(rawMidi - closest);
+            
+            for (let i = 1; i < validMidiNotes.length; i++) {
+                let diff = Math.abs(rawMidi - validMidiNotes[i]);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = validMidiNotes[i];
+                }
+            }
+            return closest;
+        }
+
+
+        // --- Main Audio & Render Loop ---
+        function detectPitchLoop() {
+            if (!isRunning) return;
+
+            const buffer = analyser.getValue();
+            // Autocorrelation to get raw frequency
+            const freq = autoCorrelate(buffer, Tone.context.sampleRate);
+            
+            // Draw Visualizer
+            drawVisualizer(buffer, freq > 0);
+
+            if (freq > 0) {
+                // We have a signal
+                let rawMidi = freqToMidi(freq);
+                
+                // Adjust for Bass preset
+                const isBass = document.querySelector('.preset-btn[data-preset="bass"]').classList.contains('bg-violet-600');
+                if (isBass) rawMidi -= 12; // Drop an octave
+
+                // Snap to Scale
+                let snappedMidi = snapToScale(rawMidi);
+                let noteStr = midiToNoteString(snappedMidi);
+
+                // Ignore extremely low/high outliers caused by vocal fry or mic bumps
+                if (snappedMidi >= 36 && snappedMidi <= 84) { 
+                    
+                    if (noteStr !== currentNote) {
+                        // Note changed!
+                        if (currentNote) {
+                            synth.triggerRelease(currentNote);
+                        }
+                        
+                        synth.triggerAttack(noteStr);
+                        currentNote = noteStr;
+                        
+                        // Update UI
+                        noteDisplay.innerText = noteStr;
+                        noteDisplay.classList.replace('text-slate-700', 'text-white');
+                        freqDisplay.innerText = freq.toFixed(1) + " Hz";
+                        statusCard.classList.add('border-violet-500');
+                    }
+                }
+
+            } else {
+                // Silence or Volume dropped below threshold
+                if (currentNote) {
+                    synth.triggerRelease(currentNote);
+                    currentNote = null;
+                    
+                    // Update UI
+                    noteDisplay.innerText = "--";
+                    noteDisplay.classList.replace('text-white', 'text-slate-700');
+                    statusCard.classList.remove('border-violet-500');
+                }
+            }
+
+            animationFrameId = requestAnimationFrame(detectPitchLoop);
+        }
+
+        // --- Visualizer ---
+        function drawVisualizer(buffer, isActive) {
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.2)'; // Slate 900 with trail effect
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = isActive ? '#a78bfa' : '#475569'; // Violet 400 or Slate 600
+            
+            // Add glow if active
+            if(isActive) {
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#8b5cf6';
+            } else {
+                ctx.shadowBlur = 0;
+            }
+
+            ctx.beginPath();
+            const sliceWidth = canvas.width * 1.0 / buffer.length;
+            let x = 0;
+
+            for (let i = 0; i < buffer.length; i++) {
+                const v = buffer[i] * 2; // amplify visually
+                const y = (canvas.height / 2) + (v * canvas.height / 2);
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+                x += sliceWidth;
+            }
+            
+            ctx.stroke();
+        }
+
+        // --- Event Listeners ---
+        
+        btnStart.addEventListener('click', async () => {
+            if (isRunning) {
+                stopAudioEngine();
+            } else {
+                await initAudioEngine();
+            }
+        });
+
+        presetBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (!isRunning) return;
+                const type = btn.dataset.preset;
+                setInstrument(type);
+            });
+        });
+
+        thresholdSlider.addEventListener('input', (e) => {
+            volumeThreshold = parseFloat(e.target.value);
+            thresholdVal.innerText = volumeThreshold.toFixed(2);
+        });
+
+        masterVol.addEventListener('input', (e) => {
+            if(Tone.Destination) {
+                Tone.Destination.volume.value = parseInt(e.target.value);
+            }
+        });
+
+        // Modal Logic
+        const modal = document.getElementById('message-modal');
+        const btnCloseModal = document.getElementById('modal-close');
+        
+        function showModal(title, desc) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-desc').innerText = desc;
+            modal.classList.remove('hidden');
+        }
+
+        btnCloseModal.addEventListener('click', () => {
+            modal.classList.add('hidden');
+        });
+
+    </script>
+</body>
+</html>
