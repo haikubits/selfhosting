@@ -405,16 +405,23 @@
             
             // Update UI Buttons
             presetBtns.forEach(btn => {
+                // Look for 'svg' because lucide replaces 'i' tags with 'svg'
+                const icon = btn.querySelector('svg') || btn.querySelector('i');
+                
                 if (btn.dataset.preset === type) {
                     btn.classList.replace('bg-slate-800', 'bg-violet-600');
                     btn.classList.replace('border-slate-700', 'border-violet-500');
                     btn.classList.replace('text-slate-300', 'text-white');
-                    btn.querySelector('i').classList.replace('text-slate-400', 'text-violet-300');
+                    if (icon) {
+                        icon.classList.replace('text-slate-400', 'text-violet-300');
+                    }
                 } else {
                     btn.classList.replace('bg-violet-600', 'bg-slate-800');
                     btn.classList.replace('border-violet-500', 'border-slate-700');
                     btn.classList.replace('text-white', 'text-slate-300');
-                    btn.querySelector('i').classList.replace('text-violet-300', 'text-slate-400');
+                    if (icon) {
+                        icon.classList.replace('text-violet-300', 'text-slate-400');
+                    }
                 }
             });
         }
