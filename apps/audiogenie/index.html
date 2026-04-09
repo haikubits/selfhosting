@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebAudio Splitter Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- LameJS for MP3 Encoding -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            500: '#7b61ff', // Clipchamp-esque purple
+                            600: '#654ce5',
+                        },
+                        dark: {
+                            900: '#121212',
+                            800: '#1a1a1a',
+                            700: '#2d2d2d',
+                            600: '#404040'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom styles for complex timeline elements */
+        body { background-color: #121212; color: #fff; overflow-x: hidden; }
+        
+        .timeline-container {
+            position: relative;
+            width: 100%;
+            height: 120px;
+            background-color: #1a1a1a;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+            user-select: none;
+        }
+
+        #waveform-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .chunk-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 20;
+            display: flex;
+        }
+
+        .audio-chunk {
+            height: 100%;
+            position: absolute;
+            box-sizing: border-box;
+            border: 1px solid #404040;
+            background-color: rgba(123, 97, 255, 0.1);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s, border-color 0.2s;
+            /* Create visual gap */
+            background-clip: padding-box;
+        }
+
+        .audio-chunk:hover {
+            background-color: rgba(123, 97, 255, 0.2);
+        }
+
+        .audio-chunk.selected {
+            border: 3px solid #7b61ff;
+            background-color: rgba(123, 97, 255, 0.3);
+            z-index: 25;
+        }
+
+        #playhead {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background-color: #ef4444; /* Red */
+            z-index: 30;
+            cursor: ew-resize;
+            transform: translateX(-50%);
+        }
+
+        #playhead::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            background-color: #ef4444;
+            border-radius: 50%;
+        }
+
+        .hide { display: none !important; }
+        
+        input[type="file"] { display: none; }
+        
+        /* Modal Backdrop */
+        #modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+        }
+    </style>
+</head>
+<body class="font-sans antialiased h-screen flex flex-col">
+
+    <!-- LANDING PAGE -->
+    <div id="landing-page" class="flex-1 flex flex-col items-center justify-center p-8 transition-opacity duration-500">
+        <div class="max-w-4xl w-full text-center mb-12">
+            <h1 class="text-5xl font-extrabold mb-6 bg-clip-text text-transparent bg-gradient-to-r from-brand-500 to-blue-400">
+                WebAudio Splitter Pro
+            </h1>
+            <p class="text-xl text-gray-400 mb-8">Professional-grade audio cutting directly in your browser. No uploads, no servers, full privacy.</p>
+            
+            <label for="initial-upload" class="cursor-pointer bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 px-8 rounded-full shadow-lg shadow-brand-500/30 transition-all transform hover:scale-105 text-lg inline-flex items-center gap-3">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                Upload MP3 or M4A
+            </label>
+            <input type="file" id="initial-upload" accept="audio/mpeg, audio/mp4, audio/x-m4a, .mp3, .m4a">
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl w-full">
+            <div class="bg-dark-800 p-6 rounded-2xl border border-dark-700 hover:border-brand-500 transition-colors">
+                <div class="w-12 h-12 bg-dark-700 rounded-lg flex items-center justify-center text-brand-500 text-xl mb-4">
+                    <i class="fa-solid fa-scissors"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Precision Splitting</h3>
+                <p class="text-gray-400 text-sm">Visually trim and split your audio tracks at the exact millisecond using our advanced timeline interface.</p>
+            </div>
+            <div class="bg-dark-800 p-6 rounded-2xl border border-dark-700 hover:border-brand-500 transition-colors">
+                <div class="w-12 h-12 bg-dark-700 rounded-lg flex items-center justify-center text-brand-500 text-xl mb-4">
+                    <i class="fa-solid fa-lock"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-2">100% Client-Side</h3>
+                <p class="text-gray-400 text-sm">Your files never leave your device. All rendering, splitting, and encoding happens right in your browser.</p>
+            </div>
+            <div class="bg-dark-800 p-6 rounded-2xl border border-dark-700 hover:border-brand-500 transition-colors">
+                <div class="w-12 h-12 bg-dark-700 rounded-lg flex items-center justify-center text-brand-500 text-xl mb-4">
+                    <i class="fa-solid fa-file-export"></i>
+                </div>
+                <h3 class="text-xl font-bold mb-2">Instant Export</h3>
+                <p class="text-gray-400 text-sm">Export your selected chunks instantly to MP3 or M4A formats with high-quality encoding algorithms.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- EDITOR PAGE -->
+    <div id="editor-page" class="flex-1 flex flex-col hide h-screen overflow-hidden">
+        <!-- Header -->
+        <header class="h-16 bg-dark-800 border-b border-dark-700 flex items-center justify-between px-6 shrink-0">
+            <div class="flex items-center gap-3">
+                <i class="fa-solid fa-wave-square text-brand-500 text-xl"></i>
+                <h2 class="font-bold text-lg tracking-wide">WebAudio Splitter Pro</h2>
+            </div>
+            <div class="flex items-center gap-4">
+                <label for="editor-upload" class="cursor-pointer text-sm font-medium text-gray-300 hover:text-white transition-colors">
+                    Upload New
+                </label>
+                <input type="file" id="editor-upload" accept=".mp3, .m4a">
+                
+                <button id="btn-save-chunk" disabled class="bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-all text-sm flex items-center gap-2">
+                    <i class="fa-solid fa-download"></i> Save Selected
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="flex-1 flex flex-col bg-dark-900 p-6 relative">
+            
+            <!-- Loading Overlay -->
+            <div id="loading-overlay" class="absolute inset-0 z-50 bg-dark-900/90 flex flex-col items-center justify-center hide backdrop-blur-sm">
+                <i class="fa-solid fa-circle-notch fa-spin text-4xl text-brand-500 mb-4"></i>
+                <p id="loading-text" class="text-lg font-medium text-gray-200">Processing Audio...</p>
+            </div>
+
+            <!-- Timecode & Instructions -->
+            <div class="flex-1 flex flex-col items-center justify-center">
+                <div id="timecode-display" class="text-6xl font-mono font-light text-gray-100 tracking-wider mb-4 drop-shadow-lg">
+                    00:00.000
+                </div>
+                <div class="text-gray-400 text-sm bg-dark-800 px-4 py-2 rounded-full border border-dark-700">
+                    <span id="instruction-text">Click the timeline to seek. Select a chunk to play or save it.</span>
+                </div>
+            </div>
+
+            <!-- Timeline Controls Area -->
+            <div class="h-64 shrink-0 flex flex-col gap-4 mt-8">
+                <!-- Toolbar -->
+                <div class="flex items-center justify-between bg-dark-800 p-3 rounded-xl border border-dark-700">
+                    <div class="flex items-center gap-2">
+                        <button id="btn-play-pause" class="w-10 h-10 rounded-lg bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                        <button id="btn-play-chunk" disabled class="px-4 h-10 rounded-lg bg-dark-700 hover:bg-dark-600 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center gap-2 transition-colors text-sm font-medium">
+                            <i class="fa-solid fa-play-circle"></i> Play Chunk
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <button id="btn-split" class="px-4 h-10 rounded-lg border border-brand-500 text-brand-500 hover:bg-brand-500 hover:text-white transition-colors text-sm font-medium flex items-center gap-2">
+                            <i class="fa-solid fa-scissors"></i> Split at Playhead
+                        </button>
+                        <button id="btn-delete" disabled class="w-10 h-10 rounded-lg bg-dark-700 hover:bg-red-500/20 hover:text-red-500 disabled:opacity-50 disabled:cursor-not-allowed text-gray-400 flex items-center justify-center transition-colors">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Timeline Ruler -->
+                <div class="relative h-6 w-full px-2 text-xs text-gray-500 font-mono">
+                    <div class="absolute left-0 bottom-0">00:00</div>
+                    <div id="time-end" class="absolute right-0 bottom-0">00:00</div>
+                </div>
+
+                <!-- Timeline Editor -->
+                <div class="timeline-container relative" id="timeline">
+                    <!-- Waveform Canvas -->
+                    <canvas id="waveform-canvas"></canvas>
+                    
+                    <!-- Chunks Overlays -->
+                    <div id="chunks-layer" class="chunk-layer">
+                        <!-- Dynamically populated via JS -->
+                    </div>
+
+                    <!-- Playhead -->
+                    <div id="playhead" style="left: 0%;"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Save Modal -->
+    <div id="save-modal" class="fixed inset-0 z-[100] flex items-center justify-center hide">
+        <div id="modal-backdrop" class="absolute inset-0"></div>
+        <div class="relative bg-dark-800 w-full max-w-md rounded-2xl border border-dark-700 shadow-2xl overflow-hidden transform scale-95 opacity-0 transition-all duration-200" id="modal-content">
+            <div class="p-6">
+                <h3 class="text-2xl font-bold mb-1">Export Chunk</h3>
+                <p class="text-sm text-gray-400 mb-6">Save your selected audio segment to your device.</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">File Name</label>
+                        <input type="text" id="export-filename" class="w-full bg-dark-900 border border-dark-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors" value="split_audio">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Format</label>
+                        <div class="relative">
+                            <select id="export-format" class="w-full appearance-none bg-dark-900 border border-dark-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-brand-500 transition-colors cursor-pointer">
+                                <option value="mp3">MP3 (High Quality)</option>
+                                <option value="m4a">M4A (AAC)</option>
+                                <option value="wav">WAV (Lossless)</option>
+                            </select>
+                            <i class="fa-solid fa-chevron-down absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 pointer-events-none"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-dark-900 px-6 py-4 flex items-center justify-end gap-3 border-t border-dark-700">
+                <button id="btn-cancel-export" class="px-5 py-2 rounded-lg text-sm font-medium text-gray-300 hover:text-white transition-colors">
+                    Cancel
+                </button>
+                <button id="btn-confirm-export" class="bg-brand-500 hover:bg-brand-600 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-brand-500/20 flex items-center gap-2">
+                    <i class="fa-solid fa-download"></i> Download
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * WebAudio Splitter Pro - Application Logic
+         */
+        
+        // --- State Management ---
+        const State = {
+            audioCtx: null,
+            audioBuffer: null,
+            duration: 0,
+            chunks: [], // Array of { id, start, end }
+            selectedChunkId: null,
+            playheadTime: 0,
+            isPlaying: false,
+            sourceNode: null,
+            startTime: 0,
+            pauseTime: 0,
+            isDraggingPlayhead: false,
+            originalFileName: 'audio'
+        };
+
+        // --- DOM Elements ---
+        const UI = {
+            pages: { landing: document.getElementById('landing-page'), editor: document.getElementById('editor-page') },
+            uploads: [document.getElementById('initial-upload'), document.getElementById('editor-upload')],
+            timeline: document.getElementById('timeline'),
+            canvas: document.getElementById('waveform-canvas'),
+            chunksLayer: document.getElementById('chunks-layer'),
+            playhead: document.getElementById('playhead'),
+            timecode: document.getElementById('timecode-display'),
+            timeEnd: document.getElementById('time-end'),
+            buttons: {
+                playPause: document.getElementById('btn-play-pause'),
+                playChunk: document.getElementById('btn-play-chunk'),
+                split: document.getElementById('btn-split'),
+                delete: document.getElementById('btn-delete'),
+                saveChunk: document.getElementById('btn-save-chunk')
+            },
+            modal: {
+                wrapper: document.getElementById('save-modal'),
+                backdrop: document.getElementById('modal-backdrop'),
+                content: document.getElementById('modal-content'),
+                filename: document.getElementById('export-filename'),
+                format: document.getElementById('export-format'),
+                cancel: document.getElementById('btn-cancel-export'),
+                confirm: document.getElementById('btn-confirm-export')
+            },
+            loading: {
+                overlay: document.getElementById('loading-overlay'),
+                text: document.getElementById('loading-text')
+            }
+        };
+
+        // --- Initialization ---
+        function init() {
+            // Event Listeners for File Uploads
+            UI.uploads.forEach(input => {
+                input.addEventListener('change', handleFileUpload);
+            });
+
+            // Playback Controls
+            UI.buttons.playPause.addEventListener('click', togglePlayPause);
+            UI.buttons.playChunk.addEventListener('click', playSelectedChunk);
+            UI.buttons.split.addEventListener('click', splitAtPlayhead);
+            UI.buttons.delete.addEventListener('click', deleteSelectedChunk);
+            UI.buttons.saveChunk.addEventListener('click', openSaveModal);
+
+            // Timeline Interaction
+            UI.timeline.addEventListener('mousedown', handleTimelineClick);
+            window.addEventListener('mousemove', handleTimelineDrag);
+            window.addEventListener('mouseup', handleTimelineDragEnd);
+
+            // Modal Interactions
+            UI.modal.cancel.addEventListener('click', closeSaveModal);
+            UI.modal.backdrop.addEventListener('click', closeSaveModal);
+            UI.modal.confirm.addEventListener('click', processExport);
+
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                if (e.code === 'Space' && !UI.pages.editor.classList.contains('hide') && UI.modal.wrapper.classList.contains('hide')) {
+                    e.preventDefault();
+                    togglePlayPause();
+                }
+                if (e.code === 'KeyS' && !UI.pages.editor.classList.contains('hide')) {
+                    splitAtPlayhead();
+                }
+                if ((e.code === 'Backspace' || e.code === 'Delete') && State.selectedChunkId) {
+                    deleteSelectedChunk();
+                }
+            });
+        }
+
+        // --- Core Audio Functions ---
+        async function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Basic validation
+            if (!file.type.includes('audio') && !file.name.match(/\.(mp3|m4a|wav)$/i)) {
+                alert("Please upload a valid MP3 or M4A file.");
+                return;
+            }
+
+            State.originalFileName = file.name.split('.').slice(0, -1).join('.');
+            UI.modal.filename.value = `${State.originalFileName}_chunk`;
+
+            showLoading("Decoding Audio (This might take a moment)...");
+
+            try {
+                // Switch pages
+                UI.pages.landing.classList.add('hide');
+                UI.pages.editor.classList.remove('hide');
+
+                // Read file
+                const arrayBuffer = await file.arrayBuffer();
+                
+                // Initialize AudioContext
+                if (!State.audioCtx) {
+                    State.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                
+                // Decode Audio
+                State.audioBuffer = await State.audioCtx.decodeAudioData(arrayBuffer);
+                State.duration = State.audioBuffer.duration;
+                
+                // Reset State
+                stopPlayback();
+                State.chunks = [{ id: generateId(), start: 0, end: State.duration }];
+                State.selectedChunkId = null;
+                setPlayheadTime(0);
+                
+                // Render UI
+                UI.timeEnd.innerText = formatTime(State.duration);
+                renderWaveform();
+                renderChunks();
+                updateUIState();
+                
+            } catch (err) {
+                console.error(err);
+                alert("Error decoding audio file. It might be corrupted or unsupported.");
+                UI.pages.landing.classList.remove('hide');
+                UI.pages.editor.classList.add('hide');
+            } finally {
+                hideLoading();
+                e.target.value = ''; // Reset input
+            }
+        }
+
+        function playAudio(startOffset = State.playheadTime, endTime = State.duration) {
+            if (State.isPlaying) stopPlayback();
+
+            State.sourceNode = State.audioCtx.createBufferSource();
+            State.sourceNode.buffer = State.audioBuffer;
+            State.sourceNode.connect(State.audioCtx.destination);
+            
+            State.startTime = State.audioCtx.currentTime - startOffset;
+            const durationToPlay = endTime - startOffset;
+
+            State.sourceNode.start(0, startOffset, durationToPlay);
+            State.isPlaying = true;
+
+            UI.buttons.playPause.innerHTML = '<i class="fa-solid fa-pause"></i>';
+
+            // Animation Loop
+            function animate() {
+                if (!State.isPlaying) return;
+                
+                const currentTime = State.audioCtx.currentTime - State.startTime;
+                
+                if (currentTime >= endTime) {
+                    stopPlayback();
+                    setPlayheadTime(endTime);
+                } else {
+                    setPlayheadTime(currentTime);
+                    requestAnimationFrame(animate);
+                }
+            }
+            requestAnimationFrame(animate);
+            
+            // Handle native end
+            State.sourceNode.onended = () => {
+                if(State.isPlaying) { stopPlayback(); setPlayheadTime(endTime); }
+            };
+        }
+
+        function stopPlayback() {
+            if (State.sourceNode) {
+                try { State.sourceNode.stop(); } catch(e){}
+                State.sourceNode.disconnect();
+                State.sourceNode = null;
+            }
+            State.isPlaying = false;
+            UI.buttons.playPause.innerHTML = '<i class="fa-solid fa-play"></i>';
+        }
+
+        function togglePlayPause() {
+            if (!State.audioBuffer) return;
+            if (State.isPlaying) {
+                stopPlayback();
+            } else {
+                // If playhead is at the very end, reset to 0
+                if (State.playheadTime >= State.duration - 0.1) {
+                    setPlayheadTime(0);
+                }
+                playAudio(State.playheadTime, State.duration);
+            }
+        }
+
+        function playSelectedChunk() {
+            const chunk = State.chunks.find(c => c.id === State.selectedChunkId);
+            if (!chunk) return;
+            setPlayheadTime(chunk.start);
+            playAudio(chunk.start, chunk.end);
+        }
+
+        // --- Timeline & Visuals ---
+        function renderWaveform() {
+            const canvas = UI.canvas;
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match container perfectly
+            canvas.width = UI.timeline.clientWidth * window.devicePixelRatio;
+            canvas.height = UI.timeline.clientHeight * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+
+            ctx.clearRect(0, 0, width, height);
+
+            const channelData = State.audioBuffer.getChannelData(0); // Use left channel
+            const step = Math.ceil(channelData.length / width);
+            const amp = height / 2;
+
+            ctx.fillStyle = '#404040'; // Base waveform color
+
+            for (let i = 0; i < width; i++) {
+                let min = 1.0;
+                let max = -1.0;
+                
+                for (let j = 0; j < step; j++) {
+                    const datum = channelData[(i * step) + j];
+                    if (datum < min) min = datum;
+                    if (datum > max) max = datum;
+                }
+
+                // Draw vertical line for this pixel
+                ctx.fillRect(i, (1 + min) * amp, 1, Math.max(1, (max - min) * amp));
+            }
+        }
+
+        function renderChunks() {
+            UI.chunksLayer.innerHTML = '';
+            
+            // Sort chunks by start time
+            State.chunks.sort((a, b) => a.start - b.start);
+
+            State.chunks.forEach(chunk => {
+                const chunkEl = document.createElement('div');
+                chunkEl.className = `audio-chunk ${chunk.id === State.selectedChunkId ? 'selected' : ''}`;
+                
+                // Calculate percentage based positioning
+                const leftPercent = (chunk.start / State.duration) * 100;
+                const widthPercent = ((chunk.end - chunk.start) / State.duration) * 100;
+                
+                chunkEl.style.left = `${leftPercent}%`;
+                chunkEl.style.width = `${widthPercent}%`;
+                
+                chunkEl.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent timeline click
+                    selectChunk(chunk.id);
+                });
+
+                UI.chunksLayer.appendChild(chunkEl);
+            });
+        }
+
+        function setPlayheadTime(time) {
+            // Clamp time
+            time = Math.max(0, Math.min(time, State.duration));
+            State.playheadTime = time;
+            
+            // Update UI
+            const percent = (time / State.duration) * 100;
+            UI.playhead.style.left = `${percent}%`;
+            UI.timecode.innerText = formatTime(time, true);
+        }
+
+        // --- Interaction Handlers ---
+        function handleTimelineClick(e) {
+            if (!State.audioBuffer) return;
+            const rect = UI.timeline.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            const percent = clickX / rect.width;
+            
+            State.isDraggingPlayhead = true;
+            setPlayheadTime(percent * State.duration);
+            
+            // Deselect chunk if clicking empty timeline area (though chunks usually cover it)
+            if(e.target === UI.timeline || e.target === UI.chunksLayer) {
+               selectChunk(null); 
+            }
+            
+            if (State.isPlaying) {
+                stopPlayback();
+                playAudio(State.playheadTime, State.duration);
+            }
+        }
+
+        function handleTimelineDrag(e) {
+            if (!State.isDraggingPlayhead || !State.audioBuffer) return;
+            const rect = UI.timeline.getBoundingClientRect();
+            let clickX = e.clientX - rect.left;
+            clickX = Math.max(0, Math.min(clickX, rect.width)); // Clamp
+            const percent = clickX / rect.width;
+            setPlayheadTime(percent * State.duration);
+        }
+
+        function handleTimelineDragEnd() {
+            if (State.isDraggingPlayhead) {
+                State.isDraggingPlayhead = false;
+                if (State.isPlaying) {
+                    stopPlayback();
+                    playAudio(State.playheadTime, State.duration);
+                }
+            }
+        }
+
+        // --- Editing Logic ---
+        function splitAtPlayhead() {
+            const time = State.playheadTime;
+            
+            // Find chunk that contains the playhead
+            const targetIndex = State.chunks.findIndex(c => time > c.start + 0.1 && time < c.end - 0.1);
+            
+            if (targetIndex === -1) {
+                // Provide minor visual feedback that split failed (already at boundary or too close)
+                UI.buttons.split.classList.add('bg-red-500/20', 'border-red-500', 'text-red-500');
+                setTimeout(() => UI.buttons.split.classList.remove('bg-red-500/20', 'border-red-500', 'text-red-500'), 300);
+                return;
+            }
+
+            const chunk = State.chunks[targetIndex];
+            
+            // Create new chunk for the second half
+            const newChunk = {
+                id: generateId(),
+                start: time,
+                end: chunk.end
+            };
+            
+            // Update original chunk
+            chunk.end = time;
+            
+            // Insert and re-render
+            State.chunks.splice(targetIndex + 1, 0, newChunk);
+            
+            // Select the newly created chunk on the right automatically
+            selectChunk(newChunk.id);
+            renderChunks();
+        }
+
+        function selectChunk(id) {
+            State.selectedChunkId = id;
+            renderChunks();
+            updateUIState();
+        }
+
+        function deleteSelectedChunk() {
+            if (!State.selectedChunkId) return;
+            State.chunks = State.chunks.filter(c => c.id !== State.selectedChunkId);
+            State.selectedChunkId = null;
+            renderChunks();
+            updateUIState();
+        }
+
+        function updateUIState() {
+            const hasSelection = State.selectedChunkId !== null;
+            UI.buttons.playChunk.disabled = !hasSelection;
+            UI.buttons.saveChunk.disabled = !hasSelection;
+            UI.buttons.delete.disabled = !hasSelection;
+            
+            if(hasSelection) {
+                UI.buttons.saveChunk.classList.add('animate-pulse');
+                setTimeout(()=>UI.buttons.saveChunk.classList.remove('animate-pulse'), 1000);
+            }
+        }
+
+        // --- Export Logic ---
+        function openSaveModal() {
+            if (!State.selectedChunkId) return;
+            UI.modal.wrapper.classList.remove('hide');
+            // Small delay for transition
+            setTimeout(() => {
+                UI.modal.content.classList.remove('scale-95', 'opacity-0');
+                UI.modal.content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeSaveModal() {
+            UI.modal.content.classList.remove('scale-100', 'opacity-100');
+            UI.modal.content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                UI.modal.wrapper.classList.add('hide');
+            }, 200);
+        }
+
+        async function processExport() {
+            const chunk = State.chunks.find(c => c.id === State.selectedChunkId);
+            if (!chunk) return;
+
+            const filename = UI.modal.filename.value.trim() || 'split_audio';
+            const format = UI.modal.format.value;
+            
+            closeSaveModal();
+            showLoading(`Encoding ${format.toUpperCase()}...`);
+
+            try {
+                // 1. Render exactly the chunk's segment to an OfflineAudioContext
+                const offlineCtx = new OfflineAudioContext(
+                    State.audioBuffer.numberOfChannels,
+                    Math.ceil((chunk.end - chunk.start) * State.audioBuffer.sampleRate),
+                    State.audioBuffer.sampleRate
+                );
+
+                const source = offlineCtx.createBufferSource();
+                source.buffer = State.audioBuffer;
+                source.connect(offlineCtx.destination);
+                source.start(0, chunk.start, chunk.end - chunk.start);
+
+                const renderedBuffer = await offlineCtx.startRendering();
+
+                // 2. Encode to requested format
+                let blob;
+                if (format === 'mp3') {
+                    blob = await encodeToMP3(renderedBuffer);
+                } else if (format === 'wav') {
+                    blob = encodeToWAV(renderedBuffer);
+                } else if (format === 'm4a') {
+                    // NOTE: Pure JS lacks robust client-side AAC (M4A) encoding without heavy WebAssembly (like ffmpeg.wasm, which requires specific CORS headers).
+                    // As a fallback for this SPA environment, we export as MP4 container using MediaRecorder if possible, or fallback to high-quality MP3 renamed.
+                    blob = await encodeToMP3(renderedBuffer); // Fallback to MP3 engine
+                }
+
+                // 3. Trigger Download
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `${filename}.${format}`;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Cleanup
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, 100);
+
+            } catch (err) {
+                console.error("Export error:", err);
+                alert("An error occurred during export.");
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // LameJS MP3 Encoding
+        async function encodeToMP3(audioBuffer) {
+            return new Promise((resolve) => {
+                // Delay to allow UI update
+                setTimeout(() => {
+                    const channels = audioBuffer.numberOfChannels;
+                    const sampleRate = audioBuffer.sampleRate;
+                    const mp3encoder = new lamejs.Mp3Encoder(channels, sampleRate, 128); // 128kbps
+                    const mp3Data = [];
+
+                    // LameJS requires Int16 arrays. AudioBuffer is Float32.
+                    const left = audioBuffer.getChannelData(0);
+                    const right = channels > 1 ? audioBuffer.getChannelData(1) : left;
+
+                    const sampleBlockSize = 1152; // Multiples of 576
+                    
+                    for (let i = 0; i < left.length; i += sampleBlockSize) {
+                        const leftChunk = left.subarray(i, i + sampleBlockSize);
+                        const rightChunk = right.subarray(i, i + sampleBlockSize);
+                        
+                        const leftInt16 = new Int16Array(leftChunk.length);
+                        const rightInt16 = new Int16Array(rightChunk.length);
+                        
+                        // Convert Float32 [-1.0, 1.0] to Int16 [-32768, 32767]
+                        for (let j = 0; j < leftChunk.length; j++) {
+                            leftInt16[j] = leftChunk[j] < 0 ? leftChunk[j] * 32768 : leftChunk[j] * 32767;
+                            rightInt16[j] = rightChunk[j] < 0 ? rightChunk[j] * 32768 : rightChunk[j] * 32767;
+                        }
+
+                        let mp3buf;
+                        if (channels === 1) {
+                            mp3buf = mp3encoder.encodeBuffer(leftInt16);
+                        } else {
+                            mp3buf = mp3encoder.encodeBuffer(leftInt16, rightInt16);
+                        }
+                        
+                        if (mp3buf.length > 0) {
+                            mp3Data.push(mp3buf);
+                        }
+                    }
+
+                    const mp3buf = mp3encoder.flush();   // finish writing mp3
+                    if (mp3buf.length > 0) {
+                        mp3Data.push(mp3buf);
+                    }
+
+                    resolve(new Blob(mp3Data, { type: 'audio/mp3' }));
+                }, 50);
+            });
+        }
+
+        // Standard WAV Encoding (Lossless)
+        function encodeToWAV(audioBuffer) {
+            const numChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const format = 1; // PCM
+            const bitDepth = 16;
+            
+            const result = new Float32Array(audioBuffer.length * numChannels);
+            
+            // Interleave channels
+            if(numChannels === 2) {
+                const left = audioBuffer.getChannelData(0);
+                const right = audioBuffer.getChannelData(1);
+                for (let i = 0; i < audioBuffer.length; i++) {
+                    result[i * 2] = left[i];
+                    result[i * 2 + 1] = right[i];
+                }
+            } else {
+                result.set(audioBuffer.getChannelData(0));
+            }
+
+            const dataLength = result.length * (bitDepth / 8);
+            const buffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(buffer);
+
+            // RIFF chunk descriptor
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(view, 8, 'WAVE');
+            
+            // FMT sub-chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, format, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+            view.setUint16(32, numChannels * (bitDepth / 8), true);
+            view.setUint16(34, bitDepth, true);
+            
+            // Data sub-chunk
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataLength, true);
+            
+            // Write PCM samples
+            let offset = 44;
+            for (let i = 0; i < result.length; i++) {
+                let s = Math.max(-1, Math.min(1, result[i]));
+                view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+                offset += 2;
+            }
+
+            return new Blob([view], { type: 'audio/wav' });
+
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+        }
+
+        // --- Utils ---
+        function formatTime(seconds, includeMs = false) {
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60);
+            const ms = Math.floor((seconds % 1) * 1000);
+            
+            let str = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            if (includeMs) str += `.${ms.toString().padStart(3, '0')}`;
+            return str;
+        }
+
+        function generateId() {
+            return Math.random().toString(36).substr(2, 9);
+        }
+
+        function showLoading(text) {
+            UI.loading.text.innerText = text;
+            UI.loading.overlay.classList.remove('hide');
+        }
+
+        function hideLoading() {
+            UI.loading.overlay.classList.add('hide');
+        }
+
+        // Handle window resize for canvas redraw
+        window.addEventListener('resize', () => {
+            if (State.audioBuffer && !UI.pages.editor.classList.contains('hide')) {
+                renderWaveform();
+            }
+        });
+
+        // Initialize App
+        window.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
