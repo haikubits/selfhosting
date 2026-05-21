@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Recovery Diet Plan</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --cream: #FAF6EF;
+    --warm-white: #FFFDF9;
+    --sage: #7C9A7E;
+    --sage-light: #A8C5AA;
+    --sage-dark: #4E6E50;
+    --terracotta: #C4704F;
+    --terracotta-light: #E8A98A;
+    --charcoal: #2C2C2C;
+    --mid-grey: #7A7A7A;
+    --border: #E2DAD0;
+    --tag-bg: #EEF4EE;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--cream);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--charcoal);
+    padding: 40px 20px;
+    min-height: 100vh;
+  }
+
+  .page {
+    max-width: 780px;
+    margin: 0 auto;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+    padding-bottom: 32px;
+    border-bottom: 1.5px solid var(--border);
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .header-eyebrow {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    margin-bottom: 12px;
+  }
+
+  .header h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 38px;
+    font-weight: 700;
+    color: var(--charcoal);
+    line-height: 1.2;
+    margin-bottom: 12px;
+  }
+
+  .header p {
+    font-size: 14px;
+    color: var(--mid-grey);
+    font-weight: 300;
+    max-width: 480px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  /* Alerts */
+  .alerts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 36px;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  .alert {
+    background: var(--warm-white);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--sage);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+
+  .alert.warn { border-left-color: var(--terracotta); }
+
+  .alert-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--sage-dark);
+    margin-bottom: 8px;
+  }
+
+  .alert.warn .alert-title { color: var(--terracotta); }
+
+  .alert ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .alert ul li {
+    font-size: 12.5px;
+    color: var(--mid-grey);
+    line-height: 1.5;
+    padding-left: 14px;
+    position: relative;
+  }
+
+  .alert ul li::before {
+    content: '–';
+    position: absolute;
+    left: 0;
+    color: var(--sage-light);
+  }
+
+  .alert.warn ul li::before { color: var(--terracotta-light); }
+
+  /* Section label */
+  .section-label {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--mid-grey);
+    margin-bottom: 18px;
+    animation: fadeUp 0.6s 0.15s ease both;
+  }
+
+  /* Day cards */
+  .day-card {
+    background: var(--warm-white);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  .day-card:nth-child(1) { animation-delay: 0.15s; }
+  .day-card:nth-child(2) { animation-delay: 0.2s; }
+  .day-card:nth-child(3) { animation-delay: 0.25s; }
+  .day-card:nth-child(4) { animation-delay: 0.3s; }
+  .day-card:nth-child(5) { animation-delay: 0.35s; }
+  .day-card:nth-child(6) { animation-delay: 0.4s; }
+  .day-card:nth-child(7) { animation-delay: 0.45s; }
+
+  .day-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 22px;
+    background: var(--cream);
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .day-header:hover { background: #F5EFE6; }
+
+  .day-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .day-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--sage-dark);
+    line-height: 1;
+    min-width: 32px;
+  }
+
+  .day-info {}
+  .day-name {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--charcoal);
+  }
+
+  .day-items-preview {
+    font-size: 12px;
+    color: var(--mid-grey);
+    margin-top: 2px;
+  }
+
+  .day-stats {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+  }
+
+  .stat {
+    text-align: right;
+  }
+
+  .stat-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--charcoal);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--mid-grey);
+    margin-top: 2px;
+  }
+
+  .stat-divider {
+    width: 1px;
+    height: 28px;
+    background: var(--border);
+  }
+
+  .chevron {
+    margin-left: 16px;
+    color: var(--mid-grey);
+    font-size: 14px;
+    transition: transform 0.3s ease;
+  }
+
+  .day-card.open .chevron { transform: rotate(180deg); }
+
+  /* Day body */
+  .day-body {
+    display: none;
+    padding: 20px 22px 22px;
+  }
+
+  .day-card.open .day-body { display: block; }
+
+  /* Food items */
+  .food-items {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .food-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 16px;
+    background: var(--cream);
+    border-radius: 9px;
+    border: 1px solid var(--border);
+  }
+
+  .food-name {
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--charcoal);
+    margin-bottom: 3px;
+  }
+
+  .food-qty {
+    font-size: 12px;
+    color: var(--mid-grey);
+  }
+
+  .food-macros {
+    text-align: right;
+    flex-shrink: 0;
+    margin-left: 12px;
+  }
+
+  .food-protein {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--sage-dark);
+  }
+
+  .food-cal {
+    font-size: 11px;
+    color: var(--mid-grey);
+    margin-top: 2px;
+  }
+
+  /* Prep section */
+  .prep-section {
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  .prep-title {
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--terracotta);
+    margin-bottom: 10px;
+  }
+
+  .prep-steps {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+  }
+
+  .prep-steps li {
+    font-size: 12.5px;
+    color: var(--mid-grey);
+    line-height: 1.55;
+    padding-left: 18px;
+    position: relative;
+  }
+
+  .prep-steps li::before {
+    content: counter(step);
+    counter-increment: step;
+    position: absolute;
+    left: 0;
+    top: 0;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--terracotta-light);
+    background: #FDF0EA;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1px;
+  }
+
+  .prep-steps { counter-reset: step; }
+
+  /* Tag */
+  .digest-tag {
+    display: inline-block;
+    font-size: 10.5px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: var(--tag-bg);
+    color: var(--sage-dark);
+    border: 1px solid #C9DEC9;
+    margin-bottom: 14px;
+  }
+
+  .digest-tag.caution {
+    background: #FDF0EA;
+    color: var(--terracotta);
+    border-color: #F0C4A8;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 40px;
+    padding-top: 28px;
+    border-top: 1.5px solid var(--border);
+    animation: fadeUp 0.6s 0.5s ease both;
+  }
+
+  .footer-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 16px;
+    color: var(--charcoal);
+  }
+
+  .reminders {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .reminder {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    background: var(--warm-white);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    font-size: 12.5px;
+    color: var(--mid-grey);
+    line-height: 1.5;
+  }
+
+  .reminder-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .disclaimer {
+    margin-top: 24px;
+    font-size: 11.5px;
+    color: var(--mid-grey);
+    text-align: center;
+    line-height: 1.6;
+    font-style: italic;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @media (max-width: 560px) {
+    .alerts { grid-template-columns: 1fr; }
+    .reminders { grid-template-columns: 1fr; }
+    .header h1 { font-size: 28px; }
+    .day-header { flex-wrap: wrap; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-eyebrow">Post-Surgery Recovery</div>
+    <h1>Weekly Protein Diet Plan</h1>
+    <p>Strictly vegetarian · No dairy curd or dahi · ~50g protein daily · Designed for gentle digestion after gallbladder removal</p>
+  </div>
+
+  <!-- Alerts -->
+  <div class="alerts">
+    <div class="alert">
+      <div class="alert-title">✅ Dietary Rules</div>
+      <ul>
+        <li>No eggs, fish, or meat</li>
+        <li>No curd, dahi, yogurt, or hung curd (allergy)</li>
+        <li>No high-fat foods (post-surgery)</li>
+        <li>Low oil — boiled or lightly sautéed only</li>
+        <li>Small, frequent portions preferred</li>
+      </ul>
+    </div>
+    <div class="alert warn">
+      <div class="alert-title">⚠️ Post-Surgery Notes</div>
+      <ul>
+        <li>Rajma and chhole only after 3–4 weeks</li>
+        <li>Always pressure-cook legumes thoroughly</li>
+        <li>Squeeze excess water from soya chunks</li>
+        <li>If loose stools occur, reduce legumes temporarily</li>
+        <li>Hydrate well between meals</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Days -->
+  <div class="section-label">7-Day Plan — click any day to expand</div>
+
+  <div class="days-container">
+
+    <!-- Monday -->
+    <div class="day-card open">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">01</div>
+          <div class="day-info">
+            <div class="day-name">Monday</div>
+            <div class="day-items-preview">Soya chunks · Tofu · Low-fat milk</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">54g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">375</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag">✅ Very gentle — ideal for early recovery</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Soya Chunks (boiled)</div><div class="food-qty">45g dry weight</div></div>
+            <div class="food-macros"><div class="food-protein">24g protein</div><div class="food-cal">155 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Soft / Silken Tofu</div><div class="food-qty">200g</div></div>
+            <div class="food-macros"><div class="food-protein">22g protein</div><div class="food-cal">140 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Low-fat Milk</div><div class="food-qty">240ml</div></div>
+            <div class="food-macros"><div class="food-protein">8g protein</div><div class="food-cal">80 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Soak soya chunks in warm water for 20 min. Boil in fresh water for 10 min. Squeeze out all excess water to reduce bloating risk.</li>
+            <li>Lightly sauté soya with cumin, salt, and minimal oil (1–2 sprays). Avoid heavy spices this week.</li>
+            <li>Use silken tofu if available — crumble it into the meal or eat as is with a pinch of salt and lemon.</li>
+            <li>Drink milk warm, ideally between meals rather than with a heavy meal.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tuesday -->
+    <div class="day-card">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">02</div>
+          <div class="day-info">
+            <div class="day-name">Tuesday</div>
+            <div class="day-items-preview">Moong dal · Cottage cheese · Low-fat milk</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">51g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">391</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag">✅ Lightest day — great for rest or low-activity days</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Moong Dal (split, yellow)</div><div class="food-qty">250g cooked</div></div>
+            <div class="food-macros"><div class="food-protein">25g protein</div><div class="food-cal">175 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Cottage Cheese (low-fat)</div><div class="food-qty">170g</div></div>
+            <div class="food-macros"><div class="food-protein">18g protein</div><div class="food-cal">136 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Low-fat Milk</div><div class="food-qty">240ml</div></div>
+            <div class="food-macros"><div class="food-protein">8g protein</div><div class="food-cal">80 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Use split yellow moong dal (not whole green moong) — it is significantly easier to digest post-surgery.</li>
+            <li>Pressure cook until very soft (3–4 whistles). Season with only turmeric, salt, and a small cumin tadka in minimal ghee (½ tsp max).</li>
+            <li>Eat cottage cheese at room temperature — cold food can cause discomfort post-surgery. Mix with cucumber or a pinch of chaat masala for taste.</li>
+            <li>Warm milk can be taken before bed as the day's final protein top-up.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wednesday -->
+    <div class="day-card">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">03</div>
+          <div class="day-info">
+            <div class="day-name">Wednesday</div>
+            <div class="day-items-preview">Soya chunks · Tofu · Sprouted moong</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">49g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">330</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag">✅ Low calorie — pair with rice or roti to add energy</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Soya Chunks (boiled)</div><div class="food-qty">45g dry weight</div></div>
+            <div class="food-macros"><div class="food-protein">24g protein</div><div class="food-cal">155 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Firm Tofu</div><div class="food-qty">200g</div></div>
+            <div class="food-macros"><div class="food-protein">22g protein</div><div class="food-cal">140 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Sprouted Moong</div><div class="food-qty">100g</div></div>
+            <div class="food-macros"><div class="food-protein">3g protein</div><div class="food-cal">35 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Sprout moong at home: soak whole green moong overnight, drain, tie in a damp cloth, leave for 24–36 hrs until tails appear.</li>
+            <li>Lightly steam or blanch the sprouts — do not eat raw in the first 4 weeks post-surgery as raw sprouts can cause gas and bloating.</li>
+            <li>Pan-fry tofu in a non-stick pan with minimal oil, salt, and turmeric. No heavy masalas.</li>
+            <li>Mix all three into a light bowl with lemon juice and coriander for a simple protein salad.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thursday -->
+    <div class="day-card">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">04</div>
+          <div class="day-info">
+            <div class="day-name">Thursday</div>
+            <div class="day-items-preview">Cottage cheese · Rajma · Low-fat milk</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">50g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">446</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag caution">⚠️ Introduce rajma only after 3–4 weeks post-surgery</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Cottage Cheese (low-fat)</div><div class="food-qty">170g</div></div>
+            <div class="food-macros"><div class="food-protein">18g protein</div><div class="food-cal">136 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Rajma (kidney beans)</div><div class="food-qty">200g cooked</div></div>
+            <div class="food-macros"><div class="food-protein">18g protein</div><div class="food-cal">230 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Low-fat Milk</div><div class="food-qty">240ml</div></div>
+            <div class="food-macros"><div class="food-protein">8g protein</div><div class="food-cal">80 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Bhuna Chana (optional top-up)</div><div class="food-qty">20g</div></div>
+            <div class="food-macros"><div class="food-protein">4g protein</div><div class="food-cal">44 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Soak rajma overnight (minimum 8 hrs). This reduces lectins and makes them significantly easier to digest.</li>
+            <li>Pressure cook for at least 5–6 whistles until very soft. Mash a few beans in the pot to make it a thicker, easier-to-digest consistency.</li>
+            <li>Use minimal oil for the tadka — just cumin, ginger, and tomato. Skip heavy cream or butter completely.</li>
+            <li>Bhuna chana can be eaten as a between-meal snack if protein needs to be topped up.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Friday -->
+    <div class="day-card">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">05</div>
+          <div class="day-info">
+            <div class="day-name">Friday</div>
+            <div class="day-items-preview">Moong dal · Tofu · Cottage cheese</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">51g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">381</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag">✅ No legume-heavy items — clean and easy day</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Moong Dal (split yellow)</div><div class="food-qty">200g cooked</div></div>
+            <div class="food-macros"><div class="food-protein">20g protein</div><div class="food-cal">140 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Firm Tofu</div><div class="food-qty">180g</div></div>
+            <div class="food-macros"><div class="food-protein">20g protein</div><div class="food-cal">126 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Cottage Cheese (low-fat)</div><div class="food-qty">140g</div></div>
+            <div class="food-macros"><div class="food-protein">15g protein</div><div class="food-cal">112 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Make khichdi with moong dal and plain rice for a complete, comforting, and highly digestible Friday meal.</li>
+            <li>Crumble tofu into the khichdi or serve separately as a scramble with turmeric and salt — a light Indian-style scrambled tofu.</li>
+            <li>Cottage cheese can double as dessert — mix with a small amount of honey and chopped fruit (banana or papaya work well).</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Saturday -->
+    <div class="day-card">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">06</div>
+          <div class="day-info">
+            <div class="day-name">Saturday</div>
+            <div class="day-items-preview">Soya chunks · Chhole · Low-fat milk</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">50g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">488</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag caution">⚠️ Introduce chhole only after 3–4 weeks post-surgery</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Soya Chunks (boiled)</div><div class="food-qty">30g dry weight</div></div>
+            <div class="food-macros"><div class="food-protein">16g protein</div><div class="food-cal">103 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Chhole (chickpeas)</div><div class="food-qty">200g cooked</div></div>
+            <div class="food-macros"><div class="food-protein">18g protein</div><div class="food-cal">270 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Low-fat Milk</div><div class="food-qty">300ml</div></div>
+            <div class="food-macros"><div class="food-protein">10g protein</div><div class="food-cal">100 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Bhuna Chana (optional)</div><div class="food-qty">15g snack</div></div>
+            <div class="food-macros"><div class="food-protein">3g protein</div><div class="food-cal">33 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Soak chickpeas overnight. Pressure cook until very tender — they should mash easily between fingers.</li>
+            <li>Make a simple, low-oil chhole: tomato base, cumin, coriander, ginger. Skip amchur and heavy garam masala initially.</li>
+            <li>Mix soya chunks directly into the chhole curry for a combined dish — they absorb the flavours well and add texture.</li>
+            <li>Drink extra milk on this day to help buffer any digestive heaviness from the chhole.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sunday -->
+    <div class="day-card">
+      <div class="day-header" onclick="toggle(this)">
+        <div class="day-left">
+          <div class="day-number">07</div>
+          <div class="day-info">
+            <div class="day-name">Sunday</div>
+            <div class="day-items-preview">Tofu · Moong dal · Cottage cheese</div>
+          </div>
+        </div>
+        <div class="day-stats">
+          <div class="stat"><div class="stat-value">50g</div><div class="stat-label">Protein</div></div>
+          <div class="stat-divider"></div>
+          <div class="stat"><div class="stat-value">348</div><div class="stat-label">Calories</div></div>
+        </div>
+        <div class="chevron">▼</div>
+      </div>
+      <div class="day-body">
+        <div class="digest-tag">✅ Gentlest day of the week — ideal reset after Saturday</div>
+        <div class="food-items">
+          <div class="food-item">
+            <div><div class="food-name">Soft Tofu</div><div class="food-qty">200g</div></div>
+            <div class="food-macros"><div class="food-protein">22g protein</div><div class="food-cal">140 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Moong Dal (split yellow)</div><div class="food-qty">150g cooked</div></div>
+            <div class="food-macros"><div class="food-protein">15g protein</div><div class="food-cal">105 cal</div></div>
+          </div>
+          <div class="food-item">
+            <div><div class="food-name">Cottage Cheese (low-fat)</div><div class="food-qty">113g</div></div>
+            <div class="food-macros"><div class="food-protein">14g protein</div><div class="food-cal">90 cal</div></div>
+          </div>
+        </div>
+        <div class="prep-section">
+          <div class="prep-title">Prep Instructions</div>
+          <ol class="prep-steps">
+            <li>Use Sunday as a reset — keep meals simple, warm, and light. This combination is the easiest on the digestive system.</li>
+            <li>Make a thin, soup-like moong dal (pani-waali dal) rather than thick — easier to process and hydrating.</li>
+            <li>Serve tofu warm in the dal or as a side. Silken tofu works especially well here.</li>
+            <li>Cottage cheese with a banana or papaya in the evening is a good, gentle close to the week.</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end days -->
+
+  <!-- Footer reminders -->
+  <div class="footer">
+    <div class="footer-title">General Reminders</div>
+    <div class="reminders">
+      <div class="reminder"><div class="reminder-icon">💧</div>Drink 2–2.5L of water daily. Without a gallbladder, bile flows continuously, and hydration helps fat digestion.</div>
+      <div class="reminder"><div class="reminder-icon">🍽️</div>Eat 4–5 small meals rather than 2–3 large ones. Large meals are harder without the bile reserve from the gallbladder.</div>
+      <div class="reminder"><div class="reminder-icon">🚫</div>Avoid fried foods, heavy ghee, cream, or coconut oil for at least 4–6 weeks. Fat digestion is the primary challenge post-surgery.</div>
+      <div class="reminder"><div class="reminder-icon">🌿</div>Ginger and ajwain (carom seeds) in cooking help significantly with post-surgery gas and bloating.</div>
+      <div class="reminder"><div class="reminder-icon">📊</div>Calories listed are for protein sources only. Add roti, rice, or fruit to meet your total daily calorie needs.</div>
+      <div class="reminder"><div class="reminder-icon">👨‍⚕️</div>Consult your surgeon or dietitian before introducing rajma and chhole. Recovery timelines vary by individual.</div>
+    </div>
+    <div class="disclaimer">This plan is informational and not a substitute for professional medical or dietary advice. Always follow your physician's guidance during post-surgical recovery.</div>
+  </div>
+
+</div>
+
+<script>
+  function toggle(header) {
+    const card = header.closest('.day-card');
+    card.classList.toggle('open');
+  }
+</script>
+</body>
+</html>
