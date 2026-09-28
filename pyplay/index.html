@@ -100,7 +100,7 @@
                     
                     <!-- Mobile Project Selector (View Only) -->
                     <div class="relative max-w-[120px] sm:max-w-[200px] md:hidden">
-                         <select id="projectSelect" class="w-full text-xs bg-transparent border-none outline-none font-bold text-gray-700 dark:text-gray-200 cursor-pointer hover:text-primary transition-colors truncate py-1 pr-6 appearance-none">
+                         <select id="projectSelect" class="w-full text-xs bg-transparent border-none outline-none font-bold text-gray-700 dark:text-gray-200 cursor-pointer hover:text-primary transition-colors">
                             <!-- Options populated by JS -->
                         </select>
                         <div class="absolute right-0 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 text-[10px]">▼</div>
@@ -113,17 +113,21 @@
                     <i class="fas fa-plus"></i>
                 </button>
 
-                <!-- SAVE BUTTON ADDED HERE -->
                 <button id="btnSave" class="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" title="Save As (Cmd+S)">
                     <i class="fas fa-save"></i>
+                </button>
+
+                <button id="btnGitHub" class="hidden sm:flex items-center gap-2 px-2.5 py-1.5 rounded text-xs font-medium border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-700" title="GitHub PAT Sync">
+                    <i class="fab fa-github"></i>
+                    <span>GitHub</span>
                 </button>
                 
                 <div class="h-6 w-px bg-gray-300 dark:bg-gray-600 mx-1 hidden sm:block"></div>
                 
-                <button id="btnRun" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-1.5 rounded-md font-semibold transition-transform active:scale-95 shadow-md" title="Run Code (Cmd+Enter)">
+                <button id="btnRun" class="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 sm:px-4 py-1.5 rounded-md font-semibold transition-transform active:scale-95 shadow-md" title="Run (Ctrl+Enter)">
                     <i class="fas fa-play text-xs"></i> <span class="hidden sm:inline">Run</span>
                 </button>
-                <button id="btnStop" class="hidden items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-1.5 rounded-md font-semibold transition-transform active:scale-95 shadow-md">
+                <button id="btnStop" class="hidden items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-3 sm:px-4 py-1.5 rounded-md font-semibold transition-transform active:scale-95 shadow-md" title="Stop">
                     <i class="fas fa-stop text-xs"></i> <span class="hidden sm:inline">Stop</span>
                 </button>
                 
@@ -145,7 +149,7 @@
         <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
             
             <!-- SIDEBAR (Projects/History) -->
-            <aside id="sidebar" class="w-72 bg-gray-50 dark:bg-darkpanel border-r border-gray-200 dark:border-gray-700 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform absolute md:relative z-20 h-full shadow-xl md:shadow-none">
+            <aside id="sidebar" class="w-72 bg-gray-50 dark:bg-darkpanel border-r border-gray-200 dark:border-gray-700 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <span class="font-semibold text-xs uppercase tracking-wider text-gray-500">Projects</span>
                     <button id="sidebarClose" class="md:hidden text-gray-500 p-2"><i class="fas fa-times"></i></button>
@@ -154,7 +158,7 @@
                     <!-- Projects populated via JS -->
                 </div>
                 <div class="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-800">
-                    <button id="btnSnippets" class="w-full text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded py-2 px-2 hover:bg-gray-50 dark:hover:bg-gray-600 transition flex items-center justify-center gap-2">
+                    <button id="btnSnippets" class="w-full text-xs bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded py-2 px-2 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors">
                         <i class="fas fa-code"></i> Insert Snippet
                     </button>
                 </div>
@@ -177,10 +181,10 @@
                 <!-- Input Pane (Hidden by default) -->
                 <div id="inputPane" class="flex-1 hidden flex-col bg-gray-50 dark:bg-darkbg p-4 overflow-y-auto min-h-0">
                     <label class="text-sm font-bold text-gray-600 dark:text-gray-400 mb-2 block">Standard Input (stdin)</label>
-                    <textarea id="stdinInput" class="w-full h-40 p-3 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-sm resize-none focus:ring-2 focus:ring-primary outline-none transition" placeholder="Enter text that input() will read..."></textarea>
+                    <textarea id="stdinInput" class="w-full h-40 p-3 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-sm resize-none focus:ring-2 focus:ring-primary focus:border-transparent"></textarea>
                     
                     <label class="text-sm font-bold text-gray-600 dark:text-gray-400 mt-4 mb-2 block">Command Line Arguments (argv)</label>
-                    <input id="argvInput" type="text" class="w-full p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary outline-none" placeholder="arg1 arg2 arg3">
+                    <input id="argvInput" type="text" class="w-full p-2 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 font-mono text-sm focus:ring-2 focus:ring-primary focus:border-transparent" placeholder="--flag value">
                 </div>
 
                  <!-- Runs Pane (Hidden by default) -->
@@ -193,7 +197,7 @@
             </section>
 
             <!-- OUTPUT PANEL -->
-            <section class="w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-darkpanel z-10 relative h-[35vh] md:h-auto shrink-0 md:shrink shadow-top md:shadow-none transition-all min-h-0" id="outputSection">
+            <section id="outputSection" class="w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-darkpanel z-10 relative h-[35vh] md:h-auto shrink-0 min-h-0">
                 <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-[#2d2d2d] border-b border-gray-200 dark:border-gray-700">
                     <span class="font-semibold text-xs uppercase tracking-wider">Output</span>
                     <div class="flex gap-2">
@@ -206,9 +210,9 @@
                         <span class="text-xs opacity-70">Press Ctrl+Enter to run</span>
                     </div>
                 </div>
-                <div id="statusFooter" class="h-8 bg-blue-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between px-3 text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                <div id="statusFooter" class="h-8 bg-blue-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between px-3 text-xs text-gray-500 dark:text-gray-300">
                     <div class="flex items-center gap-2">
-                        <span id="engineStatus" class="flex items-center gap-1"><div class="loader w-3 h-3 border-2 border-gray-400 border-t-blue-500"></div> <span class="hidden sm:inline">Loading Python...</span></span>
+                        <span id="engineStatus" class="flex items-center gap-1"><div class="loader w-3 h-3 border-2 border-gray-400 border-t-blue-500"></div> <span class="hidden sm:inline">Loading Pyodide...</span></span>
                     </div>
                     <div class="flex items-center gap-3">
                         <span id="executionTime"></span>
@@ -252,6 +256,41 @@
             </div>
             <div class="mt-6 flex justify-end">
                 <button class="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded mr-2 closeModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub PAT Modal -->
+    <div id="githubModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none">
+        <div class="bg-white dark:bg-darkpanel rounded-lg shadow-xl w-[500px] max-w-[90%] p-6 transform transition-all scale-95 modal-content">
+            <h2 class="text-xl font-bold mb-2">GitHub PAT Sync</h2>
+            <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                Enter a GitHub PAT and repo details. This runs directly in the browser and writes files to GitHub using the GitHub API.
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">GitHub Token</label>
+                    <input id="githubTokenInput" type="password" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="ghp_...">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Repository Owner</label>
+                    <input id="githubOwnerInput" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="your-username">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Repository Name</label>
+                    <input id="githubRepoInput" type="text" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600" placeholder="pyplay-projects">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                    <input id="githubCreateRepoCheckbox" type="checkbox" class="accent-primary">
+                    Create repo if it does not exist
+                </label>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button id="githubDisconnectBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 hidden">Disconnect</button>
+                <button id="githubConnectBtn" class="bg-primary text-white px-4 py-2 rounded hover:bg-blue-600">Connect</button>
+                <button class="bg-gray-200 dark:bg-gray-700 px-4 py-2 rounded closeModal">Cancel</button>
             </div>
         </div>
     </div>
@@ -347,10 +386,17 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             { label: 'Sys Argv', code: 'import sys\nprint(f"Arguments: {sys.argv}")' },
         ];
 
+        const githubState = {
+            token: localStorage.getItem('pyplay_github_token') || '',
+            owner: localStorage.getItem('pyplay_github_owner') || '',
+            repo: localStorage.getItem('pyplay_github_repo') || '',
+            createIfMissing: false
+        };
+
         const state = {
             projects: [],
             currentProjectId: null,
-            editingId: null, // Tracks which project is being edited
+            editingId: null,
             theme: localStorage.getItem('theme') || 'dark',
             isWorkerReady: false,
             isRunning: false,
@@ -367,7 +413,8 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             btnRun: document.getElementById('btnRun'),
             btnStop: document.getElementById('btnStop'),
             btnNew: document.getElementById('btnNew'),
-            btnSave: document.getElementById('btnSave'), // Added
+            btnSave: document.getElementById('btnSave'),
+            btnGitHub: document.getElementById('btnGitHub'),
             btnTheme: document.getElementById('btnTheme'),
             btnExport: document.getElementById('btnExport'),
             btnSettings: document.getElementById('btnSettings'),
@@ -388,16 +435,22 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             sidebarClose: document.getElementById('sidebarClose'),
             snippetsModal: document.getElementById('snippetsModal'),
             settingsModal: document.getElementById('settingsModal'),
+            githubModal: document.getElementById('githubModal'),
             snippetGrid: document.getElementById('snippetGrid'),
             fontSizeInput: document.getElementById('fontSizeInput'),
             btnResetData: document.getElementById('btnResetData'),
             runsList: document.getElementById('runsList'),
+            githubTokenInput: document.getElementById('githubTokenInput'),
+            githubOwnerInput: document.getElementById('githubOwnerInput'),
+            githubRepoInput: document.getElementById('githubRepoInput'),
+            githubCreateRepoCheckbox: document.getElementById('githubCreateRepoCheckbox'),
+            githubConnectBtn: document.getElementById('githubConnectBtn'),
+            githubDisconnectBtn: document.getElementById('githubDisconnectBtn')
         };
 
         // --- GLOBAL ACTIONS (Window Attached) ---
         
         window.loadProject = function(id) {
-            // Prevent loading if we are currently clicking an edit button
             if (state.editingId) return;
 
             const project = state.projects.find(p => p.id === id);
@@ -422,7 +475,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             updateProjectSelect();
             highlightActiveProject();
             
-            // Close sidebar on mobile on selection
             if (window.innerWidth < 768) {
                 els.sidebar.classList.add('-translate-x-full');
             }
@@ -436,13 +488,11 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             state.editingId = id;
             renderProjectList();
             
-            // Auto focus the input
             setTimeout(() => {
                 const input = document.getElementById(`edit-${id}`);
                 if(input) {
                     input.focus();
                     input.select();
-                    // Add listener for Enter key
                     input.addEventListener('keydown', (e) => {
                         if(e.key === 'Enter') {
                             window.saveEdit(id, e);
@@ -464,7 +514,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 if(project && newVal) {
                     project.title = newVal;
                     saveData();
-                    updateProjectSelect(); // update header select too
+                    updateProjectSelect();
                 }
             }
             state.editingId = null;
@@ -486,11 +536,8 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 saveData();
                 
                 if (state.currentProjectId === id) {
-                    // Load the first available project
-                    // reset editing state to avoid glitches
                     state.editingId = null;
                     const nextId = state.projects[0].id;
-                    // Directly call logic to load without checks
                     state.currentProjectId = nextId;
                     localStorage.setItem('lastProjectId', nextId);
                     const p = state.projects[0];
@@ -514,8 +561,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             showToast("Snippet Inserted");
         };
 
-        // --- CORE FUNCTIONS ---
-
         function init() {
             initWorker();
             initEditor();
@@ -523,6 +568,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             applyTheme(state.theme);
             renderProjectList();
             setupEventListeners();
+            updateGitHubButton();
             
             els.snippetGrid.innerHTML = SNIPPETS.map(s => 
                 `<button class="text-left p-3 border dark:border-gray-600 rounded hover:border-primary hover:bg-blue-50 dark:hover:bg-gray-700 transition" onclick="insertSnippet('${encodeURIComponent(s.code)}')">
@@ -536,7 +582,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             } else {
                 const lastId = localStorage.getItem('lastProjectId');
                 const target = state.projects.find(p => p.id === lastId) || state.projects[0];
-                // Force load logic manually to avoid early return issues
                 state.currentProjectId = target.id;
                 editor.setValue(target.code);
                 els.stdinInput.value = target.stdin || '';
@@ -550,7 +595,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
         function initWorker() {
             const blob = new Blob([document.getElementById('workerScript').textContent], { type: "text/javascript" });
             worker = new Worker(window.URL.createObjectURL(blob));
-            
             worker.postMessage({ type: 'init' });
 
             worker.onmessage = (e) => {
@@ -599,7 +643,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             const argv = els.argvInput.value;
             state.runCounter++;
 
-            // Ensure output is visible on mobile
             if(window.innerWidth < 768) {
                document.getElementById('outputSection').scrollIntoView({ behavior: 'smooth' });
             }
@@ -734,11 +777,9 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 let actionsHTML = '';
 
                 if (isEditing) {
-                    // EDIT MODE
-                    contentHTML = `<input id="edit-${p.id}" type="text" value="${p.title}" class="w-full text-sm bg-white dark:bg-gray-600 border border-primary rounded px-1 py-0.5 text-gray-800 dark:text-gray-100 outline-none relative z-30" onclick="event.stopPropagation()">`;
+                    contentHTML = `<input id="edit-${p.id}" type="text" value="${p.title}" class="w-full text-sm bg-white dark:bg-gray-600 border border-primary rounded px-1 py-0.5 text-gray-800 dark:text-gray-100" />`;
                     actionsHTML = `<button class="text-green-500 hover:text-green-600 p-2 ml-1 relative z-30" onclick="saveEdit('${p.id}', event)"><i class="fas fa-check"></i></button>`;
                 } else {
-                    // VIEW MODE
                     contentHTML = `<div class="truncate text-sm font-medium ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300'} pointer-events-none">${p.title}</div>`;
                     actionsHTML = `
                         <div class="flex items-center">
@@ -752,18 +793,14 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     `;
                 }
 
-                // Strict separation: Background click vs foreground actions
                 return `
-                    <div class="group flex items-center justify-between p-2 rounded hover:bg-white dark:hover:bg-gray-700 transition relative mb-1 ${isActive ? 'bg-white dark:bg-gray-700 border-l-4 border-primary' : 'border-l-4 border-transparent'}">
-                        <!-- Background Click Target -->
+                    <div class="group flex items-center justify-between p-2 rounded hover:bg-white dark:hover:bg-gray-700 transition relative mb-1 ${isActive ? 'bg-white dark:bg-gray-700 border-l-4 border-primary' : ''}">
                         <div class="absolute inset-0 z-0 cursor-pointer" onclick="loadProject('${p.id}')"></div>
                         
-                        <!-- Foreground Content -->
                         <div class="flex-1 min-w-0 mr-2 relative z-10 pointer-events-none">
                             ${contentHTML}
                         </div>
                         
-                        <!-- Foreground Actions -->
                         <div class="shrink-0 flex items-center relative z-20">
                             ${actionsHTML}
                         </div>
@@ -861,7 +898,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
 
         function showToast(msg, type = 'info') {
             const t = document.createElement('div');
-            t.className = `px-4 py-2 rounded shadow-lg text-white text-sm font-semibold flex items-center gap-2 transform transition-all pointer-events-auto ${type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-gray-800'}`;
+            t.className = `px-4 py-2 rounded shadow-lg text-white text-sm font-semibold flex items-center gap-2 transform transition-all pointer-events-auto ${type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600'}`;
             t.innerHTML = `<span>${msg}</span>`;
             
             const wrapper = document.createElement('div');
@@ -869,7 +906,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             wrapper.appendChild(t);
             
             document.getElementById('toastContainer').appendChild(wrapper);
-            
             requestAnimationFrame(() => wrapper.className = 'toast-enter-active');
 
             setTimeout(() => {
@@ -880,10 +916,8 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
 
         function openModal(modal) {
             modal.classList.remove('hidden', 'pointer-events-none');
-            // Trigger reflow
             void modal.offsetWidth;
             modal.classList.remove('opacity-0');
-            // Animate content
             const content = modal.querySelector('.modal-content');
             if(content) content.classList.remove('scale-95');
         }
@@ -897,20 +931,203 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             }, 200);
         }
 
+        function updateGitHubButton() {
+            if (githubState.token && githubState.owner && githubState.repo) {
+                els.btnGitHub.classList.remove('hidden');
+                els.btnGitHub.classList.add('flex');
+                els.btnGitHub.innerHTML = '<i class="fab fa-github"></i><span>' + githubState.owner + '/' + githubState.repo + '</span>';
+                els.btnGitHub.title = 'GitHub PAT connected';
+            } else {
+                els.btnGitHub.classList.remove('flex');
+                els.btnGitHub.classList.add('hidden');
+                els.btnGitHub.innerHTML = '<i class="fab fa-github"></i><span>GitHub</span>';
+            }
+        }
+
+        function saveGitHubConfig() {
+            localStorage.setItem('pyplay_github_token', githubState.token || '');
+            localStorage.setItem('pyplay_github_owner', githubState.owner || '');
+            localStorage.setItem('pyplay_github_repo', githubState.repo || '');
+            updateGitHubButton();
+        }
+
+        function clearGitHubConfig() {
+            githubState.token = '';
+            githubState.owner = '';
+            githubState.repo = '';
+            localStorage.removeItem('pyplay_github_token');
+            localStorage.removeItem('pyplay_github_owner');
+            localStorage.removeItem('pyplay_github_repo');
+            updateGitHubButton();
+        }
+
+        function base64Encode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            bytes.forEach((b) => binary += String.fromCharCode(b));
+            return btoa(binary);
+        }
+
+        async function githubRequest(path, options = {}) {
+            if (!githubState.token) {
+                throw new Error('No GitHub token configured');
+            }
+
+            const res = await fetch(`https://api.github.com${path}`, {
+                ...options,
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `Bearer ${githubState.token}`,
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    ...(options.headers || {})
+                }
+            });
+
+            if (!res.ok) {
+                const body = await res.text();
+                let message = 'GitHub API request failed';
+                try {
+                    const json = JSON.parse(body);
+                    if (json.message) message = json.message;
+                } catch (e) {}
+                throw new Error(message);
+            }
+
+            const text = await res.text();
+            return text ? JSON.parse(text) : null;
+        }
+
+        async function ensureGitHubRepoExists() {
+            if (!githubState.owner || !githubState.repo) {
+                throw new Error('GitHub owner and repo are required');
+            }
+
+            try {
+                await githubRequest(`/repos/${githubState.owner}/${githubState.repo}`);
+            } catch (err) {
+                if (!githubState.createIfMissing) {
+                    throw new Error(`Repository ${githubState.owner}/${githubState.repo} does not exist. Enable "Create repo if it does not exist" in GitHub settings.`);
+                }
+                await githubRequest('/user/repos', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        name: githubState.repo,
+                        private: false,
+                        auto_init: true
+                    })
+                });
+            }
+        }
+
+        async function saveProjectToGitHub(project, overrideFileName = null) {
+            if (!githubState.token || !githubState.owner || !githubState.repo) {
+                showToast('Connect to GitHub first', 'error');
+                return false;
+            }
+
+            try {
+                await ensureGitHubRepoExists();
+
+                const safeTitle = (overrideFileName || project.title || 'project')
+                    .trim()
+                    .replace(/\.[^/.]+$/, '')
+                    .replace(/[^a-zA-Z0-9._-]+/g, '_') || 'project';
+
+                const fileName = `${safeTitle}.py`;
+                const filePath = `projects/${fileName}`;
+                const content = project.code || '';
+
+                let sha = null;
+                try {
+                    const existing = await githubRequest(`/repos/${githubState.owner}/${githubState.repo}/contents/${filePath}`);
+                    sha = existing.sha;
+                } catch (err) {
+                    sha = null;
+                }
+
+                await githubRequest(`/repos/${githubState.owner}/${githubState.repo}/contents/${filePath}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({
+                        message: `Save ${safeTitle} from PyPlayground`,
+                        content: base64Encode(content),
+                        ...(sha ? { sha } : {})
+                    })
+                });
+
+                showToast(`Saved to GitHub: ${fileName}`, 'success');
+                return true;
+            } catch (err) {
+                showToast(`GitHub save failed: ${err.message}`, 'error');
+                return false;
+            }
+        }
+
+        function openGitHubModal() {
+            els.githubTokenInput.value = githubState.token;
+            els.githubOwnerInput.value = githubState.owner;
+            els.githubRepoInput.value = githubState.repo;
+            els.githubCreateRepoCheckbox.checked = githubState.createIfMissing;
+            els.githubDisconnectBtn.classList.toggle('hidden', !(githubState.token && githubState.owner && githubState.repo));
+            openModal(els.githubModal);
+        }
+
+        async function connectGitHubFromModal() {
+            const token = els.githubTokenInput.value.trim();
+            const owner = els.githubOwnerInput.value.trim();
+            const repo = els.githubRepoInput.value.trim();
+            const createIfMissing = els.githubCreateRepoCheckbox.checked;
+
+            if (!token || !owner || !repo) {
+                showToast('GitHub token, owner, and repo are required', 'error');
+                return;
+            }
+
+            try {
+                const userResp = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `Bearer ${token}`,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+
+                if (!userResp.ok) {
+                    const body = await userResp.text();
+                    throw new Error(body || 'Invalid GitHub token');
+                }
+
+                githubState.token = token;
+                githubState.owner = owner;
+                githubState.repo = repo;
+                githubState.createIfMissing = createIfMissing;
+                saveGitHubConfig();
+                closeModal(els.githubModal);
+                showToast('Connected to GitHub', 'success');
+                updateGitHubButton();
+            } catch (err) {
+                showToast(`GitHub connection failed: ${err.message}`, 'error');
+            }
+        }
+
+        function disconnectGitHub() {
+            clearGitHubConfig();
+            closeModal(els.githubModal);
+            showToast('Disconnected from GitHub', 'info');
+        }
+
         function setupEventListeners() {
             els.btnTheme.onclick = () => applyTheme(state.theme === 'dark' ? 'light' : 'dark');
             els.btnRun.onclick = runCode;
             els.btnStop.onclick = () => { if(state.isRunning && worker) worker.terminate(); initWorker(); finishRun("", "Stopped by user", 130, 0); };
             els.btnNew.onclick = () => createNewProject();
             els.btnExport.onclick = exportZip;
+            els.btnGitHub.onclick = openGitHubModal;
             
-            // SAVE BUTTON EVENT LISTENER
-            els.btnSave.onclick = () => {
+            els.btnSave.onclick = async () => {
                 const project = getCurrentProject();
                 const newName = prompt("Enter file name to save:", project.title);
                 if (newName && newName.trim() !== "") {
                     project.title = newName.trim();
-                    // Force update code from editor before saving
                     project.code = editor.getValue();
                     project.stdin = els.stdinInput.value;
                     project.argv = els.argvInput.value;
@@ -918,15 +1135,19 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     renderProjectList();
                     updateProjectSelect();
                     showToast(`Saved as "${project.title}"`);
+
+                    if (githubState.token && githubState.owner && githubState.repo) {
+                        await saveProjectToGitHub(project, project.title);
+                    }
                 }
             };
             
             els.btnClear.onclick = () => { els.outputContainer.innerHTML = ''; };
-
             els.projectSelect.onchange = (e) => window.loadProject(e.target.value);
-
             els.btnSettings.onclick = () => openModal(els.settingsModal);
             els.btnSnippets.onclick = () => openModal(els.snippetsModal);
+            els.githubConnectBtn.onclick = connectGitHubFromModal;
+            els.githubDisconnectBtn.onclick = disconnectGitHub;
             
             document.querySelectorAll('.closeModal').forEach(btn => {
                 btn.onclick = function() {
@@ -940,6 +1161,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 if(confirm("Delete all projects and settings? This cannot be undone.")) {
                     localStorage.removeItem('pyplayground_data');
                     localStorage.removeItem('lastProjectId');
+                    clearGitHubConfig();
                     location.reload();
                 }
             }
@@ -988,9 +1210,6 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 }
                 if ((e.metaKey || e.ctrlKey) && e.key === 's') {
                     e.preventDefault();
-                    // Ctrl+S now triggers the same explicit save dialog if preferred, 
-                    // OR keeps the silent auto-save behavior. 
-                    // Let's trigger the explicit save dialog to match the requested "Save" UX.
                     els.btnSave.click(); 
                 }
                 if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
@@ -1000,9 +1219,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             });
         }
 
-        // --- BOOT ---
         init();
-
     </script>
 </body>
 </html>
