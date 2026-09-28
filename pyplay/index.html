@@ -83,6 +83,12 @@
         .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.3s ease-in; }
 
         [v-cloak] { display: none; }
+
+        /* Draggable pane resizers */
+        .resizer { flex-shrink: 0; position: relative; z-index: 20; touch-action: none; background-color: transparent; transition: background-color 0.15s; }
+        .resizer:hover, .resizer.dragging, .resizer:focus-visible { background-color: #3b82f6; outline: none; }
+        body.resizing-col, body.resizing-col * { cursor: col-resize !important; user-select: none !important; }
+        body.resizing-row, body.resizing-row * { cursor: row-resize !important; user-select: none !important; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 dark:bg-darkbg dark:text-gray-200 h-screen w-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden">
@@ -149,7 +155,7 @@
         <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
             
             <!-- SIDEBAR (Projects/History) -->
-            <aside id="sidebar" class="w-72 bg-gray-50 dark:bg-darkpanel border-r border-gray-200 dark:border-gray-700 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
+            <aside id="sidebar" class="w-72 shrink-0 bg-gray-50 dark:bg-darkpanel border-r border-gray-200 dark:border-gray-700 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <span class="font-semibold text-xs uppercase tracking-wider text-gray-500">Projects</span>
                     <button id="sidebarClose" class="md:hidden text-gray-500 p-2"><i class="fas fa-times"></i></button>
@@ -164,8 +170,11 @@
                 </div>
             </aside>
 
+            <div class="resizer hidden md:block w-1.5 cursor-col-resize" role="separator" tabindex="0" aria-label="Resize projects pane (double-click to reset)" title="Drag to resize, double-click to reset"
+                 data-direction="col" data-target="sidebar" data-flex="editorSection" data-key="sidebar" data-min="160" data-max-ratio="0.45"></div>
+
             <!-- EDITOR AREA -->
-            <section class="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#1e1e1e] min-h-0">
+            <section id="editorSection" class="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#1e1e1e] min-h-0">
                 <!-- Tabs -->
                 <div class="flex bg-gray-100 dark:bg-[#1e1e1e] border-b border-gray-200 dark:border-gray-700 overflow-x-auto shrink-0">
                     <button data-tab="editor" class="tab-btn px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary bg-white dark:bg-[#1e1e1e] whitespace-nowrap">Code</button>
@@ -195,6 +204,9 @@
                 </div>
 
             </section>
+
+            <div class="resizer w-full h-1.5 cursor-row-resize md:w-1.5 md:h-auto md:cursor-col-resize" role="separator" tabindex="0" aria-label="Resize output pane (double-click to reset)" title="Drag to resize, double-click to reset"
+                 data-direction="auto" data-side="after" data-target="outputSection" data-flex="editorSection" data-key="output" data-min="160" data-max-ratio="0.75"></div>
 
             <!-- OUTPUT PANEL -->
             <section id="outputSection" class="w-full md:w-1/3 border-t md:border-t-0 md:border-l border-gray-200 dark:border-gray-700 flex flex-col bg-white dark:bg-darkpanel z-10 relative h-[35vh] md:h-auto shrink-0 min-h-0">
@@ -285,6 +297,22 @@
                     <input id="githubCreateRepoCheckbox" type="checkbox" class="accent-primary">
                     Create repo if it does not exist
                 </label>
+            </div>
+
+            <div id="githubSyncSection" class="hidden mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <div class="text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-1">Sync Projects</div>
+                <p class="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    Each project is stored in its own folder: <code>projects/&lt;folder&gt;/main.py</code> + <code>meta.json</code>.
+                    Flat <code>projects/*.py</code> files saved by older versions are left untouched and are not imported.
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="githubPushCurrentBtn" class="gh-sync-btn text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"><i class="fas fa-arrow-up mr-1"></i> Push current</button>
+                    <button id="githubPushAllBtn" class="gh-sync-btn text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"><i class="fas fa-upload mr-1"></i> Push all</button>
+                    <button id="githubPullBtn" class="gh-sync-btn text-sm border border-gray-300 dark:border-gray-600 rounded px-3 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50"><i class="fas fa-download mr-1"></i> Pull</button>
+                    <button id="githubSyncAllBtn" class="gh-sync-btn text-sm bg-primary text-white rounded px-3 py-2 hover:bg-blue-600 disabled:opacity-50"><i class="fas fa-rotate mr-1"></i> Sync all</button>
+                </div>
+                <button id="githubRenameFolderBtn" class="gh-sync-btn text-xs text-primary hover:underline mt-3 disabled:opacity-50">Rename current project's GitHub folder to match its title</button>
+                <div id="githubSyncStatus" class="text-xs text-gray-500 dark:text-gray-400 mt-2 min-h-[1rem]"></div>
             </div>
 
             <div class="mt-6 flex justify-end gap-2">
@@ -390,7 +418,8 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             token: localStorage.getItem('pyplay_github_token') || '',
             owner: localStorage.getItem('pyplay_github_owner') || '',
             repo: localStorage.getItem('pyplay_github_repo') || '',
-            createIfMissing: false
+            createIfMissing: false,
+            busy: false
         };
 
         const state = {
@@ -445,7 +474,14 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             githubRepoInput: document.getElementById('githubRepoInput'),
             githubCreateRepoCheckbox: document.getElementById('githubCreateRepoCheckbox'),
             githubConnectBtn: document.getElementById('githubConnectBtn'),
-            githubDisconnectBtn: document.getElementById('githubDisconnectBtn')
+            githubDisconnectBtn: document.getElementById('githubDisconnectBtn'),
+            githubSyncSection: document.getElementById('githubSyncSection'),
+            githubPushCurrentBtn: document.getElementById('githubPushCurrentBtn'),
+            githubPushAllBtn: document.getElementById('githubPushAllBtn'),
+            githubPullBtn: document.getElementById('githubPullBtn'),
+            githubSyncAllBtn: document.getElementById('githubSyncAllBtn'),
+            githubRenameFolderBtn: document.getElementById('githubRenameFolderBtn'),
+            githubSyncStatus: document.getElementById('githubSyncStatus')
         };
 
         // --- GLOBAL ACTIONS (Window Attached) ---
@@ -513,6 +549,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 const project = state.projects.find(p => p.id === id);
                 if(project && newVal) {
                     project.title = newVal;
+                    refreshSlugIfUnsynced(project);
                     saveData();
                     updateProjectSelect();
                 }
@@ -569,6 +606,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             renderProjectList();
             setupEventListeners();
             updateGitHubButton();
+            initResizers();
             
             els.snippetGrid.innerHTML = SNIPPETS.map(s => 
                 `<button class="text-left p-3 border dark:border-gray-600 rounded hover:border-primary hover:bg-blue-50 dark:hover:bg-gray-700 transition" onclick="insertSnippet('${encodeURIComponent(s.code)}')">
@@ -716,13 +754,16 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
         }
 
         function createNewProject(code = 'print("Hello World")') {
+            const title = 'Untitled ' + (state.projects.length + 1);
             const newProject = {
-                id: 'proj_' + Date.now(),
-                title: 'Untitled ' + (state.projects.length + 1),
+                id: generateProjectId(),
+                slug: uniqueSlug(slugify(title)),
+                title: title,
                 code: code,
                 stdin: '',
                 argv: '',
-                runs: []
+                runs: [],
+                createdAt: new Date().toISOString()
             };
             state.projects.push(newProject);
             saveData();
@@ -743,6 +784,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
 
         function saveData() {
             localStorage.setItem('pyplayground_data', JSON.stringify(state.projects));
+            updateSyncBadges();
         }
 
         function loadData() {
@@ -754,6 +796,19 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     state.projects = [];
                 }
             }
+            migrateProjects();
+        }
+
+        // Backfill fields added after the original data model (slug, createdAt).
+        function migrateProjects() {
+            state.projects.forEach(p => {
+                if (!Array.isArray(p.runs)) p.runs = [];
+                if (!p.createdAt) {
+                    const ts = parseInt(String(p.id).replace('proj_', ''), 10);
+                    p.createdAt = new Date(isNaN(ts) ? Date.now() : ts).toISOString();
+                }
+                if (!p.slug) p.slug = uniqueSlug(slugify(p.title), p.id);
+            });
         }
 
         function debounceSave() {
@@ -777,12 +832,13 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 let actionsHTML = '';
 
                 if (isEditing) {
-                    contentHTML = `<input id="edit-${p.id}" type="text" value="${p.title}" class="w-full text-sm bg-white dark:bg-gray-600 border border-primary rounded px-1 py-0.5 text-gray-800 dark:text-gray-100" />`;
+                    contentHTML = `<input id="edit-${p.id}" type="text" value="${escapeHtml(p.title)}" class="w-full text-sm bg-white dark:bg-gray-600 border border-primary rounded px-1 py-0.5 text-gray-800 dark:text-gray-100" />`;
                     actionsHTML = `<button class="text-green-500 hover:text-green-600 p-2 ml-1 relative z-30" onclick="saveEdit('${p.id}', event)"><i class="fas fa-check"></i></button>`;
                 } else {
-                    contentHTML = `<div class="truncate text-sm font-medium ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300'} pointer-events-none">${p.title}</div>`;
+                    contentHTML = `<div class="truncate text-sm font-medium ${isActive ? 'text-primary' : 'text-gray-600 dark:text-gray-300'} pointer-events-none">${escapeHtml(p.title)}</div>`;
                     actionsHTML = `
                         <div class="flex items-center">
+                            <span data-sync-badge="${p.id}">${syncBadgeHTML(p)}</span>
                             <button class="text-gray-400 hover:text-primary p-2 transition-colors relative z-20" title="Rename" onclick="startEdit('${p.id}', event)">
                                 <i class="fas fa-pen text-[10px]"></i>
                             </button>
@@ -813,7 +869,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
 
         function updateProjectSelect() {
             els.projectSelect.innerHTML = state.projects.map(p => 
-                `<option value="${p.id}" ${p.id === state.currentProjectId ? 'selected' : ''}>${p.title}</option>`
+                `<option value="${p.id}" ${p.id === state.currentProjectId ? 'selected' : ''}>${escapeHtml(p.title)}</option>`
             ).join('');
         }
         
@@ -990,11 +1046,133 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     const json = JSON.parse(body);
                     if (json.message) message = json.message;
                 } catch (e) {}
-                throw new Error(message);
+                const error = new Error(message);
+                error.status = res.status;
+                throw error;
             }
 
             const text = await res.text();
             return text ? JSON.parse(text) : null;
+        }
+
+        // --- GITHUB PROJECT SYNC ---
+        // Repo layout: projects/<slug>/main.py + projects/<slug>/meta.json (one folder per project).
+        // Writes go through the Git Data API so a multi-project push is a single atomic commit.
+        const PROJECTS_ROOT = 'projects';
+
+        function isGitHubConnected() {
+            return !!(githubState.token && githubState.owner && githubState.repo);
+        }
+
+        function repoBase() {
+            return `/repos/${encodeURIComponent(githubState.owner)}/${encodeURIComponent(githubState.repo)}`;
+        }
+
+        function branchRefPath(branch) {
+            return branch.split('/').map(encodeURIComponent).join('/');
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function generateProjectId() {
+            return 'proj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        }
+
+        function slugify(text) {
+            return String(text || '')
+                .toLowerCase()
+                .trim()
+                .replace(/\.py$/, '')
+                .replace(/[^a-z0-9._-]+/g, '-')
+                .replace(/^[-.]+|[-.]+$/g, '')
+                .slice(0, 64) || 'project';
+        }
+
+        function uniqueSlug(base, excludeId = null, remoteFiles = null) {
+            const taken = (s) =>
+                state.projects.some(p => p.id !== excludeId && p.slug === s) ||
+                (remoteFiles && [...remoteFiles.keys()].some(k => k.startsWith(`${PROJECTS_ROOT}/${s}/`)));
+            let slug = base;
+            let i = 2;
+            while (taken(slug)) slug = `${base}-${i++}`;
+            return slug;
+        }
+
+        // Folder names are fixed once a project has been pushed; before that they follow the title.
+        function refreshSlugIfUnsynced(project) {
+            if (!project.sync) project.slug = uniqueSlug(slugify(project.title), project.id);
+        }
+
+        function projectPaths(slug) {
+            return {
+                main: `${PROJECTS_ROOT}/${slug}/main.py`,
+                meta: `${PROJECTS_ROOT}/${slug}/meta.json`
+            };
+        }
+
+        // cyrb53-style hash of the synced fields, used to detect unpushed local edits.
+        function projectHash(p) {
+            const s = JSON.stringify([p.title || '', p.code || '', p.stdin || '', p.argv || '']);
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
+        }
+
+        function isProjectDirty(p) {
+            return !p.sync || !!p.sync.conflict || projectHash(p) !== p.sync.hash;
+        }
+
+        function getSyncStatus(p) {
+            if (!p.sync) return 'new';
+            if (p.sync.conflict) return 'conflict';
+            return projectHash(p) !== p.sync.hash ? 'dirty' : 'synced';
+        }
+
+        function syncBadgeHTML(p) {
+            if (!isGitHubConnected()) return '';
+            const badges = {
+                new: ['fa-cloud text-gray-400 opacity-60', 'Not yet pushed to GitHub'],
+                dirty: ['fa-cloud-arrow-up text-amber-500', 'Local changes not pushed to GitHub'],
+                conflict: ['fa-triangle-exclamation text-red-500', 'Conflict: changed both locally and on GitHub'],
+                synced: ['fa-cloud text-green-500', 'Synced with GitHub']
+            };
+            const [icon, title] = badges[getSyncStatus(p)];
+            return `<span class="p-2 inline-flex" title="${title}"><i class="fas ${icon} text-[10px]"></i></span>`;
+        }
+
+        function updateSyncBadges() {
+            document.querySelectorAll('[data-sync-badge]').forEach(el => {
+                const project = state.projects.find(p => p.id === el.dataset.syncBadge);
+                if (project) el.innerHTML = syncBadgeHTML(project);
+            });
+        }
+
+        function markProjectSynced(project, mainSha, metaSha) {
+            project.sync = {
+                mainSha: mainSha || null,
+                metaSha: metaSha || null,
+                hash: projectHash(project),
+                lastSyncedAt: new Date().toISOString(),
+                conflict: false
+            };
+        }
+
+        function markProjectConflict(project) {
+            project.sync = { ...(project.sync || {}), conflict: true };
+        }
+
+        function base64Decode(b64) {
+            const binary = atob((b64 || '').replace(/\s/g, ''));
+            const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
         }
 
         async function ensureGitHubRepoExists() {
@@ -1003,12 +1181,13 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             }
 
             try {
-                await githubRequest(`/repos/${githubState.owner}/${githubState.repo}`);
+                return await githubRequest(repoBase());
             } catch (err) {
+                if (err.status && err.status !== 404) throw err;
                 if (!githubState.createIfMissing) {
                     throw new Error(`Repository ${githubState.owner}/${githubState.repo} does not exist. Enable "Create repo if it does not exist" in GitHub settings.`);
                 }
-                await githubRequest('/user/repos', {
+                return await githubRequest('/user/repos', {
                     method: 'POST',
                     body: JSON.stringify({
                         name: githubState.repo,
@@ -1019,47 +1198,320 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             }
         }
 
-        async function saveProjectToGitHub(project, overrideFileName = null) {
-            if (!githubState.token || !githubState.owner || !githubState.repo) {
-                showToast('Connect to GitHub first', 'error');
-                return false;
+        // The Git Data API cannot operate on a repo with no commits, so seed one via the Contents API.
+        async function initializeEmptyRepo() {
+            await githubRequest(`${repoBase()}/contents/README.md`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    message: 'Initialize PyPlayground projects repo',
+                    content: base64Encode('# PyPlayground Projects\n\nEach folder under `projects/` is one PyPlayground project (`main.py` + `meta.json`).\n')
+                })
+            });
+        }
+
+        function treeToFileMap(tree) {
+            const files = new Map();
+            (tree.tree || []).forEach(entry => {
+                if (entry.type === 'blob') files.set(entry.path, entry.sha);
+            });
+            return files;
+        }
+
+        async function getRemoteSnapshot() {
+            const repoInfo = await ensureGitHubRepoExists();
+            const branch = repoInfo.default_branch || 'main';
+
+            let ref;
+            try {
+                ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+            } catch (err) {
+                if (err.status !== 404 && err.status !== 409) throw err;
+                await initializeEmptyRepo();
+                ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
             }
+
+            const commitSha = ref.object.sha;
+            const commit = await githubRequest(`${repoBase()}/git/commits/${commitSha}`);
+            const tree = await githubRequest(`${repoBase()}/git/trees/${commit.tree.sha}?recursive=1`);
+            if (tree.truncated) {
+                showToast('Repository is very large; some projects may be missing from sync', 'error');
+            }
+
+            return { branch, commitSha, treeSha: commit.tree.sha, files: treeToFileMap(tree) };
+        }
+
+        async function commitTreeEntries(snapshot, entries, message) {
+            const tree = await githubRequest(`${repoBase()}/git/trees`, {
+                method: 'POST',
+                body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries })
+            });
+            const commit = await githubRequest(`${repoBase()}/git/commits`, {
+                method: 'POST',
+                body: JSON.stringify({ message, tree: tree.sha, parents: [snapshot.commitSha] })
+            });
+            try {
+                await githubRequest(`${repoBase()}/git/refs/heads/${branchRefPath(snapshot.branch)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ sha: commit.sha })
+                });
+            } catch (err) {
+                if (err.status === 422) throw new Error('GitHub branch changed during sync. Please try again.');
+                throw err;
+            }
+            const newTree = await githubRequest(`${repoBase()}/git/trees/${tree.sha}?recursive=1`);
+            return treeToFileMap(newTree);
+        }
+
+        function buildProjectTreeEntries(project) {
+            const { main, meta } = projectPaths(project.slug);
+            const metaJson = JSON.stringify({
+                title: project.title,
+                slug: project.slug,
+                stdin: project.stdin || '',
+                argv: project.argv || '',
+                createdAt: project.createdAt,
+                updatedAt: new Date().toISOString()
+            }, null, 2) + '\n';
+            return [
+                { path: main, mode: '100644', type: 'blob', content: project.code || '' },
+                { path: meta, mode: '100644', type: 'blob', content: metaJson }
+            ];
+        }
+
+        function listRemoteProjects(files) {
+            const pattern = new RegExp(`^${PROJECTS_ROOT}/([^/]+)/(main\\.py|meta\\.json)$`);
+            const remote = new Map();
+            files.forEach((sha, path) => {
+                const match = path.match(pattern);
+                if (!match) return;
+                const entry = remote.get(match[1]) || { mainSha: null, metaSha: null };
+                if (match[2] === 'main.py') entry.mainSha = sha;
+                else entry.metaSha = sha;
+                remote.set(match[1], entry);
+            });
+            [...remote.keys()].forEach(slug => { if (!remote.get(slug).mainSha) remote.delete(slug); });
+            return remote;
+        }
+
+        function remoteChangedSinceSync(project, snapshot) {
+            const { main, meta } = projectPaths(project.slug);
+            const remoteMain = snapshot.files.get(main) || null;
+            const remoteMeta = snapshot.files.get(meta) || null;
+            if (!remoteMain && !remoteMeta) return false;
+            if (!project.sync) return true;
+            return remoteMain !== project.sync.mainSha || remoteMeta !== project.sync.metaSha;
+        }
+
+        async function fetchBlobText(sha) {
+            const blob = await githubRequest(`${repoBase()}/git/blobs/${sha}`);
+            return base64Decode(blob.content);
+        }
+
+        function reloadEditorFromProject(project) {
+            editor.setValue(project.code || '');
+            els.stdinInput.value = project.stdin || '';
+            els.argvInput.value = project.argv || '';
+            renderRuns(project);
+        }
+
+        function setSyncStatus(text) {
+            els.githubSyncStatus.textContent = text || '';
+        }
+
+        async function runGitHubOperation(label, fn) {
+            if (!isGitHubConnected()) {
+                showToast('Connect to GitHub first', 'error');
+                return null;
+            }
+            if (githubState.busy) {
+                showToast('A GitHub sync is already in progress', 'info');
+                return null;
+            }
+
+            githubState.busy = true;
+            document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = true);
+            els.btnGitHub.classList.add('opacity-60');
+            setSyncStatus(`${label}...`);
 
             try {
-                await ensureGitHubRepoExists();
+                saveCurrentProjectState();
+                return await fn();
+            } catch (err) {
+                showToast(`GitHub ${label.toLowerCase()} failed: ${err.message}`, 'error');
+                setSyncStatus(`${label} failed: ${err.message}`);
+                return null;
+            } finally {
+                githubState.busy = false;
+                document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = false);
+                els.btnGitHub.classList.remove('opacity-60');
+                saveData();
+                renderProjectList();
+            }
+        }
 
-                const safeTitle = (overrideFileName || project.title || 'project')
-                    .trim()
-                    .replace(/\.[^/.]+$/, '')
-                    .replace(/[^a-zA-Z0-9._-]+/g, '_') || 'project';
+        // Pushes the given projects in one commit. Projects whose ids are in `force` overwrite GitHub without prompting.
+        async function pushProjectsCore(projects, snapshot, force = new Set()) {
+            const conflicts = projects.filter(p => !force.has(p.id) && remoteChangedSinceSync(p, snapshot));
+            let toPush = projects;
 
-                const fileName = `${safeTitle}.py`;
-                const filePath = `projects/${fileName}`;
-                const content = project.code || '';
+            if (conflicts.length) {
+                const names = conflicts.map(p => `• ${p.title} (${PROJECTS_ROOT}/${p.slug})`).join('\n');
+                const overwrite = confirm(`These projects were changed on GitHub since your last sync:\n\n${names}\n\nOK = overwrite GitHub with your local version\nCancel = skip them (use Pull to get the GitHub version)`);
+                if (!overwrite) {
+                    conflicts.forEach(markProjectConflict);
+                    toPush = projects.filter(p => !conflicts.includes(p));
+                }
+            }
 
-                let sha = null;
-                try {
-                    const existing = await githubRequest(`/repos/${githubState.owner}/${githubState.repo}/contents/${filePath}`);
-                    sha = existing.sha;
-                } catch (err) {
-                    sha = null;
+            if (!toPush.length) return 0;
+
+            const entries = toPush.flatMap(buildProjectTreeEntries);
+            const message = toPush.length === 1
+                ? `Update ${toPush[0].slug} from PyPlayground`
+                : `Sync ${toPush.length} projects from PyPlayground`;
+            const files = await commitTreeEntries(snapshot, entries, message);
+
+            toPush.forEach(p => {
+                const { main, meta } = projectPaths(p.slug);
+                markProjectSynced(p, files.get(main), files.get(meta));
+            });
+            return toPush.length;
+        }
+
+        // mode 'pull': conflicts keep local and get flagged. mode 'sync': conflicts kept locally are returned for force-push.
+        async function pullProjectsCore(snapshot, mode = 'pull') {
+            const remote = listRemoteProjects(snapshot.files);
+            const keepLocal = new Set();
+            let added = 0, updated = 0, conflicts = 0;
+
+            for (const [slug, r] of remote) {
+                let local = state.projects.find(p => p.slug === slug);
+
+                if (local && local.sync && local.sync.mainSha === r.mainSha && local.sync.metaSha === r.metaSha) {
+                    continue;
                 }
 
-                await githubRequest(`/repos/${githubState.owner}/${githubState.repo}/contents/${filePath}`, {
-                    method: 'PUT',
-                    body: JSON.stringify({
-                        message: `Save ${safeTitle} from PyPlayground`,
-                        content: base64Encode(content),
-                        ...(sha ? { sha } : {})
-                    })
-                });
+                if (local && isProjectDirty(local)) {
+                    const useRemote = confirm(mode === 'sync'
+                        ? `"${local.title}" changed both locally and on GitHub.\n\nOK = use the GitHub version (discard local changes)\nCancel = keep your local version (it will overwrite GitHub)`
+                        : `"${local.title}" has local changes, and GitHub has a different version.\n\nOK = replace local with the GitHub version\nCancel = keep local (marked as conflict)`);
+                    if (!useRemote) {
+                        if (mode === 'sync') {
+                            keepLocal.add(local.id);
+                        } else {
+                            markProjectConflict(local);
+                            conflicts++;
+                        }
+                        continue;
+                    }
+                }
 
-                showToast(`Saved to GitHub: ${fileName}`, 'success');
-                return true;
-            } catch (err) {
-                showToast(`GitHub save failed: ${err.message}`, 'error');
-                return false;
+                setSyncStatus(`Downloading ${PROJECTS_ROOT}/${slug}...`);
+                const code = await fetchBlobText(r.mainSha);
+                let meta = {};
+                if (r.metaSha) {
+                    try { meta = JSON.parse(await fetchBlobText(r.metaSha)) || {}; } catch (e) { meta = {}; }
+                }
+
+                if (!local) {
+                    local = {
+                        id: generateProjectId(),
+                        slug,
+                        title: slug,
+                        code: '',
+                        stdin: '',
+                        argv: '',
+                        runs: [],
+                        createdAt: meta.createdAt || new Date().toISOString()
+                    };
+                    state.projects.push(local);
+                    added++;
+                } else {
+                    updated++;
+                }
+
+                local.title = (typeof meta.title === 'string' && meta.title.trim()) ? meta.title.trim() : (local.title || slug);
+                local.code = code;
+                local.stdin = typeof meta.stdin === 'string' ? meta.stdin : '';
+                local.argv = typeof meta.argv === 'string' ? meta.argv : '';
+                markProjectSynced(local, r.mainSha, r.metaSha);
+
+                if (local.id === state.currentProjectId) reloadEditorFromProject(local);
             }
+
+            return { added, updated, conflicts, keepLocal };
+        }
+
+        async function pushProjects(projects) {
+            return runGitHubOperation('Push', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const pushed = await pushProjectsCore(projects, snapshot);
+                const skipped = projects.length - pushed;
+                const msg = `Pushed ${pushed} project${pushed === 1 ? '' : 's'}` + (skipped ? `, skipped ${skipped}` : '');
+                setSyncStatus(msg);
+                showToast(msg, pushed ? 'success' : 'info');
+                return pushed;
+            });
+        }
+
+        async function pullProjects() {
+            return runGitHubOperation('Pull', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const { added, updated, conflicts } = await pullProjectsCore(snapshot, 'pull');
+                const msg = `Pulled: ${added} new, ${updated} updated` + (conflicts ? `, ${conflicts} conflict${conflicts === 1 ? '' : 's'}` : '');
+                setSyncStatus(msg);
+                showToast(msg, conflicts ? 'error' : 'success');
+            });
+        }
+
+        async function syncAllProjects() {
+            return runGitHubOperation('Sync', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const { added, updated, keepLocal } = await pullProjectsCore(snapshot, 'sync');
+                const toPush = state.projects.filter(p => isProjectDirty(p) || keepLocal.has(p.id));
+                setSyncStatus(`Pushing ${toPush.length} project${toPush.length === 1 ? '' : 's'}...`);
+                const pushed = toPush.length ? await pushProjectsCore(toPush, snapshot, keepLocal) : 0;
+                const msg = `Sync complete: ${added} new, ${updated} updated from GitHub, ${pushed} pushed`;
+                setSyncStatus(msg);
+                showToast(msg, 'success');
+            });
+        }
+
+        async function renameRemoteFolder() {
+            const project = getCurrentProject();
+            if (!project) return;
+
+            if (!project.sync) {
+                refreshSlugIfUnsynced(project);
+                saveData();
+                showToast(`Folder will be ${PROJECTS_ROOT}/${project.slug} on first push`, 'info');
+                return;
+            }
+
+            return runGitHubOperation('Rename', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const oldSlug = project.slug;
+                const newSlug = uniqueSlug(slugify(project.title), project.id, snapshot.files);
+                if (slugify(project.title) === oldSlug) {
+                    setSyncStatus(`Folder already matches: ${PROJECTS_ROOT}/${oldSlug}`);
+                    return;
+                }
+                if (!confirm(`Move ${PROJECTS_ROOT}/${oldSlug} to ${PROJECTS_ROOT}/${newSlug} on GitHub?\n\nThe current local version will be written to the new folder.`)) {
+                    setSyncStatus('');
+                    return;
+                }
+
+                const deletions = [...snapshot.files.keys()]
+                    .filter(path => path.startsWith(`${PROJECTS_ROOT}/${oldSlug}/`))
+                    .map(path => ({ path, mode: '100644', type: 'blob', sha: null }));
+                const entries = [...deletions, ...buildProjectTreeEntries({ ...project, slug: newSlug })];
+                const files = await commitTreeEntries(snapshot, entries, `Rename ${oldSlug} to ${newSlug} from PyPlayground`);
+                project.slug = newSlug;
+                const { main, meta } = projectPaths(newSlug);
+                markProjectSynced(project, files.get(main), files.get(meta));
+                setSyncStatus(`Moved to ${PROJECTS_ROOT}/${newSlug}`);
+                showToast(`Moved to ${PROJECTS_ROOT}/${newSlug}`, 'success');
+            });
         }
 
         function openGitHubModal() {
@@ -1068,6 +1520,8 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             els.githubRepoInput.value = githubState.repo;
             els.githubCreateRepoCheckbox.checked = githubState.createIfMissing;
             els.githubDisconnectBtn.classList.toggle('hidden', !(githubState.token && githubState.owner && githubState.repo));
+            els.githubSyncSection.classList.toggle('hidden', !isGitHubConnected());
+            if (!githubState.busy) setSyncStatus('');
             openModal(els.githubModal);
         }
 
@@ -1104,6 +1558,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 closeModal(els.githubModal);
                 showToast('Connected to GitHub', 'success');
                 updateGitHubButton();
+                renderProjectList();
             } catch (err) {
                 showToast(`GitHub connection failed: ${err.message}`, 'error');
             }
@@ -1112,6 +1567,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
         function disconnectGitHub() {
             clearGitHubConfig();
             closeModal(els.githubModal);
+            renderProjectList();
             showToast('Disconnected from GitHub', 'info');
         }
 
@@ -1128,6 +1584,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                 const newName = prompt("Enter file name to save:", project.title);
                 if (newName && newName.trim() !== "") {
                     project.title = newName.trim();
+                    refreshSlugIfUnsynced(project);
                     project.code = editor.getValue();
                     project.stdin = els.stdinInput.value;
                     project.argv = els.argvInput.value;
@@ -1136,8 +1593,8 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     updateProjectSelect();
                     showToast(`Saved as "${project.title}"`);
 
-                    if (githubState.token && githubState.owner && githubState.repo) {
-                        await saveProjectToGitHub(project, project.title);
+                    if (isGitHubConnected()) {
+                        await pushProjects([project]);
                     }
                 }
             };
@@ -1148,6 +1605,11 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             els.btnSnippets.onclick = () => openModal(els.snippetsModal);
             els.githubConnectBtn.onclick = connectGitHubFromModal;
             els.githubDisconnectBtn.onclick = disconnectGitHub;
+            els.githubPushCurrentBtn.onclick = () => { const p = getCurrentProject(); if (p) pushProjects([p]); };
+            els.githubPushAllBtn.onclick = () => pushProjects([...state.projects]);
+            els.githubPullBtn.onclick = pullProjects;
+            els.githubSyncAllBtn.onclick = syncAllProjects;
+            els.githubRenameFolderBtn.onclick = renameRemoteFolder;
             
             document.querySelectorAll('.closeModal').forEach(btn => {
                 btn.onclick = function() {
@@ -1217,6 +1679,131 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     toggleSidebar();
                 }
             });
+        }
+
+        // --- RESIZABLE PANES ---
+        // A .resizer sits between flex siblings and sets an explicit size on its data-target pane.
+        // data-direction: 'col' (width), 'row' (height) or 'auto' (col on md+, row when stacked on mobile).
+        // data-side="after" means the target pane follows the resizer, so drag direction is inverted.
+        // data-flex names the flexible sibling that absorbs the remaining space (kept above a minimum).
+        const desktopQuery = window.matchMedia('(min-width: 768px)');
+        const FLEX_MIN = { col: 240, row: 120 };
+
+        function getResizerDirection(r) {
+            const d = r.dataset.direction;
+            return d === 'auto' ? (desktopQuery.matches ? 'col' : 'row') : d;
+        }
+
+        function getResizerStorageKey(r, dir) {
+            return `pyplay_layout_${r.dataset.key}_${dir}`;
+        }
+
+        function getPaneSize(el, dir) {
+            const rect = el.getBoundingClientRect();
+            return dir === 'col' ? rect.width : rect.height;
+        }
+
+        function setPaneSize(r, dir, px) {
+            const target = document.getElementById(r.dataset.target);
+            const flex = document.getElementById(r.dataset.flex);
+            const total = getPaneSize(r.parentElement, dir);
+            const min = parseFloat(r.dataset.min) || 120;
+            let max = total * (parseFloat(r.dataset.maxRatio) || 0.6);
+            if (flex) {
+                max = Math.min(max, getPaneSize(target, dir) + getPaneSize(flex, dir) - FLEX_MIN[dir]);
+            }
+            const size = Math.round(Math.min(Math.max(max, min), Math.max(min, px)));
+            target.style[dir === 'col' ? 'width' : 'height'] = size + 'px';
+            return size;
+        }
+
+        function refreshEditorLayout() {
+            if (editor) editor.refresh();
+        }
+
+        function applyPaneLayout() {
+            const resizers = [...document.querySelectorAll('.resizer')];
+            resizers.forEach(r => {
+                const target = document.getElementById(r.dataset.target);
+                target.style.width = '';
+                target.style.height = '';
+                r.setAttribute('aria-orientation', getResizerDirection(r) === 'col' ? 'vertical' : 'horizontal');
+            });
+            resizers.forEach(r => {
+                if (r.offsetParent === null) return;
+                const dir = getResizerDirection(r);
+                const saved = parseFloat(localStorage.getItem(getResizerStorageKey(r, dir)));
+                if (!isNaN(saved)) setPaneSize(r, dir, saved);
+            });
+            refreshEditorLayout();
+        }
+
+        function initResizers() {
+            document.querySelectorAll('.resizer').forEach(r => {
+                const target = document.getElementById(r.dataset.target);
+                const sign = r.dataset.side === 'after' ? -1 : 1;
+
+                r.addEventListener('pointerdown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const dir = getResizerDirection(r);
+                    const startSize = getPaneSize(target, dir);
+                    const startPos = dir === 'col' ? e.clientX : e.clientY;
+                    let size = startSize;
+                    let moved = false;
+                    let frame = null;
+
+                    r.setPointerCapture(e.pointerId);
+                    r.classList.add('dragging');
+                    document.body.classList.add(`resizing-${dir}`);
+
+                    const onMove = (ev) => {
+                        const pos = dir === 'col' ? ev.clientX : ev.clientY;
+                        if (!moved && Math.abs(pos - startPos) < 2) return;
+                        moved = true;
+                        size = setPaneSize(r, dir, startSize + sign * (pos - startPos));
+                        if (!frame) frame = requestAnimationFrame(() => { frame = null; refreshEditorLayout(); });
+                    };
+                    const onUp = () => {
+                        r.removeEventListener('pointermove', onMove);
+                        r.removeEventListener('pointerup', onUp);
+                        r.removeEventListener('pointercancel', onUp);
+                        r.classList.remove('dragging');
+                        document.body.classList.remove(`resizing-${dir}`);
+                        if (moved) localStorage.setItem(getResizerStorageKey(r, dir), size);
+                        refreshEditorLayout();
+                    };
+
+                    r.addEventListener('pointermove', onMove);
+                    r.addEventListener('pointerup', onUp);
+                    r.addEventListener('pointercancel', onUp);
+                });
+
+                r.addEventListener('keydown', (e) => {
+                    const dir = getResizerDirection(r);
+                    const keys = dir === 'col' ? { ArrowLeft: -1, ArrowRight: 1 } : { ArrowUp: -1, ArrowDown: 1 };
+                    if (!(e.key in keys)) return;
+                    e.preventDefault();
+                    const step = e.shiftKey ? 64 : 16;
+                    const size = setPaneSize(r, dir, getPaneSize(target, dir) + keys[e.key] * step * sign);
+                    localStorage.setItem(getResizerStorageKey(r, dir), size);
+                    refreshEditorLayout();
+                });
+
+                r.addEventListener('dblclick', () => {
+                    const dir = getResizerDirection(r);
+                    localStorage.removeItem(getResizerStorageKey(r, dir));
+                    target.style[dir === 'col' ? 'width' : 'height'] = '';
+                    refreshEditorLayout();
+                });
+            });
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(applyPaneLayout, 100);
+            });
+            applyPaneLayout();
         }
 
         init();
