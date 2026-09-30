@@ -89,6 +89,22 @@
         .resizer:hover, .resizer.dragging, .resizer:focus-visible { background-color: #3b82f6; outline: none; }
         body.resizing-col, body.resizing-col * { cursor: col-resize !important; user-select: none !important; }
         body.resizing-row, body.resizing-row * { cursor: row-resize !important; user-select: none !important; }
+
+        /* ANSI terminal colors for program output (VS Code terminal palettes) */
+        :root {
+            --ansi-default-fg: #1f2937; --ansi-default-bg: #ffffff;
+            --ansi-0: #000000; --ansi-1: #cd3131; --ansi-2: #00bc00; --ansi-3: #949800;
+            --ansi-4: #0451a5; --ansi-5: #bc05bc; --ansi-6: #0598bc; --ansi-7: #555555;
+            --ansi-8: #666666; --ansi-9: #cd3131; --ansi-10: #14ce14; --ansi-11: #b5ba00;
+            --ansi-12: #0451a5; --ansi-13: #bc05bc; --ansi-14: #0598bc; --ansi-15: #a5a5a5;
+        }
+        .dark {
+            --ansi-default-fg: #e5e7eb; --ansi-default-bg: #1e1e1e;
+            --ansi-0: #000000; --ansi-1: #cd3131; --ansi-2: #0dbc79; --ansi-3: #e5e510;
+            --ansi-4: #2472c8; --ansi-5: #bc3fbc; --ansi-6: #11a8cd; --ansi-7: #e5e5e5;
+            --ansi-8: #666666; --ansi-9: #f14c4c; --ansi-10: #23d18b; --ansi-11: #f5f543;
+            --ansi-12: #3b8eea; --ansi-13: #d670d6; --ansi-14: #29b8db; --ansi-15: #e5e5e5;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800 dark:bg-darkbg dark:text-gray-200 h-screen w-screen flex flex-col font-sans transition-colors duration-200 overflow-hidden">
@@ -1512,13 +1528,13 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             
             const outElem = document.createElement('div');
             outElem.className = "text-gray-800 dark:text-gray-200";
-            outElem.textContent = stdout;
+            outElem.appendChild(ansiToFragment(stdout));
             els.outputContainer.appendChild(outElem);
 
             if (stderr) {
                 const errElem = document.createElement('div');
                 errElem.className = "text-red-500 mt-2 p-2 bg-red-50 dark:bg-red-900/20 border-l-2 border-red-500 rounded-r";
-                errElem.textContent = stderr;
+                errElem.appendChild(ansiToFragment(stderr));
                 els.outputContainer.appendChild(errElem);
             }
 
@@ -1703,7 +1719,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                         Exit: ${r.exitCode}
                     </div>
                     <div class="max-h-16 overflow-hidden text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-black/20 p-1 rounded font-mono">
-                        ${r.stdout || r.stderr || '(No Output)'}
+                        ${escapeHtml(stripAnsi(r.stdout || r.stderr || '(No Output)'))}
                     </div>
                 </div>
             `).join('');
@@ -2489,6 +2505,102 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                     toggleSidebar();
                 }
             });
+        }
+
+        // --- ANSI OUTPUT RENDERING ---
+        // Turns ANSI escape sequences in program output into styled spans (SGR colors/styles, including
+        // 256-color and truecolor). Other control sequences (cursor movement, OSC titles, ...) are dropped.
+        const ANSI_ESCAPE_SOURCE = '\\x1b\\[([0-9;:?]*)([@-~])|\\x1b\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\)|\\x1b[@-Z\\\\-_]';
+
+        function stripAnsi(text) {
+            return String(text || '').replace(new RegExp(ANSI_ESCAPE_SOURCE, 'g'), '');
+        }
+
+        function ansi256Color(n) {
+            if (!Number.isInteger(n) || n < 0 || n > 255) return null;
+            if (n < 16) return `var(--ansi-${n})`;
+            if (n < 232) {
+                const levels = [0, 95, 135, 175, 215, 255];
+                const i = n - 16;
+                return `rgb(${levels[Math.floor(i / 36)]},${levels[Math.floor(i / 6) % 6]},${levels[i % 6]})`;
+            }
+            const g = 8 + (n - 232) * 10;
+            return `rgb(${g},${g},${g})`;
+        }
+
+        function applySgr(style, params) {
+            const codes = params === '' ? [0] : params.split(/[;:]/).map((p) => (p === '' ? 0 : Number(p)));
+            for (let i = 0; i < codes.length; i++) {
+                const c = codes[i];
+                if (c === 0) Object.keys(style).forEach((k) => delete style[k]);
+                else if (c === 1) style.bold = true;
+                else if (c === 2) style.dim = true;
+                else if (c === 3) style.italic = true;
+                else if (c === 4) style.underline = true;
+                else if (c === 7) style.inverse = true;
+                else if (c === 8) style.hidden = true;
+                else if (c === 9) style.strike = true;
+                else if (c === 22) { style.bold = false; style.dim = false; }
+                else if (c === 23) style.italic = false;
+                else if (c === 24) style.underline = false;
+                else if (c === 27) style.inverse = false;
+                else if (c === 28) style.hidden = false;
+                else if (c === 29) style.strike = false;
+                else if (c >= 30 && c <= 37) style.fg = `var(--ansi-${c - 30})`;
+                else if (c === 39) style.fg = null;
+                else if (c >= 40 && c <= 47) style.bg = `var(--ansi-${c - 40})`;
+                else if (c === 49) style.bg = null;
+                else if (c >= 90 && c <= 97) style.fg = `var(--ansi-${c - 90 + 8})`;
+                else if (c >= 100 && c <= 107) style.bg = `var(--ansi-${c - 100 + 8})`;
+                else if (c === 38 || c === 48) {
+                    let color = null;
+                    if (codes[i + 1] === 5) {
+                        color = ansi256Color(codes[i + 2]);
+                        i += 2;
+                    } else if (codes[i + 1] === 2) {
+                        const [r, g, b] = codes.slice(i + 2, i + 5).map((v) => Math.max(0, Math.min(255, v || 0)));
+                        color = `rgb(${r},${g},${b})`;
+                        i += 4;
+                    }
+                    if (color) style[c === 38 ? 'fg' : 'bg'] = color;
+                }
+            }
+        }
+
+        function ansiToFragment(text) {
+            text = String(text || '');
+            const frag = document.createDocumentFragment();
+            const style = {};
+            const pushText = (s) => {
+                if (!s) return;
+                if (!Object.values(style).some(Boolean)) {
+                    frag.appendChild(document.createTextNode(s));
+                    return;
+                }
+                const span = document.createElement('span');
+                span.textContent = s;
+                let fg = style.fg, bg = style.bg;
+                if (style.inverse) [fg, bg] = [bg || 'var(--ansi-default-bg)', fg || 'var(--ansi-default-fg)'];
+                if (fg) span.style.color = fg;
+                if (bg) span.style.backgroundColor = bg;
+                if (style.bold) span.style.fontWeight = 'bold';
+                if (style.dim) span.style.opacity = '0.7';
+                if (style.italic) span.style.fontStyle = 'italic';
+                const decorations = [style.underline && 'underline', style.strike && 'line-through'].filter(Boolean);
+                if (decorations.length) span.style.textDecoration = decorations.join(' ');
+                if (style.hidden) span.style.visibility = 'hidden';
+                frag.appendChild(span);
+            };
+            const re = new RegExp(ANSI_ESCAPE_SOURCE, 'g');
+            let last = 0;
+            let m;
+            while ((m = re.exec(text))) {
+                pushText(text.slice(last, m.index));
+                if (m[2] === 'm') applySgr(style, m[1]);
+                last = re.lastIndex;
+            }
+            pushText(text.slice(last));
+            return frag;
         }
 
         // --- TURTLE GRAPHICS VIEW ---
