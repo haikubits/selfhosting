@@ -1,0 +1,2616 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Board Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: [
+                            '-apple-system',
+                            'BlinkMacSystemFont',
+                            '"SF Pro Display"',
+                            '"SF Pro Text"',
+                            '"SF Pro"',
+                            'system-ui',
+                            '"Segoe UI"',
+                            'Roboto',
+                            'Helvetica',
+                            'Arial',
+                            'sans-serif'
+                        ],
+                    },
+                    colors: {
+                        apple: {
+                            blue: '#0071E3',
+                            'blue-hover': '#0077ED',
+                            purple: '#AF52DE',
+                            indigo: '#5856D6',
+                            teal: '#30B0C7',
+                            green: '#34C759',
+                            yellow: '#FF9500',
+                            orange: '#FF9500',
+                            red: '#FF3B30',
+                            pink: '#FF2D55',
+                            gray: {
+                                50: '#FBFBFD',
+                                100: '#F5F5F7',
+                                200: '#E5E5EA',
+                                300: '#D2D2D7',
+                                400: '#AEAEB2',
+                                500: '#8E8E93',
+                                600: '#636366',
+                                700: '#3A3A3C',
+                                800: '#1C1C1E',
+                                850: '#161618',
+                                900: '#000000',
+                            }
+                        }
+                    },
+                    boxShadow: {
+                        'apple-card': '0 2px 8px -1px rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02)',
+                        'apple-card-hover': '0 8px 24px -4px rgba(0, 0, 0, 0.09), 0 3px 6px -2px rgba(0, 0, 0, 0.05)',
+                        'apple-sheet': '0 25px 60px -15px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.06)',
+                        'apple-panel': '-10px 0 30px rgba(0, 0, 0, 0.15)',
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        * {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* macOS-style subtle scrollbar */
+        ::-webkit-scrollbar {
+            width: 7px;
+            height: 7px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(142, 142, 147, 0.35);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(142, 142, 147, 0.6);
+        }
+
+        /* Apple frosted glass material */
+        .apple-frosted {
+            backdrop-filter: blur(28px) saturate(190%);
+            -webkit-backdrop-filter: blur(28px) saturate(190%);
+        }
+
+        /* Drag feedback */
+        .card-ghost {
+            opacity: 0.35 !important;
+            transform: scale(0.98) rotate(1deg);
+            border: 1.5px dashed #0071E3 !important;
+        }
+
+        .drop-indicator {
+            height: 3.5px;
+            background: #0071E3;
+            border-radius: 9999px;
+            margin: 4px 0;
+            box-shadow: 0 0 8px rgba(0, 113, 227, 0.7);
+            transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Smooth card micro-animations */
+        .task-card {
+            transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
+        }
+        .task-card:hover {
+            transform: translateY(-2px);
+        }
+        .task-card:active {
+            transform: scale(0.99);
+        }
+
+        /* Slide panels */
+        .panel-slide {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Toast animations */
+        .toast-enter {
+            animation: toastIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        .toast-exit {
+            animation: toastOut 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+        @keyframes toastIn {
+            from { opacity: 0; transform: translateY(14px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes toastOut {
+            from { opacity: 1; transform: translateY(0) scale(1); }
+            to { opacity: 0; transform: translateY(10px) scale(0.95); }
+        }
+    </style>
+</head>
+<body class="h-full bg-[#F5F5F7] dark:bg-[#000000] text-[#1D1D1F] dark:text-[#F5F5F7] flex flex-col font-sans overflow-hidden select-none transition-colors duration-200">
+
+    <!-- Top Navigation Bar -->
+    <header class="h-14 px-4 sm:px-6 apple-frosted bg-[#FFFFFF]/80 dark:bg-[#1C1C1E]/80 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between z-30 shrink-0">
+        <!-- Left: Branding & Board Selector Dropdown -->
+        <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 pr-3 border-r border-black/[0.08] dark:border-white/[0.1]">
+                <div id="boardLogoBadge" class="w-8 h-8 rounded-xl bg-apple-blue flex items-center justify-center text-white shadow-sm transition-colors duration-300">
+                    <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+                </div>
+                <span class="font-semibold tracking-tight text-[15px] hidden sm:inline-block">BoardCraft</span>
+            </div>
+
+            <!-- Board Picker Trigger -->
+            <div class="relative">
+                <button id="boardPickerBtn" onclick="toggleBoardDropdown()" class="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition text-[14px] font-medium">
+                    <span id="currentBoardDot" class="w-2.5 h-2.5 rounded-full bg-apple-blue shrink-0"></span>
+                    <span id="currentBoardTitle" class="max-w-[150px] md:max-w-[220px] truncate font-medium">Product Launch</span>
+                    <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-apple-gray-500"></i>
+                </button>
+
+                <!-- Board Switcher & Creator Dropdown -->
+                <div id="boardDropdown" class="hidden absolute top-full left-0 mt-2 w-72 bg-white/95 dark:bg-[#1C1C1E]/95 apple-frosted rounded-2xl shadow-apple-sheet border border-black/[0.08] dark:border-white/[0.1] py-2 z-50">
+                    <div class="px-3 pb-2 pt-1 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between">
+                        <span class="text-[11px] font-semibold tracking-wider uppercase text-apple-gray-500">Boards</span>
+                        <button onclick="openNewBoardModal()" class="text-xs text-apple-blue hover:underline flex items-center gap-1 font-medium">
+                            <i data-lucide="plus" class="w-3 h-3"></i> New Board
+                        </button>
+                    </div>
+                    <div id="boardList" class="max-h-60 overflow-y-auto py-1">
+                        <!-- Injected via JS -->
+                    </div>
+                    <div class="pt-1.5 px-2 border-t border-black/[0.06] dark:border-white/[0.08] flex gap-1">
+                        <button onclick="openEditBoardModal()" class="flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs text-apple-gray-600 dark:text-apple-gray-300 hover:bg-black/[0.04] dark:hover:bg-white/[0.08] rounded-lg transition font-medium">
+                            <i data-lucide="settings" class="w-3.5 h-3.5"></i> Board Settings
+                        </button>
+                        <button onclick="deleteCurrentBoard()" class="p-1.5 text-apple-red hover:bg-apple-red/10 rounded-lg transition" title="Delete current board">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Instant Search / Filter Bar -->
+        <div class="hidden md:flex items-center w-72 lg:w-96 relative">
+            <i data-lucide="search" class="w-3.5 h-3.5 text-apple-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+            <input id="searchInput" type="text" placeholder="Search tasks, tags, priorities..." 
+                   oninput="handleSearch(this.value)"
+                   class="w-full bg-[#EFEFF4]/80 dark:bg-[#2C2C2E]/80 text-[13px] pl-9 pr-8 py-1.5 rounded-full border-none focus:ring-2 focus:ring-apple-blue/50 text-[#1D1D1F] dark:text-[#F5F5F7] placeholder:text-apple-gray-500 outline-none transition">
+            <button id="searchClearBtn" onclick="clearSearch()" class="hidden absolute right-2.5 top-1/2 -translate-y-1/2 text-apple-gray-400 hover:text-apple-gray-600 p-0.5">
+                <i data-lucide="x" class="w-3 h-3"></i>
+            </button>
+        </div>
+
+        <!-- Right: Actions, History Side Drawer, Quick Undo & Settings -->
+        <div class="flex items-center gap-2">
+            <!-- Live Undo Quick Button -->
+            <button id="undoBtn" onclick="undoLastAction()" disabled title="Undo last action (Cmd/Ctrl+Z)"
+                    class="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium rounded-full bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] disabled:opacity-30 disabled:cursor-not-allowed transition text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">Undo</span>
+            </button>
+
+            <!-- Board History Button -->
+            <button onclick="toggleHistoryDrawer(true)" class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] transition text-[#1D1D1F] dark:text-[#F5F5F7]" title="View Board Change History">
+                <i data-lucide="history" class="w-3.5 h-3.5 text-apple-blue"></i>
+                <span class="hidden sm:inline">History</span>
+                <span id="historyCounterBadge" class="text-[10px] px-1.5 py-0.2 rounded-full bg-apple-blue text-white font-semibold">0</span>
+            </button>
+
+            <!-- Add Column Direct Button -->
+            <button onclick="promptAddColumn()" class="hidden lg:flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] transition text-[#1D1D1F] dark:text-[#F5F5F7]">
+                <i data-lucide="columns" class="w-3.5 h-3.5 text-apple-purple"></i>
+                <span>Add Column</span>
+            </button>
+
+            <!-- GitHub Sync Button -->
+            <button id="githubBtn" onclick="openGitHubModal()" class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium rounded-full bg-black/[0.04] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.14] transition text-[#1D1D1F] dark:text-[#F5F5F7]" title="GitHub PAT Sync">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                <span id="githubBtnLabel" class="hidden sm:inline max-w-[160px] truncate">GitHub</span>
+                <span id="githubBtnDot" class="hidden w-2 h-2 rounded-full shrink-0"></span>
+            </button>
+
+            <!-- Data Export/Import Overflow Button -->
+            <button onclick="openDataModal()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-apple-gray-600 dark:text-apple-gray-300 transition" title="Data Backup & Restore">
+                <i data-lucide="hard-drive-download" class="w-4 h-4"></i>
+            </button>
+
+            <!-- Dark/Light Theme Toggle -->
+            <button onclick="toggleDarkMode()" class="w-8 h-8 rounded-full flex items-center justify-center hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-apple-gray-600 dark:text-apple-gray-300 transition" title="Toggle appearance">
+                <i data-lucide="moon" class="w-4 h-4 hidden dark:inline-block"></i>
+                <i data-lucide="sun" class="w-4 h-4 dark:hidden"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Board Scroll Canvas Area -->
+    <main class="flex-1 overflow-x-auto overflow-y-hidden p-4 sm:p-6 relative">
+        <div id="boardColumnsContainer" class="flex items-start gap-4 sm:gap-5 h-full pb-3 w-max">
+            <!-- Dynamic Columns Injected by JavaScript -->
+        </div>
+    </main>
+
+    <!-- Card Detail Modal (macOS / iOS Inspector Sheet) -->
+    <div id="cardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/70 backdrop-blur-sm transition-opacity">
+        <div class="bg-white dark:bg-[#1C1C1E] text-[#1D1D1F] dark:text-[#F5F5F7] rounded-3xl shadow-apple-sheet w-full max-w-xl max-h-[92vh] flex flex-col border border-black/[0.08] dark:border-white/[0.1] overflow-hidden transform transition-all duration-200">
+            <!-- Modal Header -->
+            <div class="px-6 py-4 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between bg-[#FBFBFD] dark:bg-[#181819]">
+                <div class="flex items-center gap-2">
+                    <span id="modalColumnBadge" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-apple-blue/10 text-apple-blue">In Progress</span>
+                    <span id="modalDateRelative" class="text-xs text-apple-gray-500 font-medium"></span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="duplicateActiveCard()" class="p-1.5 hover:bg-black/[0.05] dark:hover:bg-white/[0.1] rounded-lg text-apple-gray-500 transition" title="Duplicate Card">
+                        <i data-lucide="copy" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="deleteActiveCard()" class="p-1.5 hover:bg-apple-red/10 rounded-lg text-apple-red transition" title="Delete Card">
+                        <i data-lucide="trash" class="w-4 h-4"></i>
+                    </button>
+                    <button onclick="closeCardModal()" class="p-1.5 hover:bg-black/[0.05] dark:hover:bg-white/[0.1] rounded-lg text-apple-gray-500 transition ml-2">
+                        <i data-lucide="x" class="w-5 h-5"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Modal Body Content -->
+            <div class="p-6 overflow-y-auto space-y-5 flex-1 text-sm">
+                <!-- Task Title -->
+                <div>
+                    <input id="modalCardTitle" type="text" placeholder="Task title..." 
+                           class="w-full text-xl font-bold bg-transparent border-b border-transparent focus:border-apple-blue outline-none py-1 transition" />
+                </div>
+
+                <!-- Attributes Box (Priority, Due Date, Labels) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 p-4 rounded-2xl border border-black/[0.04] dark:border-white/[0.06]">
+                    <!-- Priority -->
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1.5">Priority</label>
+                        <select id="modalCardPriority" class="w-full bg-white dark:bg-[#3A3A3C] border border-black/[0.06] dark:border-white/[0.1] rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-apple-blue outline-none">
+                            <option value="none">None</option>
+                            <option value="low">Low Priority</option>
+                            <option value="medium">Medium Priority</option>
+                            <option value="high">High Priority</option>
+                            <option value="urgent">Urgent</option>
+                        </select>
+                    </div>
+
+                    <!-- Due Date -->
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1.5">Due Date</label>
+                        <input id="modalCardDueDate" type="date" class="w-full bg-white dark:bg-[#3A3A3C] border border-black/[0.06] dark:border-white/[0.1] rounded-xl px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-apple-blue outline-none">
+                    </div>
+
+                    <!-- Tags -->
+                    <div class="sm:col-span-2">
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1.5">Tags (Comma-separated)</label>
+                        <input id="modalCardTags" type="text" placeholder="Engineering, Design, Marketing..." 
+                               class="w-full bg-white dark:bg-[#3A3A3C] border border-black/[0.06] dark:border-white/[0.1] rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-apple-blue outline-none">
+                    </div>
+                </div>
+
+                <!-- Notes / Description Area -->
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500">Notes / Details</label>
+                    </div>
+                    <textarea id="modalCardDesc" rows="4" placeholder="Add descriptions, reference links, specifications..." 
+                              class="w-full bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 border border-transparent focus:border-apple-blue rounded-2xl p-3.5 text-[13px] outline-none transition resize-none"></textarea>
+                </div>
+
+                <!-- Checklist Subtasks -->
+                <div>
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <label class="text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500">Checklist</label>
+                            <span id="checklistProgressText" class="text-[11px] font-medium text-apple-gray-500">0%</span>
+                        </div>
+                    </div>
+
+                    <!-- Checklist Progress Bar -->
+                    <div class="w-full h-1.5 bg-[#E5E5EA] dark:bg-[#3A3A3C] rounded-full overflow-hidden mb-3">
+                        <div id="checklistProgressBar" class="h-full bg-apple-green transition-all duration-300" style="width: 0%"></div>
+                    </div>
+
+                    <div id="modalChecklistItems" class="space-y-2 mb-3">
+                        <!-- Dynamic Checklist rows -->
+                    </div>
+
+                    <!-- New Checklist Input -->
+                    <div class="flex gap-2">
+                        <input id="newChecklistInput" type="text" placeholder="Add a checklist item..." 
+                               onkeydown="if(event.key==='Enter'){event.preventDefault();addChecklistItem();}"
+                               class="flex-1 bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 border-none rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-apple-blue">
+                        <button onclick="addChecklistItem()" class="px-3.5 py-2 rounded-xl bg-black/[0.05] dark:bg-white/[0.1] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] text-xs font-medium transition">Add</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-6 py-4 border-t border-black/[0.06] dark:border-white/[0.08] flex items-center justify-end gap-3 bg-[#FBFBFD] dark:bg-[#181819]">
+                <button onclick="closeCardModal()" class="px-4 py-2 rounded-full text-xs font-medium text-apple-gray-600 dark:text-apple-gray-300 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition">Cancel</button>
+                <button onclick="saveCardDetails()" class="px-5 py-2 rounded-full text-xs font-semibold bg-apple-blue hover:bg-apple-blue-hover text-white shadow-sm transition">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Board Settings & Creation Modal -->
+    <div id="boardModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/70 backdrop-blur-sm">
+        <div class="bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-apple-sheet w-full max-w-md p-6 border border-black/[0.08] dark:border-white/[0.1]">
+            <h2 id="boardModalTitle" class="text-lg font-bold mb-4">Board Settings</h2>
+            
+            <div class="space-y-4 text-xs font-medium">
+                <div>
+                    <label class="block text-apple-gray-500 uppercase tracking-wider mb-1">Board Title</label>
+                    <input id="boardModalInput" type="text" class="w-full bg-[#F5F5F7] dark:bg-[#2C2C2E] rounded-xl px-3.5 py-2.5 text-sm outline-none focus:ring-2 focus:ring-apple-blue border-none">
+                </div>
+
+                <div>
+                    <label class="block text-apple-gray-500 uppercase tracking-wider mb-2">Accent Color</label>
+                    <div class="flex items-center gap-3" id="accentColorPalette">
+                        <!-- Colors injected dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6">
+                <button onclick="closeBoardModal()" class="px-4 py-2 rounded-full text-xs font-medium hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">Cancel</button>
+                <button id="boardModalSaveBtn" onclick="saveBoardSettings()" class="px-5 py-2 rounded-full text-xs font-semibold bg-apple-blue hover:bg-apple-blue-hover text-white transition">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sliding Board History Panel (macOS Time-Machine / Inspector Side Panel) -->
+    <div id="historyDrawerBackdrop" onclick="toggleHistoryDrawer(false)" class="hidden fixed inset-0 z-40 bg-black/25 dark:bg-black/50 backdrop-blur-[2px] transition-opacity"></div>
+    <aside id="historyDrawer" class="fixed top-0 right-0 bottom-0 w-80 sm:w-96 bg-white/95 dark:bg-[#1C1C1E]/95 apple-frosted border-l border-black/[0.08] dark:border-white/[0.1] shadow-apple-panel z-50 flex flex-col transform translate-x-full panel-slide">
+        <!-- History Header -->
+        <div class="h-14 px-4 border-b border-black/[0.06] dark:border-white/[0.08] flex items-center justify-between shrink-0">
+            <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-apple-blue/10 text-apple-blue flex items-center justify-center">
+                    <i data-lucide="clock" class="w-4 h-4"></i>
+                </div>
+                <div>
+                    <h3 class="text-xs font-bold leading-tight">Board Activity Log</h3>
+                    <p class="text-[10px] text-apple-gray-500" id="historyBoardSubtitle">Current Board</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1">
+                <button onclick="clearCurrentBoardHistory()" class="p-1.5 hover:bg-apple-red/10 text-apple-red rounded-lg transition" title="Clear History Log">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="toggleHistoryDrawer(false)" class="p-1.5 hover:bg-black/[0.05] dark:hover:bg-white/[0.08] rounded-lg transition text-apple-gray-500">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- History Filter Search -->
+        <div class="p-3 border-b border-black/[0.04] dark:border-white/[0.06]">
+            <input id="historySearchInput" type="text" placeholder="Filter history actions..." 
+                   oninput="renderHistoryList()"
+                   class="w-full bg-[#EFEFF4] dark:bg-[#2C2C2E] text-xs px-3 py-1.5 rounded-xl border-none outline-none focus:ring-2 focus:ring-apple-blue/40">
+        </div>
+
+        <!-- History Items Scroll Container -->
+        <div id="historyListContainer" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <!-- Dynamic History Injected -->
+        </div>
+    </aside>
+
+    <!-- Data Backup & Reset Modal -->
+    <div id="dataModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/70 backdrop-blur-sm">
+        <div class="bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-apple-sheet w-full max-w-lg p-6 border border-black/[0.08] dark:border-white/[0.1]">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-base flex items-center gap-2">
+                    <i data-lucide="database" class="w-4 h-4 text-apple-blue"></i>
+                    Storage & Backup
+                </h3>
+                <button onclick="closeDataModal()" class="p-1 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <p class="text-xs text-apple-gray-500 mb-4 leading-relaxed">
+                All your boards, tasks, columns, and history are stored directly in your browser's persistent LocalStorage. You can export a full backup JSON file or restore anytime.
+            </p>
+
+            <div class="space-y-3">
+                <div class="flex items-center justify-between p-3.5 rounded-2xl bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 border border-black/[0.04] dark:border-white/[0.06]">
+                    <div>
+                        <h4 class="text-xs font-semibold">Export JSON Archive</h4>
+                        <p class="text-[11px] text-apple-gray-500">Download complete dataset including change histories</p>
+                    </div>
+                    <button onclick="exportDataJson()" class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-apple-blue hover:bg-apple-blue-hover text-white transition">Export</button>
+                </div>
+
+                <div class="flex items-center justify-between p-3.5 rounded-2xl bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 border border-black/[0.04] dark:border-white/[0.06]">
+                    <div>
+                        <h4 class="text-xs font-semibold">Import JSON Archive</h4>
+                        <p class="text-[11px] text-apple-gray-500">Restore from an existing JSON backup file</p>
+                    </div>
+                    <label class="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-black/[0.05] dark:bg-white/[0.1] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] cursor-pointer transition">
+                        <span>Import</span>
+                        <input type="file" accept=".json" onchange="importDataJson(event)" class="hidden">
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-between p-3.5 rounded-2xl bg-apple-red/5 border border-apple-red/10">
+                    <div>
+                        <h4 class="text-xs font-semibold text-apple-red">Reset to Default Template</h4>
+                        <p class="text-[11px] text-apple-gray-500">Erase current state and restore sample boards</p>
+                    </div>
+                    <button onclick="resetToDefaults()" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-apple-red text-white hover:bg-red-600 transition">Reset</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub PAT Sync Modal -->
+    <div id="githubModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 dark:bg-black/70 backdrop-blur-sm">
+        <div class="bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-apple-sheet w-full max-w-lg max-h-[92vh] overflow-y-auto p-6 border border-black/[0.08] dark:border-white/[0.1]">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-bold text-base flex items-center gap-2">
+                    <svg class="w-4 h-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                    GitHub PAT Sync
+                </h3>
+                <button onclick="closeGitHubModal()" class="p-1 rounded-lg hover:bg-black/[0.05] dark:hover:bg-white/[0.08]">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <p class="text-xs text-apple-gray-500 mb-4 leading-relaxed">
+                Enter a GitHub personal access token and repo details. Everything runs in your browser and talks directly to the GitHub API.
+                A fine-grained token needs <b>Contents: Read and write</b> on the repo (plus <b>Administration: Read and write</b> if it should create the repo).
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1">GitHub Token</label>
+                    <input id="githubTokenInput" type="password" autocomplete="off" placeholder="github_pat_... or ghp_..." class="w-full bg-[#F5F5F7] dark:bg-[#2C2C2E] text-[13px] px-3 py-2 rounded-xl border border-black/[0.06] dark:border-white/[0.08] focus:ring-2 focus:ring-apple-blue/50 outline-none select-text">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1">Repository Owner</label>
+                        <input id="githubOwnerInput" type="text" placeholder="your-username" class="w-full bg-[#F5F5F7] dark:bg-[#2C2C2E] text-[13px] px-3 py-2 rounded-xl border border-black/[0.06] dark:border-white/[0.08] focus:ring-2 focus:ring-apple-blue/50 outline-none select-text">
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1">Repository Name</label>
+                        <input id="githubRepoInput" type="text" placeholder="boardcraft-boards" class="w-full bg-[#F5F5F7] dark:bg-[#2C2C2E] text-[13px] px-3 py-2 rounded-xl border border-black/[0.06] dark:border-white/[0.08] focus:ring-2 focus:ring-apple-blue/50 outline-none select-text">
+                    </div>
+                </div>
+                <label class="flex items-center gap-2 text-xs text-apple-gray-600 dark:text-apple-gray-300">
+                    <input id="githubCreateRepoCheckbox" type="checkbox" class="accent-[#0071E3]">
+                    Create repo if it does not exist
+                </label>
+            </div>
+
+            <div id="githubSyncSection" class="hidden mt-5 pt-4 border-t border-black/[0.06] dark:border-white/[0.08]">
+                <div class="text-[11px] font-semibold uppercase tracking-wider text-apple-gray-500 mb-1">Sync Boards</div>
+                <p class="text-[11px] text-apple-gray-500 mb-3 leading-relaxed">
+                    Each board is stored in its own folder: <code>boards/&lt;folder&gt;/board.json</code>.
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="githubPushCurrentBtn" onclick="pushCurrentBoard()" class="gh-sync-btn flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-black/[0.05] dark:bg-white/[0.1] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] transition disabled:opacity-50">
+                        <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i> Push current
+                    </button>
+                    <button id="githubPushAllBtn" onclick="pushAllBoards()" class="gh-sync-btn flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-black/[0.05] dark:bg-white/[0.1] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] transition disabled:opacity-50">
+                        <i data-lucide="upload" class="w-3.5 h-3.5"></i> Push all
+                    </button>
+                    <button id="githubPullBtn" onclick="pullBoards()" class="gh-sync-btn flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-black/[0.05] dark:bg-white/[0.1] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] transition disabled:opacity-50">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i> Pull
+                    </button>
+                    <button id="githubSyncAllBtn" onclick="syncAllBoards()" class="gh-sync-btn flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold bg-apple-blue hover:bg-apple-blue-hover text-white transition disabled:opacity-50">
+                        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync all
+                    </button>
+                </div>
+                <button id="githubRenameFolderBtn" onclick="renameRemoteFolder()" class="gh-sync-btn text-[11px] text-apple-blue hover:underline mt-3 disabled:opacity-50">Rename current board's GitHub folder to match its title</button>
+                <div id="githubSyncStatus" class="text-[11px] text-apple-gray-500 mt-2 min-h-[1rem] select-text"></div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button id="githubDisconnectBtn" onclick="disconnectGitHub()" class="hidden px-4 py-2 rounded-full text-xs font-semibold bg-apple-red text-white hover:bg-red-600 transition">Disconnect</button>
+                <button id="githubConnectBtn" onclick="connectGitHubFromModal()" class="px-4 py-2 rounded-full text-xs font-semibold bg-apple-blue hover:bg-apple-blue-hover text-white transition">Connect</button>
+                <button onclick="closeGitHubModal()" class="px-4 py-2 rounded-full text-xs font-semibold bg-black/[0.05] dark:bg-white/[0.1] hover:bg-black/[0.1] dark:hover:bg-white/[0.15] transition">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification Anchor -->
+    <div id="toastContainer" class="fixed bottom-6 right-6 z-50 pointer-events-none flex flex-col gap-2"></div>
+
+    <script>
+        /* ==========================================================================
+           KANBAN PERSISTENCE & APPLICATION CORE STATE
+           ========================================================================== */
+        const STORAGE_KEY = 'boardcraft_apple_full_state_v2';
+
+        const ACCENT_COLORS = [
+            { name: 'System Blue', hex: '#0071E3' },
+            { name: 'System Purple', hex: '#AF52DE' },
+            { name: 'System Indigo', hex: '#5856D6' },
+            { name: 'System Green', hex: '#34C759' },
+            { name: 'System Orange', hex: '#FF9500' },
+            { name: 'System Pink', hex: '#FF2D55' }
+        ];
+
+        // Seed data for fresh installations
+        const DEFAULT_BOARDS = [
+            {
+                id: 'board-vision',
+                title: 'VisionOS Spatial Experience',
+                accentColor: '#0071E3',
+                history: [
+                    {
+                        id: 'h-seed-1',
+                        action: 'Board Initialized',
+                        details: 'Created board with 4 workflow stages',
+                        timestamp: Date.now() - 3600000 * 24
+                    }
+                ],
+                columns: [
+                    {
+                        id: 'col-concept',
+                        title: 'Exploration',
+                        cards: [
+                            {
+                                id: 'card-101',
+                                title: 'Glassmorphism Material Shader',
+                                desc: 'Implement specular highlights and real-time environment reflection blur in Metal.',
+                                priority: 'high',
+                                dueDate: '2026-10-05',
+                                tags: ['Metal', 'Graphics', 'UI'],
+                                checklist: [
+                                    { text: 'Sample ambient lighting probes', done: true },
+                                    { text: 'Dynamic specular fresnel curve', done: false }
+                                ]
+                            },
+                            {
+                                id: 'card-102',
+                                title: 'Spatial Audio Anchors',
+                                desc: 'Map 3D head-tracking coordinates with low latency HRTF processing.',
+                                priority: 'medium',
+                                dueDate: '',
+                                tags: ['Audio', 'Spatial'],
+                                checklist: []
+                            }
+                        ]
+                    },
+                    {
+                        id: 'col-wip',
+                        title: 'In Engineering',
+                        cards: [
+                            {
+                                id: 'card-103',
+                                title: 'Gaze & Pinch Micro-gestures',
+                                desc: 'Calibrate eye tracking convergence with index tap physics.',
+                                priority: 'urgent',
+                                dueDate: '2026-09-30',
+                                tags: ['Interaction', 'AI'],
+                                checklist: [
+                                    { text: 'Bench test 90fps camera feedback', done: true },
+                                    { text: 'Haptic feedback on pinch down', done: true },
+                                    { text: 'Palm rejection threshold filter', done: false }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        id: 'col-qa',
+                        title: 'Design Review',
+                        cards: [
+                            {
+                                id: 'card-104',
+                                title: 'SF Pro Spatial Optical Kerning',
+                                desc: 'Inspect text legibility across 1.5m virtual viewing distances.',
+                                priority: 'low',
+                                dueDate: '',
+                                tags: ['Design', 'Typography'],
+                                checklist: [
+                                    { text: 'Dark and light luminance passes', done: true }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        id: 'col-done',
+                        title: 'Golden Master',
+                        cards: [
+                            {
+                                id: 'card-105',
+                                title: 'App Sandbox & Privacy Manifest',
+                                desc: 'Declared camera telemetry and signed entitlements.',
+                                priority: 'medium',
+                                dueDate: '2026-09-12',
+                                tags: ['Security'],
+                                checklist: [
+                                    { text: 'App Store Connect notarization', done: true }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            },
+            {
+                id: 'board-marketing',
+                title: 'Fall Keynote Campaign',
+                accentColor: '#AF52DE',
+                history: [
+                    {
+                        id: 'h-seed-2',
+                        action: 'Board Initialized',
+                        details: 'Keynote launch timeline established',
+                        timestamp: Date.now() - 3600000 * 48
+                    }
+                ],
+                columns: [
+                    {
+                        id: 'col-mkt-todo',
+                        title: 'Briefs & Copy',
+                        cards: [
+                            {
+                                id: 'card-201',
+                                title: 'Hero Webpage Interactive 3D Canvas',
+                                desc: 'Interactive scroll-driven animation showing internal chip architecture.',
+                                priority: 'high',
+                                dueDate: '2026-10-18',
+                                tags: ['Web', 'Keynote'],
+                                checklist: []
+                            }
+                        ]
+                    },
+                    {
+                        id: 'col-mkt-done',
+                        title: 'Approved',
+                        cards: [
+                            {
+                                id: 'card-202',
+                                title: 'Press Release Distribution List',
+                                desc: 'Embargo guidelines finalized for Tier 1 tech publishers.',
+                                priority: 'none',
+                                dueDate: '',
+                                tags: ['PR'],
+                                checklist: [
+                                    { text: 'Sign NDA agreements', done: true }
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ];
+
+        let state = {
+            boards: [],
+            activeBoardId: null,
+            searchQuery: '',
+            darkMode: false
+        };
+
+        // Live undo stack (memory-backed with active board correlation)
+        const undoStack = [];
+
+        // Active inspection modal state
+        let currentModalCard = null;
+        let currentModalColumnId = null;
+        let modalTempChecklist = [];
+
+        // Drag session data
+        let dragSession = {
+            cardId: null,
+            sourceColId: null,
+            targetColId: null,
+            targetCardId: null,
+            position: 'before' // 'before' or 'after'
+        };
+
+        function initApp() {
+            loadPersistedState();
+            applyTheme();
+            renderApp();
+            attachGlobalListeners();
+            updateGitHubButton();
+            lucide.createIcons();
+        }
+
+        function loadPersistedState() {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (raw) {
+                try {
+                    const parsed = JSON.parse(raw);
+                    state.boards = parsed.boards && parsed.boards.length > 0 ? parsed.boards : DEFAULT_BOARDS;
+                    state.activeBoardId = parsed.activeBoardId || state.boards[0].id;
+                    state.darkMode = parsed.darkMode !== undefined ? parsed.darkMode : false;
+                } catch (e) {
+                    console.error('LocalStorage restoration error:', e);
+                    state.boards = JSON.parse(JSON.stringify(DEFAULT_BOARDS));
+                    state.activeBoardId = state.boards[0].id;
+                }
+            } else {
+                // Initialize default seeds
+                state.boards = JSON.parse(JSON.stringify(DEFAULT_BOARDS));
+                state.activeBoardId = state.boards[0].id;
+                state.darkMode = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                persistState();
+            }
+
+            // Ensure board sanity
+            if (!state.boards.find(b => b.id === state.activeBoardId) && state.boards.length > 0) {
+                state.activeBoardId = state.boards[0].id;
+            }
+        }
+
+        function persistState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    boards: state.boards,
+                    activeBoardId: state.activeBoardId,
+                    darkMode: state.darkMode
+                }));
+            } catch (err) {
+                console.error('Failed saving to LocalStorage', err);
+                showToast('Storage write quota exceeded', 'error');
+            }
+            updateUndoButtonState();
+            updateSyncIndicators();
+        }
+
+        function getActiveBoard() {
+            return state.boards.find(b => b.id === state.activeBoardId) || state.boards[0];
+        }
+
+        function recordBoardHistory(action, details, board = null) {
+            const targetBoard = board || getActiveBoard();
+            if (!targetBoard) return;
+
+            if (!targetBoard.history) {
+                targetBoard.history = [];
+            }
+
+            const entry = {
+                id: 'hist-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+                action: action,
+                details: details,
+                timestamp: Date.now()
+            };
+
+            // Prepend latest entry, limit to 200 items per board
+            targetBoard.history.unshift(entry);
+            if (targetBoard.history.length > 200) {
+                targetBoard.history.pop();
+            }
+
+            persistState();
+            updateHistoryCounterBadge();
+        }
+
+        function recordUndoAction(description, revertFn) {
+            undoStack.push({
+                description,
+                revertFn
+            });
+            if (undoStack.length > 30) undoStack.shift();
+            updateUndoButtonState();
+        }
+
+        function undoLastAction() {
+            if (undoStack.length === 0) return;
+            const item = undoStack.pop();
+            if (item && typeof item.revertFn === 'function') {
+                item.revertFn();
+                showToast(`Undone: ${item.description}`, 'info');
+                renderApp();
+            }
+            updateUndoButtonState();
+        }
+
+        function updateUndoButtonState() {
+            const btn = document.getElementById('undoBtn');
+            if (btn) {
+                btn.disabled = undoStack.length === 0;
+            }
+        }
+
+        function applyTheme() {
+            if (state.darkMode) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function toggleDarkMode() {
+            state.darkMode = !state.darkMode;
+            applyTheme();
+            persistState();
+            showToast(state.darkMode ? 'Appearance set to Dark' : 'Appearance set to Light', 'info');
+        }
+
+        function attachGlobalListeners() {
+            // Dropdown dismiss on outside click
+            window.addEventListener('click', (e) => {
+                const pickerBtn = document.getElementById('boardPickerBtn');
+                const dropdown = document.getElementById('boardDropdown');
+                if (pickerBtn && dropdown && !pickerBtn.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.add('hidden');
+                }
+            });
+
+            // Keyboard shortcut handler
+            window.addEventListener('keydown', (e) => {
+                // Cmd/Ctrl + Z Undo
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                        e.preventDefault();
+                        undoLastAction();
+                    }
+                }
+                // Escape closes active modals or side drawer
+                if (e.key === 'Escape') {
+                    closeCardModal();
+                    closeBoardModal();
+                    closeDataModal();
+                    closeGitHubModal();
+                    toggleHistoryDrawer(false);
+                }
+            });
+        }
+
+        function renderApp() {
+            renderHeader();
+            renderColumns();
+            renderHistoryList();
+            updateHistoryCounterBadge();
+            lucide.createIcons();
+        }
+
+        function renderHeader() {
+            const activeBoard = getActiveBoard();
+            if (!activeBoard) return;
+
+            document.getElementById('currentBoardTitle').textContent = activeBoard.title;
+            const accentHex = activeBoard.accentColor || '#0071E3';
+
+            document.getElementById('currentBoardDot').style.backgroundColor = accentHex;
+            document.getElementById('boardLogoBadge').style.backgroundColor = accentHex;
+            document.getElementById('historyBoardSubtitle').textContent = activeBoard.title;
+
+            // Render Board Picker Dropdown List
+            const listEl = document.getElementById('boardList');
+            listEl.innerHTML = '';
+
+            state.boards.forEach(b => {
+                const isSelected = b.id === activeBoard.id;
+                const totalCards = b.columns.reduce((sum, col) => sum + col.cards.length, 0);
+
+                const item = document.createElement('button');
+                item.className = `w-full text-left px-3.5 py-2.5 rounded-xl flex items-center justify-between text-xs font-medium transition ${
+                    isSelected 
+                        ? 'bg-apple-blue/10 text-apple-blue font-semibold' 
+                        : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.08] text-apple-gray-700 dark:text-apple-gray-200'
+                }`;
+                item.onclick = () => selectBoard(b.id);
+
+                item.innerHTML = `
+                    <div class="flex items-center gap-2.5 truncate">
+                        <span class="w-2.5 h-2.5 rounded-full shrink-0" style="background-color: ${b.accentColor || '#0071E3'}"></span>
+                        <span class="truncate">${escapeHtml(b.title)}</span>
+                    </div>
+                    <div class="flex items-center gap-2 ml-2 shrink-0">
+                        <span data-sync-badge="${b.id}" class="inline-flex">${syncBadgeHTML(b)}</span>
+                        <span class="text-[11px] text-apple-gray-400 font-normal">${totalCards} cards</span>
+                    </div>
+                `;
+                listEl.appendChild(item);
+            });
+        }
+
+        function updateHistoryCounterBadge() {
+            const board = getActiveBoard();
+            const badge = document.getElementById('historyCounterBadge');
+            if (board && badge) {
+                const count = board.history ? board.history.length : 0;
+                badge.textContent = count;
+            }
+        }
+
+        function renderColumns() {
+            const board = getActiveBoard();
+            const container = document.getElementById('boardColumnsContainer');
+            container.innerHTML = '';
+
+            if (!board) return;
+
+            board.columns.forEach((col, colIndex) => {
+                const colWrapper = document.createElement('div');
+                colWrapper.className = 'flex flex-col w-80 max-h-full rounded-[22px] bg-[#FFFFFF]/75 dark:bg-[#1C1C1E]/75 apple-frosted border border-black/[0.06] dark:border-white/[0.08] shadow-apple-card shrink-0 transition-all';
+                colWrapper.dataset.columnId = col.id;
+
+                // Column Header
+                const colHeader = document.createElement('div');
+                colHeader.className = 'px-4 py-3.5 flex items-center justify-between border-b border-black/[0.05] dark:border-white/[0.06]';
+
+                const query = state.searchQuery.toLowerCase().trim();
+                const visibleCards = col.cards.filter(c => filterCardMatches(c, query));
+
+                colHeader.innerHTML = `
+                    <div class="flex items-center gap-2 flex-1 min-w-0 mr-2">
+                        <input type="text" value="${escapeHtml(col.title)}" 
+                               onblur="renameColumn('${col.id}', this.value)"
+                               onkeydown="if(event.key==='Enter') this.blur();"
+                               title="Click to rename column"
+                               class="font-semibold text-[14px] bg-transparent hover:bg-black/[0.04] dark:hover:bg-white/[0.08] focus:bg-white dark:focus:bg-[#2C2C2E] px-2 py-0.5 rounded-lg w-full truncate outline-none focus:ring-2 focus:ring-apple-blue transition cursor-pointer" />
+                        <span class="text-[11px] font-semibold text-apple-gray-500 bg-black/[0.05] dark:bg-white/[0.1] px-2 py-0.5 rounded-full shrink-0">
+                            ${visibleCards.length}
+                        </span>
+                    </div>
+
+                    <div class="flex items-center gap-0.5">
+                        ${colIndex > 0 ? `
+                            <button onclick="reorderColumn('${col.id}', -1)" class="p-1 rounded-md text-apple-gray-400 hover:text-apple-gray-700 dark:hover:text-white transition" title="Move Left">
+                                <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
+                            </button>
+                        ` : ''}
+
+                        ${colIndex < board.columns.length - 1 ? `
+                            <button onclick="reorderColumn('${col.id}', 1)" class="p-1 rounded-md text-apple-gray-400 hover:text-apple-gray-700 dark:hover:text-white transition" title="Move Right">
+                                <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
+                            </button>
+                        ` : ''}
+
+                        <button onclick="deleteColumn('${col.id}')" class="p-1 rounded-md text-apple-gray-400 hover:text-apple-red transition" title="Delete Column">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                `;
+                colWrapper.appendChild(colHeader);
+
+                // Cards Scroll Container
+                const cardsContainer = document.createElement('div');
+                cardsContainer.className = 'p-3 flex-1 overflow-y-auto space-y-2.5 min-h-[80px]';
+                cardsContainer.dataset.colDrop = col.id;
+
+                bindColumnDropZones(cardsContainer, col.id);
+
+                visibleCards.forEach(card => {
+                    const cardEl = renderCardNode(card, col.id);
+                    cardsContainer.appendChild(cardEl);
+                });
+
+                colWrapper.appendChild(cardsContainer);
+
+                // Inline Card Quick Add Footer
+                const footer = document.createElement('div');
+                footer.className = 'p-3 pt-1 border-t border-black/[0.03] dark:border-white/[0.04]';
+                footer.appendChild(createQuickCardAddElement(col.id));
+                colWrapper.appendChild(footer);
+
+                container.appendChild(colWrapper);
+            });
+
+            // Append "+ Add New Column" button at board right end
+            const addColumnCard = document.createElement('div');
+            addColumnCard.className = 'w-80 shrink-0';
+            addColumnCard.innerHTML = `
+                <button onclick="promptAddColumn()" class="w-full py-4 px-4 rounded-[22px] border-2 border-dashed border-black/[0.1] dark:border-white/[0.12] hover:border-apple-blue dark:hover:border-apple-blue hover:bg-apple-blue/[0.04] flex items-center justify-center gap-2 text-sm font-medium text-apple-gray-500 hover:text-apple-blue transition group">
+                    <i data-lucide="plus-circle" class="w-4 h-4 transition-transform group-hover:scale-110"></i>
+                    <span>Add New Column</span>
+                </button>
+            `;
+            container.appendChild(addColumnCard);
+        }
+
+        function renderCardNode(card, columnId) {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'task-card bg-white dark:bg-[#2C2C2E] p-3.5 rounded-2xl shadow-apple-card hover:shadow-apple-card-hover border border-black/[0.05] dark:border-white/[0.08] cursor-grab active:cursor-grabbing group relative';
+            cardEl.draggable = true;
+            cardEl.dataset.cardId = card.id;
+            cardEl.dataset.columnId = columnId;
+
+            cardEl.onclick = (e) => {
+                if (e.target.closest('button') || e.target.closest('input')) return;
+                openCardModal(columnId, card.id);
+            };
+
+            // Priority styling map
+            const priorityTokens = {
+                urgent: { label: 'Urgent', bg: 'bg-red-500/10 dark:bg-red-500/20', text: 'text-red-600 dark:text-red-400' },
+                high: { label: 'High', bg: 'bg-orange-500/10 dark:bg-orange-500/20', text: 'text-orange-600 dark:text-orange-400' },
+                medium: { label: 'Medium', bg: 'bg-yellow-500/10 dark:bg-yellow-500/20', text: 'text-amber-600 dark:text-amber-400' },
+                low: { label: 'Low', bg: 'bg-blue-500/10 dark:bg-blue-500/20', text: 'text-blue-600 dark:text-blue-400' },
+                none: null
+            };
+            const pBadge = priorityTokens[card.priority] || null;
+
+            // Checklists computation
+            const checklistCount = card.checklist ? card.checklist.length : 0;
+            const completedCount = checklistCount > 0 ? card.checklist.filter(i => i.done).length : 0;
+
+            const dateInfo = evaluateDueDate(card.dueDate);
+
+            cardEl.innerHTML = `
+                <!-- Priority & Tags Row -->
+                <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                    ${pBadge ? `<span class="text-[10px] font-semibold px-2 py-0.5 rounded-md ${pBadge.bg} ${pBadge.text}">${pBadge.label}</span>` : ''}
+                    ${card.tags && card.tags.length > 0 ? card.tags.map(t => `
+                        <span class="text-[10px] font-medium px-2 py-0.5 rounded-md bg-black/[0.04] dark:bg-white/[0.08] text-apple-gray-600 dark:text-apple-gray-300">
+                            #${escapeHtml(t)}
+                        </span>
+                    `).join('') : ''}
+                </div>
+
+                <!-- Card Title -->
+                <div class="font-medium text-[13.5px] leading-snug tracking-tight text-[#1D1D1F] dark:text-[#F5F5F7] mb-1.5 break-words">
+                    ${escapeHtml(card.title)}
+                </div>
+
+                <!-- Note / Description excerpt -->
+                ${card.desc ? `
+                    <p class="text-xs text-apple-gray-500 line-clamp-2 mb-2 font-normal leading-relaxed">
+                        ${escapeHtml(card.desc)}
+                    </p>
+                ` : ''}
+
+                <!-- Footer Metas -->
+                ${(checklistCount > 0 || dateInfo) ? `
+                    <div class="flex items-center gap-3 pt-2 mt-1 border-t border-black/[0.04] dark:border-white/[0.06] text-[11px] text-apple-gray-500 font-medium">
+                        ${checklistCount > 0 ? `
+                            <div class="flex items-center gap-1 ${completedCount === checklistCount ? 'text-apple-green font-semibold' : ''}">
+                                <i data-lucide="check-square" class="w-3 h-3"></i>
+                                <span>${completedCount}/${checklistCount}</span>
+                            </div>
+                        ` : ''}
+
+                        ${dateInfo ? `
+                            <div class="flex items-center gap-1 ${dateInfo.badgeClass}">
+                                <i data-lucide="calendar" class="w-3 h-3"></i>
+                                <span>${dateInfo.text}</span>
+                            </div>
+                        ` : ''}
+                    </div>
+                ` : ''}
+            `;
+
+            bindCardDragHandlers(cardEl, card.id, columnId);
+            return cardEl;
+        }
+
+        function createQuickCardAddElement(columnId) {
+            const wrapper = document.createElement('div');
+
+            const toggleBtn = document.createElement('button');
+            toggleBtn.className = 'w-full py-1.5 px-3 rounded-xl flex items-center gap-1.5 text-apple-gray-500 hover:text-apple-blue hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-xs font-medium transition';
+            toggleBtn.innerHTML = `<i data-lucide="plus" class="w-3.5 h-3.5"></i> Add Task`;
+
+            const form = document.createElement('div');
+            form.className = 'hidden flex-col gap-2 mt-1';
+
+            const textarea = document.createElement('textarea');
+            textarea.rows = 2;
+            textarea.placeholder = 'Task title...';
+            textarea.className = 'w-full text-xs p-2.5 rounded-xl bg-white dark:bg-[#2C2C2E] border border-apple-blue/40 focus:ring-2 focus:ring-apple-blue outline-none resize-none shadow-sm';
+
+            const actions = document.createElement('div');
+            actions.className = 'flex justify-end items-center gap-1.5';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'px-2.5 py-1 text-xs text-apple-gray-500 hover:text-apple-gray-700 dark:hover:text-apple-gray-300 rounded-lg';
+            cancelBtn.textContent = 'Cancel';
+
+            const submitBtn = document.createElement('button');
+            submitBtn.type = 'button';
+            submitBtn.className = 'px-3 py-1 text-xs font-medium bg-apple-blue hover:bg-apple-blue-hover text-white rounded-lg transition shadow-sm';
+            submitBtn.textContent = 'Add Task';
+
+            actions.appendChild(cancelBtn);
+            actions.appendChild(submitBtn);
+            form.appendChild(textarea);
+            form.appendChild(actions);
+
+            toggleBtn.onclick = () => {
+                toggleBtn.classList.add('hidden');
+                form.classList.remove('hidden');
+                form.classList.add('flex');
+                textarea.focus();
+            };
+
+            const close = () => {
+                form.classList.add('hidden');
+                form.classList.remove('flex');
+                toggleBtn.classList.remove('hidden');
+                textarea.value = '';
+            };
+
+            cancelBtn.onclick = close;
+
+            const submit = () => {
+                const title = textarea.value.trim();
+                if (title) {
+                    createNewCard(columnId, title);
+                    textarea.value = '';
+                    textarea.focus();
+                }
+            };
+
+            submitBtn.onclick = submit;
+            textarea.onkeydown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    submit();
+                } else if (e.key === 'Escape') {
+                    close();
+                }
+            };
+
+            wrapper.appendChild(toggleBtn);
+            wrapper.appendChild(form);
+            return wrapper;
+        }
+
+        function bindCardDragHandlers(cardEl, cardId, columnId) {
+            cardEl.addEventListener('dragstart', (e) => {
+                dragSession.cardId = cardId;
+                dragSession.sourceColId = columnId;
+
+                e.dataTransfer.setData('text/plain', cardId);
+                e.dataTransfer.effectAllowed = 'move';
+
+                setTimeout(() => {
+                    cardEl.classList.add('card-ghost');
+                }, 0);
+            });
+
+            cardEl.addEventListener('dragend', () => {
+                cardEl.classList.remove('card-ghost');
+                removeDropIndicators();
+                dragSession.cardId = null;
+                dragSession.sourceColId = null;
+            });
+        }
+
+        function bindColumnDropZones(container, columnId) {
+            container.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+
+                const targetCardEl = e.target.closest('.task-card');
+                removeDropIndicators();
+
+                if (targetCardEl && targetCardEl.dataset.cardId !== dragSession.cardId) {
+                    const rect = targetCardEl.getBoundingClientRect();
+                    const midY = rect.top + rect.height / 2;
+
+                    const indicator = document.createElement('div');
+                    indicator.className = 'drop-indicator';
+
+                    if (e.clientY < midY) {
+                        targetCardEl.parentNode.insertBefore(indicator, targetCardEl);
+                        dragSession.targetCardId = targetCardEl.dataset.cardId;
+                        dragSession.position = 'before';
+                    } else {
+                        targetCardEl.parentNode.insertBefore(indicator, targetCardEl.nextSibling);
+                        dragSession.targetCardId = targetCardEl.dataset.cardId;
+                        dragSession.position = 'after';
+                    }
+                } else if (!targetCardEl) {
+                    dragSession.targetCardId = null;
+                    dragSession.position = 'append';
+                }
+
+                dragSession.targetColId = columnId;
+            });
+
+            container.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (!dragSession.cardId || !dragSession.sourceColId || !dragSession.targetColId) {
+                    removeDropIndicators();
+                    return;
+                }
+
+                executeCardMove(
+                    dragSession.cardId,
+                    dragSession.sourceColId,
+                    dragSession.targetColId,
+                    dragSession.targetCardId,
+                    dragSession.position
+                );
+
+                removeDropIndicators();
+            });
+        }
+
+        function removeDropIndicators() {
+            document.querySelectorAll('.drop-indicator').forEach(el => el.remove());
+        }
+
+        function executeCardMove(cardId, srcColId, targetColId, targetCardId, position) {
+            const board = getActiveBoard();
+            const srcCol = board.columns.find(c => c.id === srcColId);
+            const targetCol = board.columns.find(c => c.id === targetColId);
+
+            if (!srcCol || !targetCol) return;
+
+            const cardIndex = srcCol.cards.findIndex(c => c.id === cardId);
+            if (cardIndex === -1) return;
+
+            // Preserve snapshot for Undo
+            const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+            const [card] = srcCol.cards.splice(cardIndex, 1);
+
+            if (targetCardId) {
+                const targetIdx = targetCol.cards.findIndex(c => c.id === targetCardId);
+                if (targetIdx !== -1) {
+                    const insertIdx = position === 'after' ? targetIdx + 1 : targetIdx;
+                    targetCol.cards.splice(insertIdx, 0, card);
+                } else {
+                    targetCol.cards.push(card);
+                }
+            } else {
+                targetCol.cards.push(card);
+            }
+
+            const actionDesc = srcColId === targetColId 
+                ? `Reordered task "${card.title}" in ${srcCol.title}`
+                : `Moved task "${card.title}" from [${srcCol.title}] to [${targetCol.title}]`;
+
+            recordBoardHistory('Moved Task', actionDesc);
+
+            recordUndoAction(actionDesc, () => {
+                state.boards = previousBoardsState;
+                persistState();
+            });
+
+            persistState();
+            renderColumns();
+            lucide.createIcons();
+        }
+
+        function createNewCard(columnId, title) {
+            const board = getActiveBoard();
+            const col = board.columns.find(c => c.id === columnId);
+            if (!col) return;
+
+            const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+            const newCard = {
+                id: 'card-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4),
+                title: title.trim(),
+                desc: '',
+                priority: 'none',
+                dueDate: '',
+                tags: [],
+                checklist: []
+            };
+
+            col.cards.push(newCard);
+
+            recordBoardHistory('Created Task', `Added "${newCard.title}" to column [${col.title}]`);
+
+            recordUndoAction(`Add task "${newCard.title}"`, () => {
+                state.boards = previousBoardsState;
+                persistState();
+            });
+
+            persistState();
+            renderColumns();
+            lucide.createIcons();
+            showToast('Task added');
+        }
+
+        function promptAddColumn() {
+            const colTitle = prompt('Enter a name for the new column:', 'Quality Assurance');
+            if (colTitle && colTitle.trim()) {
+                const board = getActiveBoard();
+                const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+                const newCol = {
+                    id: 'col-' + Date.now().toString(36),
+                    title: colTitle.trim(),
+                    cards: []
+                };
+
+                board.columns.push(newCol);
+                recordBoardHistory('Added Column', `Created column "${newCol.title}"`);
+
+                recordUndoAction(`Add column "${newCol.title}"`, () => {
+                    state.boards = previousBoardsState;
+                    persistState();
+                });
+
+                persistState();
+                renderColumns();
+                lucide.createIcons();
+                showToast(`Column "${newCol.title}" created`);
+            }
+        }
+
+        function renameColumn(colId, newTitle) {
+            const clean = newTitle.trim();
+            if (!clean) return;
+
+            const board = getActiveBoard();
+            const col = board.columns.find(c => c.id === colId);
+            if (col && col.title !== clean) {
+                const oldTitle = col.title;
+                const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+                col.title = clean;
+                recordBoardHistory('Renamed Column', `Renamed column from "${oldTitle}" to "${clean}"`);
+
+                recordUndoAction(`Rename column "${clean}"`, () => {
+                    state.boards = previousBoardsState;
+                    persistState();
+                });
+
+                persistState();
+                renderColumns();
+                lucide.createIcons();
+                showToast('Column renamed');
+            }
+        }
+
+        function deleteColumn(colId) {
+            const board = getActiveBoard();
+            const col = board.columns.find(c => c.id === colId);
+            if (!col) return;
+
+            const cardCount = col.cards.length;
+            const message = cardCount > 0 
+                ? `Column "${col.title}" contains ${cardCount} task(s). Delete this column and all its contents?`
+                : `Delete column "${col.title}"?`;
+
+            if (confirm(message)) {
+                const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+                board.columns = board.columns.filter(c => c.id !== colId);
+
+                recordBoardHistory('Deleted Column', `Deleted column "${col.title}" containing ${cardCount} tasks`);
+
+                recordUndoAction(`Delete column "${col.title}"`, () => {
+                    state.boards = previousBoardsState;
+                    persistState();
+                });
+
+                persistState();
+                renderColumns();
+                lucide.createIcons();
+                showToast('Column deleted', 'error');
+            }
+        }
+
+        function reorderColumn(colId, offset) {
+            const board = getActiveBoard();
+            const index = board.columns.findIndex(c => c.id === colId);
+            if (index === -1) return;
+
+            const targetIdx = index + offset;
+            if (targetIdx >= 0 && targetIdx < board.columns.length) {
+                const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+                const [col] = board.columns.splice(index, 1);
+                board.columns.splice(targetIdx, 0, col);
+
+                recordBoardHistory('Reordered Column', `Shifted column "${col.title}" position`);
+
+                recordUndoAction(`Reorder column "${col.title}"`, () => {
+                    state.boards = previousBoardsState;
+                    persistState();
+                });
+
+                persistState();
+                renderColumns();
+                lucide.createIcons();
+            }
+        }
+
+        function openCardModal(columnId, cardId) {
+            const board = getActiveBoard();
+            const column = board.columns.find(c => c.id === columnId);
+            if (!column) return;
+            const card = column.cards.find(c => c.id === cardId);
+            if (!card) return;
+
+            currentModalCard = card;
+            currentModalColumnId = columnId;
+            modalTempChecklist = JSON.parse(JSON.stringify(card.checklist || []));
+
+            document.getElementById('modalColumnBadge').textContent = column.title;
+            document.getElementById('modalCardTitle').value = card.title;
+            document.getElementById('modalCardDesc').value = card.desc || '';
+            document.getElementById('modalCardPriority').value = card.priority || 'none';
+            document.getElementById('modalCardDueDate').value = card.dueDate || '';
+            document.getElementById('modalCardTags').value = (card.tags || []).join(', ');
+
+            const dateEval = evaluateDueDate(card.dueDate);
+            document.getElementById('modalDateRelative').textContent = dateEval ? dateEval.text : '';
+
+            renderChecklistRows();
+
+            document.getElementById('cardModal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function closeCardModal() {
+            document.getElementById('cardModal').classList.add('hidden');
+            currentModalCard = null;
+            currentModalColumnId = null;
+        }
+
+        function saveCardDetails() {
+            if (!currentModalCard) return;
+
+            const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+            const oldTitle = currentModalCard.title;
+            const newTitle = document.getElementById('modalCardTitle').value.trim() || 'Untitled Task';
+            const newDesc = document.getElementById('modalCardDesc').value.trim();
+            const newPriority = document.getElementById('modalCardPriority').value;
+            const newDueDate = document.getElementById('modalCardDueDate').value;
+
+            const rawTags = document.getElementById('modalCardTags').value;
+            const newTags = rawTags
+                .split(',')
+                .map(t => t.trim().replace(/^#/, ''))
+                .filter(Boolean);
+
+            currentModalCard.title = newTitle;
+            currentModalCard.desc = newDesc;
+            currentModalCard.priority = newPriority;
+            currentModalCard.dueDate = newDueDate;
+            currentModalCard.tags = newTags;
+            currentModalCard.checklist = modalTempChecklist;
+
+            recordBoardHistory('Edited Task', `Updated details for task "${newTitle}"`);
+
+            recordUndoAction(`Edit task "${newTitle}"`, () => {
+                state.boards = previousBoardsState;
+                persistState();
+            });
+
+            persistState();
+            renderColumns();
+            lucide.createIcons();
+            closeCardModal();
+            showToast('Task saved');
+        }
+
+        function duplicateActiveCard() {
+            if (!currentModalCard || !currentModalColumnId) return;
+
+            const board = getActiveBoard();
+            const col = board.columns.find(c => c.id === currentModalColumnId);
+            if (!col) return;
+
+            const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+            const clone = JSON.parse(JSON.stringify(currentModalCard));
+            clone.id = 'card-' + Date.now().toString(36) + Math.random().toString(36).substr(2, 4);
+            clone.title = clone.title + ' (Copy)';
+
+            const index = col.cards.findIndex(c => c.id === currentModalCard.id);
+            col.cards.splice(index + 1, 0, clone);
+
+            recordBoardHistory('Duplicated Task', `Cloned "${clone.title}"`);
+
+            recordUndoAction(`Duplicate task "${clone.title}"`, () => {
+                state.boards = previousBoardsState;
+                persistState();
+            });
+
+            persistState();
+            renderColumns();
+            lucide.createIcons();
+            closeCardModal();
+            showToast('Task duplicated');
+        }
+
+        function deleteActiveCard() {
+            if (!currentModalCard || !currentModalColumnId) return;
+
+            const board = getActiveBoard();
+            const col = board.columns.find(c => c.id === currentModalColumnId);
+            if (!col) return;
+
+            const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+            const targetTitle = currentModalCard.title;
+
+            col.cards = col.cards.filter(c => c.id !== currentModalCard.id);
+
+            recordBoardHistory('Deleted Task', `Deleted "${targetTitle}" from [${col.title}]`);
+
+            recordUndoAction(`Delete task "${targetTitle}"`, () => {
+                state.boards = previousBoardsState;
+                persistState();
+            });
+
+            persistState();
+            renderColumns();
+            lucide.createIcons();
+            closeCardModal();
+            showToast('Task removed', 'error');
+        }
+
+        function renderChecklistRows() {
+            const container = document.getElementById('modalChecklistItems');
+            container.innerHTML = '';
+
+            const total = modalTempChecklist.length;
+            const completed = modalTempChecklist.filter(i => i.done).length;
+            const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+            document.getElementById('checklistProgressText').textContent = `${pct}% (${completed}/${total})`;
+            document.getElementById('checklistProgressBar').style.width = `${pct}%`;
+
+            modalTempChecklist.forEach((item, index) => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2.5 bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 px-3 py-2 rounded-xl group transition-all';
+
+                row.innerHTML = `
+                    <input type="checkbox" ${item.done ? 'checked' : ''} 
+                           onchange="toggleChecklistItem(${index}, this.checked)"
+                           class="w-4 h-4 rounded text-apple-blue focus:ring-apple-blue/40 cursor-pointer">
+                    <span class="flex-1 text-xs ${item.done ? 'line-through text-apple-gray-400' : ''}">${escapeHtml(item.text)}</span>
+                    <button onclick="removeChecklistRow(${index})" class="opacity-0 group-hover:opacity-100 p-1 text-apple-gray-400 hover:text-apple-red transition">
+                        <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                `;
+                container.appendChild(row);
+            });
+
+            lucide.createIcons();
+        }
+
+        function addChecklistItem() {
+            const input = document.getElementById('newChecklistInput');
+            const val = input.value.trim();
+            if (val) {
+                modalTempChecklist.push({ text: val, done: false });
+                input.value = '';
+                renderChecklistRows();
+            }
+        }
+
+        function toggleChecklistItem(index, checked) {
+            if (modalTempChecklist[index]) {
+                modalTempChecklist[index].done = checked;
+                renderChecklistRows();
+            }
+        }
+
+        function removeChecklistRow(index) {
+            modalTempChecklist.splice(index, 1);
+            renderChecklistRows();
+        }
+
+        function toggleBoardDropdown() {
+            document.getElementById('boardDropdown').classList.toggle('hidden');
+        }
+
+        function selectBoard(boardId) {
+            state.activeBoardId = boardId;
+            persistState();
+            renderApp();
+            document.getElementById('boardDropdown').classList.add('hidden');
+            showToast('Switched board');
+        }
+
+        let boardModalEditingId = null;
+        let selectedModalAccent = ACCENT_COLORS[0].hex;
+
+        function openNewBoardModal() {
+            boardModalEditingId = null;
+            document.getElementById('boardModalTitle').textContent = 'Create New Board';
+            document.getElementById('boardModalInput').value = 'New Project Roadmap';
+            renderAccentColorPalette(ACCENT_COLORS[0].hex);
+            document.getElementById('boardDropdown').classList.add('hidden');
+            document.getElementById('boardModal').classList.remove('hidden');
+        }
+
+        function openEditBoardModal() {
+            const board = getActiveBoard();
+            if (!board) return;
+
+            boardModalEditingId = board.id;
+            document.getElementById('boardModalTitle').textContent = 'Board Settings';
+            document.getElementById('boardModalInput').value = board.title;
+            renderAccentColorPalette(board.accentColor || ACCENT_COLORS[0].hex);
+            document.getElementById('boardDropdown').classList.add('hidden');
+            document.getElementById('boardModal').classList.remove('hidden');
+        }
+
+        function renderAccentColorPalette(activeHex) {
+            selectedModalAccent = activeHex;
+            const container = document.getElementById('accentColorPalette');
+            container.innerHTML = '';
+
+            ACCENT_COLORS.forEach(color => {
+                const isSelected = color.hex.toLowerCase() === activeHex.toLowerCase();
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `w-7 h-7 rounded-full transition-transform ${isSelected ? 'scale-125 ring-2 ring-offset-2 ring-apple-blue dark:ring-offset-[#1C1C1E]' : 'hover:scale-110'}`;
+                btn.style.backgroundColor = color.hex;
+                btn.onclick = () => renderAccentColorPalette(color.hex);
+                container.appendChild(btn);
+            });
+        }
+
+        function closeBoardModal() {
+            document.getElementById('boardModal').classList.add('hidden');
+        }
+
+        function saveBoardSettings() {
+            const titleInput = document.getElementById('boardModalInput').value.trim() || 'Untitled Board';
+            const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+            if (boardModalEditingId) {
+                const board = state.boards.find(b => b.id === boardModalEditingId);
+                if (board) {
+                    const oldTitle = board.title;
+                    board.title = titleInput;
+                    board.accentColor = selectedModalAccent;
+                    recordBoardHistory('Board Settings', `Renamed board from "${oldTitle}" to "${titleInput}"`, board);
+                }
+            } else {
+                const newBoard = {
+                    id: 'board-' + Date.now().toString(36),
+                    title: titleInput,
+                    accentColor: selectedModalAccent,
+                    history: [],
+                    columns: [
+                        { id: 'col-todo-' + Date.now(), title: 'To Do', cards: [] },
+                        { id: 'col-progress-' + Date.now(), title: 'In Progress', cards: [] },
+                        { id: 'col-done-' + Date.now(), title: 'Done', cards: [] }
+                    ]
+                };
+                state.boards.push(newBoard);
+                state.activeBoardId = newBoard.id;
+                recordBoardHistory('Board Created', `Created new board "${titleInput}"`, newBoard);
+            }
+
+            recordUndoAction(`Board settings update`, () => {
+                state.boards = previousBoardsState;
+                persistState();
+            });
+
+            persistState();
+            closeBoardModal();
+            renderApp();
+            showToast('Board saved');
+        }
+
+        function deleteCurrentBoard() {
+            if (state.boards.length <= 1) {
+                showToast('You must keep at least one board active', 'info');
+                return;
+            }
+
+            const current = getActiveBoard();
+            if (confirm(`Delete board "${current.title}" and its entire history? This action is immediate.`)) {
+                const previousBoardsState = JSON.parse(JSON.stringify(state.boards));
+
+                state.boards = state.boards.filter(b => b.id !== current.id);
+                state.activeBoardId = state.boards[0].id;
+
+                recordUndoAction(`Delete board "${current.title}"`, () => {
+                    state.boards = previousBoardsState;
+                    persistState();
+                });
+
+                persistState();
+                renderApp();
+                showToast('Board removed', 'error');
+            }
+        }
+
+        function toggleHistoryDrawer(open) {
+            const drawer = document.getElementById('historyDrawer');
+            const backdrop = document.getElementById('historyDrawerBackdrop');
+
+            if (open) {
+                renderHistoryList();
+                backdrop.classList.remove('hidden');
+                drawer.classList.remove('translate-x-full');
+            } else {
+                drawer.classList.add('translate-x-full');
+                backdrop.classList.add('hidden');
+            }
+        }
+
+        function renderHistoryList() {
+            const board = getActiveBoard();
+            const container = document.getElementById('historyListContainer');
+            container.innerHTML = '';
+
+            if (!board || !board.history || board.history.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-12 text-apple-gray-400">
+                        <i data-lucide="history" class="w-8 h-8 mx-auto mb-2 opacity-40"></i>
+                        <p class="text-xs font-medium">No recorded actions yet</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            const searchFilter = (document.getElementById('historySearchInput').value || '').toLowerCase().trim();
+
+            const filteredHistory = board.history.filter(item => {
+                if (!searchFilter) return true;
+                return item.action.toLowerCase().includes(searchFilter) || item.details.toLowerCase().includes(searchFilter);
+            });
+
+            if (filteredHistory.length === 0) {
+                container.innerHTML = `<p class="text-xs text-center text-apple-gray-400 py-6">No matching actions found</p>`;
+                return;
+            }
+
+            filteredHistory.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'p-3 rounded-2xl bg-[#F5F5F7] dark:bg-[#2C2C2E]/60 border border-black/[0.04] dark:border-white/[0.06] text-xs space-y-1';
+
+                const dateString = new Date(item.timestamp).toLocaleString(undefined, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                card.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <span class="font-semibold text-[11px] text-apple-blue">${escapeHtml(item.action)}</span>
+                        <span class="text-[10px] text-apple-gray-400">${dateString}</span>
+                    </div>
+                    <p class="text-apple-gray-600 dark:text-apple-gray-300 text-[12px] leading-relaxed">
+                        ${escapeHtml(item.details)}
+                    </p>
+                `;
+                container.appendChild(card);
+            });
+
+            lucide.createIcons();
+        }
+
+        function clearCurrentBoardHistory() {
+            const board = getActiveBoard();
+            if (!board || !board.history || board.history.length === 0) return;
+
+            if (confirm('Clear all recorded activity history for this board?')) {
+                board.history = [];
+                persistState();
+                renderHistoryList();
+                updateHistoryCounterBadge();
+                showToast('Activity log cleared');
+            }
+        }
+
+        function handleSearch(query) {
+            state.searchQuery = query;
+            const clearBtn = document.getElementById('searchClearBtn');
+            if (query.trim()) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            renderColumns();
+            lucide.createIcons();
+        }
+
+        function clearSearch() {
+            document.getElementById('searchInput').value = '';
+            handleSearch('');
+        }
+
+        function filterCardMatches(card, query) {
+            if (!query) return true;
+            const inTitle = card.title.toLowerCase().includes(query);
+            const inDesc = (card.desc || '').toLowerCase().includes(query);
+            const inPriority = (card.priority || '').toLowerCase().includes(query);
+            const inTags = (card.tags || []).some(t => t.toLowerCase().includes(query));
+            return inTitle || inDesc || inPriority || inTags;
+        }
+
+        function openDataModal() {
+            document.getElementById('dataModal').classList.remove('hidden');
+        }
+
+        function closeDataModal() {
+            document.getElementById('dataModal').classList.add('hidden');
+        }
+
+        function exportDataJson() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({
+                version: 2,
+                exportedAt: new Date().toISOString(),
+                state: state
+            }, null, 2));
+            const dlAnchor = document.createElement('a');
+            dlAnchor.setAttribute("href", dataStr);
+            dlAnchor.setAttribute("download", `boardcraft_backup_${new Date().toISOString().slice(0, 10)}.json`);
+            document.body.appendChild(dlAnchor);
+            dlAnchor.click();
+            dlAnchor.remove();
+            showToast('Backup archive exported');
+        }
+
+        function importDataJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    if (parsed.state && Array.isArray(parsed.state.boards)) {
+                        state = parsed.state;
+                        persistState();
+                        applyTheme();
+                        renderApp();
+                        closeDataModal();
+                        showToast('Dataset restored successfully');
+                    } else {
+                        showToast('Invalid backup JSON format', 'error');
+                    }
+                } catch (err) {
+                    console.error('Import parse error:', err);
+                    showToast('Failed to parse backup JSON', 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function resetToDefaults() {
+            if (confirm('Erase all current boards and restore default factory templates? This resets LocalStorage.')) {
+                state.boards = JSON.parse(JSON.stringify(DEFAULT_BOARDS));
+                state.activeBoardId = state.boards[0].id;
+                persistState();
+                renderApp();
+                closeDataModal();
+                showToast('Reset to default templates');
+            }
+        }
+
+        function evaluateDueDate(dateStr) {
+            if (!dateStr) return null;
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return null;
+
+            const target = new Date(parts[0], parts[1] - 1, parts[2]);
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+            const diffTime = target - today;
+            const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays < 0) {
+                return { text: `${Math.abs(diffDays)}d Overdue`, badgeClass: 'text-apple-red font-semibold' };
+            } else if (diffDays === 0) {
+                return { text: 'Due Today', badgeClass: 'text-apple-orange font-semibold' };
+            } else if (diffDays === 1) {
+                return { text: 'Tomorrow', badgeClass: 'text-apple-blue font-medium' };
+            } else if (diffDays <= 7) {
+                return { text: `In ${diffDays}d`, badgeClass: 'text-apple-gray-500 font-medium' };
+            } else {
+                return { text: target.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }), badgeClass: 'text-apple-gray-500' };
+            }
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = 'toast-enter px-4 py-2.5 rounded-2xl bg-white/95 dark:bg-[#2C2C2E]/95 apple-frosted border border-black/[0.08] dark:border-white/[0.1] shadow-apple-card text-xs font-medium flex items-center gap-2 text-[#1D1D1F] dark:text-[#F5F5F7] pointer-events-auto';
+
+            let iconHtml = '<i data-lucide="check-circle" class="w-3.5 h-3.5 text-apple-green"></i>';
+            if (type === 'error') {
+                iconHtml = '<i data-lucide="alert-circle" class="w-3.5 h-3.5 text-apple-red"></i>';
+            } else if (type === 'info') {
+                iconHtml = '<i data-lucide="info" class="w-3.5 h-3.5 text-apple-blue"></i>';
+            }
+
+            toast.innerHTML = `${iconHtml} <span>${message}</span>`;
+            container.appendChild(toast);
+            lucide.createIcons();
+
+            setTimeout(() => {
+                toast.classList.remove('toast-enter');
+                toast.classList.add('toast-exit');
+                setTimeout(() => toast.remove(), 250);
+            }, 2600);
+        }
+
+        /* ==========================================================================
+           GITHUB PAT SYNC
+           Repo layout: boards/<slug>/board.json (one folder per board).
+           Writes use the Git Data API so a multi-board push is a single atomic commit.
+           Sync bookkeeping lives in its own localStorage key (not inside state.boards) so
+           undo snapshots, JSON import/export and resets never corrupt it.
+           ========================================================================== */
+        const GH_STORAGE = {
+            token: 'boardcraft_github_token',
+            owner: 'boardcraft_github_owner',
+            repo: 'boardcraft_github_repo',
+            sync: 'boardcraft_github_sync'
+        };
+        const BOARDS_ROOT = 'boards';
+
+        const githubState = {
+            token: localStorage.getItem(GH_STORAGE.token) || '',
+            owner: localStorage.getItem(GH_STORAGE.owner) || '',
+            repo: localStorage.getItem(GH_STORAGE.repo) || '',
+            createIfMissing: false,
+            busy: false
+        };
+
+        // { repo: 'owner/repo', boards: { [boardId]: { slug, sha, hash, lastSyncedAt, conflict } } }
+        let githubSync = loadGitHubSync();
+
+        function loadGitHubSync() {
+            try {
+                const parsed = JSON.parse(localStorage.getItem(GH_STORAGE.sync) || 'null');
+                if (parsed && parsed.boards) return parsed;
+            } catch (e) { }
+            return { repo: '', boards: {} };
+        }
+
+        function saveGitHubSync() {
+            localStorage.setItem(GH_STORAGE.sync, JSON.stringify(githubSync));
+        }
+
+        function currentRepoKey() {
+            return `${githubState.owner}/${githubState.repo}`.toLowerCase();
+        }
+
+        function isGitHubConnected() {
+            return !!(githubState.token && githubState.owner && githubState.repo);
+        }
+
+        function repoBase() {
+            return `/repos/${encodeURIComponent(githubState.owner)}/${encodeURIComponent(githubState.repo)}`;
+        }
+
+        function branchRefPath(branch) {
+            return branch.split('/').map(encodeURIComponent).join('/');
+        }
+
+        function boardPath(slug) {
+            return `${BOARDS_ROOT}/${slug}/board.json`;
+        }
+
+        function slugify(text) {
+            return String(text || '')
+                .toLowerCase()
+                .trim()
+                .replace(/[^a-z0-9._-]+/g, '-')
+                .replace(/^[-.]+|[-.]+$/g, '')
+                .slice(0, 64) || 'board';
+        }
+
+        // cyrb53-style hash of the synced board fields, used to detect unpushed local edits.
+        function hashString(s) {
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
+        }
+
+        function boardHash(b) {
+            return hashString(JSON.stringify([b.title || '', b.accentColor || '', b.columns || []]));
+        }
+
+        function getBoardSyncMeta(boardId) {
+            return githubSync.boards[boardId] || null;
+        }
+
+        function getBoardSyncStatus(b) {
+            const meta = getBoardSyncMeta(b.id);
+            if (meta && meta.conflict) return 'conflict';
+            if (!meta || !meta.sha) return 'new';
+            return boardHash(b) !== meta.hash ? 'dirty' : 'synced';
+        }
+
+        function isBoardDirty(b) {
+            return getBoardSyncStatus(b) !== 'synced';
+        }
+
+        const SYNC_BADGES = {
+            new: ['border border-apple-gray-400 bg-transparent', 'Not yet pushed to GitHub'],
+            dirty: ['bg-apple-orange', 'Local changes not pushed to GitHub'],
+            conflict: ['bg-apple-red', 'Conflict: changed both locally and on GitHub'],
+            synced: ['bg-apple-green', 'Synced with GitHub']
+        };
+
+        function syncBadgeHTML(b) {
+            if (!isGitHubConnected()) return '';
+            const [cls, title] = SYNC_BADGES[getBoardSyncStatus(b)];
+            return `<span class="inline-block w-2 h-2 rounded-full ${cls}" title="${title}"></span>`;
+        }
+
+        function updateSyncIndicators() {
+            document.querySelectorAll('[data-sync-badge]').forEach(el => {
+                const board = state.boards.find(b => b.id === el.dataset.syncBadge);
+                el.innerHTML = board ? syncBadgeHTML(board) : '';
+            });
+
+            const dot = document.getElementById('githubBtnDot');
+            if (!dot) return;
+            if (!isGitHubConnected()) {
+                dot.className = 'hidden';
+                return;
+            }
+            const statuses = state.boards.map(getBoardSyncStatus);
+            const overall = statuses.includes('conflict') ? 'conflict'
+                : statuses.some(s => s === 'dirty' || s === 'new') ? 'dirty' : 'synced';
+            const [cls, title] = SYNC_BADGES[overall];
+            dot.className = `inline-block w-2 h-2 rounded-full shrink-0 ${cls}`;
+            dot.title = overall === 'dirty' ? 'Some boards have changes not pushed to GitHub' : title;
+        }
+
+        function markBoardSynced(board, slug, sha) {
+            githubSync.boards[board.id] = {
+                slug,
+                sha: sha || null,
+                hash: boardHash(board),
+                lastSyncedAt: new Date().toISOString(),
+                conflict: false
+            };
+        }
+
+        function markBoardConflict(board) {
+            githubSync.boards[board.id] = { ...(getBoardSyncMeta(board.id) || {}), conflict: true };
+        }
+
+        function updateGitHubButton() {
+            const label = document.getElementById('githubBtnLabel');
+            const btn = document.getElementById('githubBtn');
+            if (isGitHubConnected()) {
+                label.textContent = `${githubState.owner}/${githubState.repo}`;
+                btn.title = 'GitHub PAT connected';
+            } else {
+                label.textContent = 'GitHub';
+                btn.title = 'GitHub PAT Sync';
+            }
+            updateSyncIndicators();
+        }
+
+        function saveGitHubConfig() {
+            localStorage.setItem(GH_STORAGE.token, githubState.token || '');
+            localStorage.setItem(GH_STORAGE.owner, githubState.owner || '');
+            localStorage.setItem(GH_STORAGE.repo, githubState.repo || '');
+            // Sync bookkeeping only applies to the repo it was recorded against.
+            if (githubSync.repo !== currentRepoKey()) {
+                githubSync = { repo: currentRepoKey(), boards: {} };
+                saveGitHubSync();
+            }
+            updateGitHubButton();
+        }
+
+        function clearGitHubConfig() {
+            githubState.token = '';
+            githubState.owner = '';
+            githubState.repo = '';
+            Object.values(GH_STORAGE).filter(k => k !== GH_STORAGE.sync).forEach(k => localStorage.removeItem(k));
+            updateGitHubButton();
+        }
+
+        function base64Encode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            bytes.forEach((b) => binary += String.fromCharCode(b));
+            return btoa(binary);
+        }
+
+        function base64Decode(b64) {
+            const binary = atob((b64 || '').replace(/\s/g, ''));
+            const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        }
+
+        async function githubRequest(path, options = {}, token = githubState.token) {
+            if (!token) throw new Error('No GitHub token configured');
+
+            const res = await fetch(`https://api.github.com${path}`, {
+                ...options,
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `Bearer ${token}`,
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    ...(options.headers || {})
+                }
+            });
+
+            if (!res.ok) {
+                const body = await res.text();
+                let message = `GitHub API request failed (${res.status})`;
+                try {
+                    const json = JSON.parse(body);
+                    if (json.message) message = json.message;
+                } catch (e) { }
+                const error = new Error(message);
+                error.status = res.status;
+                throw error;
+            }
+
+            const text = await res.text();
+            return text ? JSON.parse(text) : null;
+        }
+
+        async function ensureGitHubRepoExists() {
+            const fullName = `${githubState.owner}/${githubState.repo}`;
+            try {
+                return await githubRequest(repoBase());
+            } catch (err) {
+                if (err.status && err.status !== 404) throw err;
+                // A 404 can also mean the repo exists but a fine-grained token was not granted access to it.
+                if (!githubState.createIfMissing) {
+                    throw new Error(`Repository ${fullName} was not found, or your token has no access to it. Create it on GitHub (or enable "Create repo if it does not exist") and make sure the token can access it`);
+                }
+                const created = await githubRequest('/user/repos', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: githubState.repo, private: false, auto_init: true })
+                });
+                created.justCreated = true;
+                return created;
+            }
+        }
+
+        // The Git Data API cannot operate on a repo with no commits, so seed one via the Contents API.
+        async function initializeEmptyRepo() {
+            await githubRequest(`${repoBase()}/contents/README.md`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    message: 'Initialize BoardCraft boards repo',
+                    content: base64Encode('# BoardCraft Boards\n\nEach folder under `boards/` is one BoardCraft Kanban board (`board.json`).\n')
+                })
+            });
+        }
+
+        async function getBranchRef(branch, justCreated) {
+            const path = `${repoBase()}/git/ref/heads/${branchRefPath(branch)}`;
+            const isEmptyRepoError = (err) => err.status === 404 || err.status === 409;
+
+            if (!justCreated) {
+                try {
+                    return await githubRequest(path);
+                } catch (err) {
+                    if (!isEmptyRepoError(err)) throw err;
+                    await initializeEmptyRepo();
+                }
+            }
+
+            // Newly created repos can take a moment before their branch ref is readable.
+            for (let attempt = 0; ; attempt++) {
+                try {
+                    return await githubRequest(path);
+                } catch (err) {
+                    if (!isEmptyRepoError(err) || attempt >= 5) throw err;
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        }
+
+        function treeToFileMap(tree) {
+            const files = new Map();
+            (tree.tree || []).forEach(entry => {
+                if (entry.type === 'blob') files.set(entry.path, entry.sha);
+            });
+            return files;
+        }
+
+        async function getRemoteSnapshot() {
+            const repoInfo = await ensureGitHubRepoExists();
+            const branch = repoInfo.default_branch || 'main';
+            const ref = await getBranchRef(branch, !!repoInfo.justCreated);
+
+            const commitSha = ref.object.sha;
+            const commit = await githubRequest(`${repoBase()}/git/commits/${commitSha}`);
+            const tree = await githubRequest(`${repoBase()}/git/trees/${commit.tree.sha}?recursive=1`);
+            if (tree.truncated) {
+                showToast('Repository is very large; some boards may be missing from sync', 'error');
+            }
+
+            return { branch, commitSha, treeSha: commit.tree.sha, files: treeToFileMap(tree) };
+        }
+
+        async function commitTreeEntries(snapshot, entries, message) {
+            const tree = await githubRequest(`${repoBase()}/git/trees`, {
+                method: 'POST',
+                body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries })
+            });
+            const commit = await githubRequest(`${repoBase()}/git/commits`, {
+                method: 'POST',
+                body: JSON.stringify({ message, tree: tree.sha, parents: [snapshot.commitSha] })
+            });
+            try {
+                await githubRequest(`${repoBase()}/git/refs/heads/${branchRefPath(snapshot.branch)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ sha: commit.sha })
+                });
+            } catch (err) {
+                if (err.status === 422) throw new Error('GitHub branch changed during sync. Please try again');
+                throw err;
+            }
+            const newTree = await githubRequest(`${repoBase()}/git/trees/${tree.sha}?recursive=1`);
+            return treeToFileMap(newTree);
+        }
+
+        function serializeBoard(board, slug) {
+            return JSON.stringify({
+                format: 'boardcraft-board',
+                version: 1,
+                id: board.id,
+                slug,
+                title: board.title,
+                accentColor: board.accentColor || '#0071E3',
+                columns: board.columns || [],
+                history: board.history || [],
+                updatedAt: new Date().toISOString()
+            }, null, 2) + '\n';
+        }
+
+        async function fetchRemoteBoard(sha) {
+            const blob = await githubRequest(`${repoBase()}/git/blobs/${sha}`);
+            try {
+                const data = JSON.parse(base64Decode(blob.content));
+                return data && Array.isArray(data.columns) ? data : null;
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function listRemoteBoards(files) {
+            const pattern = new RegExp(`^${BOARDS_ROOT}/([^/]+)/board\\.json$`);
+            const remote = new Map();
+            files.forEach((sha, path) => {
+                const match = path.match(pattern);
+                if (match) remote.set(match[1], sha);
+            });
+            return remote;
+        }
+
+        // Folder names are fixed once a board has been pushed; before that they follow the title
+        // and avoid folders that already belong to a different board.
+        async function resolveSlugForPush(board, snapshot, reserved) {
+            const meta = getBoardSyncMeta(board.id);
+            if (meta && meta.slug) return meta.slug;
+
+            const base = slugify(board.title);
+            for (let n = 1; ; n++) {
+                const slug = n === 1 ? base : `${base}-${n}`;
+                if (reserved.has(slug)) continue;
+                if (Object.entries(githubSync.boards).some(([id, m]) => id !== board.id && m.slug === slug)) continue;
+                const remoteSha = snapshot.files.get(boardPath(slug));
+                const folderUsed = [...snapshot.files.keys()].some(p => p.startsWith(`${BOARDS_ROOT}/${slug}/`));
+                if (!folderUsed) return slug;
+                if (remoteSha) {
+                    const remote = await fetchRemoteBoard(remoteSha);
+                    if (remote && remote.id === board.id) return slug;
+                }
+            }
+        }
+
+        function remoteChangedSinceSync(board, slug, snapshot) {
+            const remoteSha = snapshot.files.get(boardPath(slug));
+            if (!remoteSha) return false;
+            const meta = getBoardSyncMeta(board.id);
+            return !meta || remoteSha !== meta.sha;
+        }
+
+        function setSyncStatus(text) {
+            const el = document.getElementById('githubSyncStatus');
+            if (el) el.textContent = text || '';
+        }
+
+        async function runGitHubOperation(label, fn) {
+            if (!isGitHubConnected()) {
+                showToast('Connect to GitHub first', 'error');
+                return null;
+            }
+            if (githubState.busy) {
+                showToast('A GitHub sync is already in progress', 'info');
+                return null;
+            }
+
+            githubState.busy = true;
+            document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = true);
+            document.getElementById('githubBtn').classList.add('opacity-60');
+            setSyncStatus(`${label}...`);
+
+            try {
+                return await fn();
+            } catch (err) {
+                let message = err.message;
+                if (err.status === 403) {
+                    message += `. Make sure your token can access ${githubState.owner}/${githubState.repo} with "Contents: Read and write" permission`;
+                }
+                showToast(escapeHtml(`GitHub ${label.toLowerCase()} failed: ${message}`), 'error');
+                setSyncStatus(`${label} failed: ${message}`);
+                return null;
+            } finally {
+                githubState.busy = false;
+                document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = false);
+                document.getElementById('githubBtn').classList.remove('opacity-60');
+                saveGitHubSync();
+                updateSyncIndicators();
+            }
+        }
+
+        // Pushes the given boards in one commit. Boards whose ids are in `force` overwrite GitHub without prompting.
+        async function pushBoardsCore(boards, snapshot, force = new Set()) {
+            const reserved = new Set();
+            const plan = [];
+            for (const board of boards) {
+                const slug = await resolveSlugForPush(board, snapshot, reserved);
+                reserved.add(slug);
+                plan.push({ board, slug });
+            }
+
+            const conflicts = plan.filter(p => !force.has(p.board.id) && remoteChangedSinceSync(p.board, p.slug, snapshot));
+            let toPush = plan;
+
+            if (conflicts.length) {
+                const names = conflicts.map(p => `• ${p.board.title} (${BOARDS_ROOT}/${p.slug})`).join('\n');
+                const overwrite = confirm(`These boards were changed on GitHub since your last sync:\n\n${names}\n\nOK = overwrite GitHub with your local version\nCancel = skip them (use Pull to get the GitHub version)`);
+                if (!overwrite) {
+                    conflicts.forEach(p => markBoardConflict(p.board));
+                    toPush = plan.filter(p => !conflicts.includes(p));
+                }
+            }
+
+            if (!toPush.length) return 0;
+
+            const entries = toPush.map(p => ({ path: boardPath(p.slug), mode: '100644', type: 'blob', content: serializeBoard(p.board, p.slug) }));
+            const message = toPush.length === 1
+                ? `Update board ${toPush[0].slug} from BoardCraft`
+                : `Sync ${toPush.length} boards from BoardCraft`;
+            const files = await commitTreeEntries(snapshot, entries, message);
+
+            toPush.forEach(p => markBoardSynced(p.board, p.slug, files.get(boardPath(p.slug))));
+            return toPush.length;
+        }
+
+        // mode 'pull': conflicts keep local and get flagged. mode 'sync': conflicts kept locally are returned for force-push.
+        async function pullBoardsCore(snapshot, mode = 'pull') {
+            const remote = listRemoteBoards(snapshot.files);
+            const keepLocal = new Set();
+            const previousBoards = JSON.parse(JSON.stringify(state.boards));
+            let added = 0, updated = 0, conflicts = 0, invalid = 0;
+
+            for (const [slug, sha] of remote) {
+                let local = state.boards.find(b => { const m = getBoardSyncMeta(b.id); return m && m.slug === slug; });
+                const localMeta = local ? getBoardSyncMeta(local.id) : null;
+                if (local && localMeta.sha === sha && !localMeta.conflict) continue;
+
+                setSyncStatus(`Downloading ${BOARDS_ROOT}/${slug}...`);
+                const data = await fetchRemoteBoard(sha);
+                if (!data) { invalid++; continue; }
+
+                // A board that was never synced here can still be the same board (e.g. pushed from another device).
+                if (!local && data.id) {
+                    local = state.boards.find(b => b.id === data.id && !(getBoardSyncMeta(b.id) || {}).slug);
+                }
+
+                const remoteHash = boardHash(data);
+                if (local && isBoardDirty(local) && boardHash(local) !== remoteHash) {
+                    const useRemote = confirm(mode === 'sync'
+                        ? `"${local.title}" changed both locally and on GitHub.\n\nOK = use the GitHub version (discard local changes)\nCancel = keep your local version (it will overwrite GitHub)`
+                        : `"${local.title}" has local changes, and GitHub has a different version.\n\nOK = replace local with the GitHub version\nCancel = keep local (marked as conflict)`);
+                    if (!useRemote) {
+                        if (mode === 'sync') {
+                            githubSync.boards[local.id] = { ...(getBoardSyncMeta(local.id) || {}), slug };
+                            keepLocal.add(local.id);
+                        } else {
+                            markBoardConflict(local);
+                            conflicts++;
+                        }
+                        continue;
+                    }
+                }
+
+                if (!local) {
+                    const idTaken = !data.id || state.boards.some(b => b.id === data.id);
+                    local = {
+                        id: idTaken ? 'board-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) : data.id,
+                        title: '',
+                        accentColor: '#0071E3',
+                        history: [],
+                        columns: []
+                    };
+                    state.boards.push(local);
+                    added++;
+                } else {
+                    updated++;
+                }
+
+                local.title = (typeof data.title === 'string' && data.title.trim()) ? data.title.trim() : slug;
+                local.accentColor = typeof data.accentColor === 'string' ? data.accentColor : (local.accentColor || '#0071E3');
+                local.columns = data.columns;
+                if (Array.isArray(data.history)) local.history = data.history;
+                markBoardSynced(local, slug, sha);
+            }
+
+            if (added || updated) {
+                recordUndoAction('Pull from GitHub', () => {
+                    state.boards = previousBoards;
+                    if (!state.boards.find(b => b.id === state.activeBoardId)) state.activeBoardId = state.boards[0].id;
+                    persistState();
+                });
+                persistState();
+                renderApp();
+            }
+
+            return { added, updated, conflicts, invalid, keepLocal };
+        }
+
+        function pullSummary({ added, updated, conflicts, invalid }) {
+            let msg = `${added} new, ${updated} updated`;
+            if (conflicts) msg += `, ${conflicts} conflict${conflicts === 1 ? '' : 's'}`;
+            if (invalid) msg += `, ${invalid} unreadable`;
+            return msg;
+        }
+
+        async function pushBoards(boards, emptyMessage) {
+            return runGitHubOperation('Push', async () => {
+                if (!boards.length) {
+                    setSyncStatus(emptyMessage);
+                    showToast(emptyMessage, 'info');
+                    return 0;
+                }
+                const snapshot = await getRemoteSnapshot();
+                const pushed = await pushBoardsCore(boards, snapshot);
+                const skipped = boards.length - pushed;
+                const msg = `Pushed ${pushed} board${pushed === 1 ? '' : 's'}` + (skipped ? `, skipped ${skipped}` : '');
+                setSyncStatus(msg);
+                showToast(msg, pushed ? 'success' : 'info');
+                return pushed;
+            });
+        }
+
+        function pushCurrentBoard() {
+            const board = getActiveBoard();
+            if (board) pushBoards([board]);
+        }
+
+        function pushAllBoards() {
+            pushBoards(state.boards.filter(isBoardDirty), 'All boards are already up to date on GitHub');
+        }
+
+        async function pullBoards() {
+            return runGitHubOperation('Pull', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const result = await pullBoardsCore(snapshot, 'pull');
+                const msg = `Pulled: ${pullSummary(result)}`;
+                setSyncStatus(msg);
+                showToast(msg, result.conflicts || result.invalid ? 'error' : 'success');
+            });
+        }
+
+        async function syncAllBoards() {
+            return runGitHubOperation('Sync', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const result = await pullBoardsCore(snapshot, 'sync');
+                const toPush = state.boards.filter(b => isBoardDirty(b) || result.keepLocal.has(b.id));
+                setSyncStatus(`Pushing ${toPush.length} board${toPush.length === 1 ? '' : 's'}...`);
+                const pushed = toPush.length ? await pushBoardsCore(toPush, snapshot, result.keepLocal) : 0;
+                const msg = `Sync complete: ${pullSummary(result)} from GitHub, ${pushed} pushed`;
+                setSyncStatus(msg);
+                showToast(msg, result.invalid ? 'error' : 'success');
+            });
+        }
+
+        async function renameRemoteFolder() {
+            const board = getActiveBoard();
+            if (!board) return;
+            const meta = getBoardSyncMeta(board.id);
+
+            if (!meta || !meta.sha) {
+                showToast(`Folder will be named after "${escapeHtml(board.title)}" on first push`, 'info');
+                return;
+            }
+
+            return runGitHubOperation('Rename', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const oldSlug = meta.slug;
+                const base = slugify(board.title);
+                if (base === oldSlug) {
+                    setSyncStatus(`Folder already matches: ${BOARDS_ROOT}/${oldSlug}`);
+                    return;
+                }
+                let newSlug = base;
+                for (let n = 2; [...snapshot.files.keys()].some(p => p.startsWith(`${BOARDS_ROOT}/${newSlug}/`)) ||
+                    Object.entries(githubSync.boards).some(([id, m]) => id !== board.id && m.slug === newSlug); n++) {
+                    newSlug = `${base}-${n}`;
+                }
+                if (!confirm(`Move ${BOARDS_ROOT}/${oldSlug} to ${BOARDS_ROOT}/${newSlug} on GitHub?\n\nThe current local version will be written to the new folder.`)) {
+                    setSyncStatus('');
+                    return;
+                }
+
+                const deletions = [...snapshot.files.keys()]
+                    .filter(path => path.startsWith(`${BOARDS_ROOT}/${oldSlug}/`))
+                    .map(path => ({ path, mode: '100644', type: 'blob', sha: null }));
+                const entries = [...deletions, { path: boardPath(newSlug), mode: '100644', type: 'blob', content: serializeBoard(board, newSlug) }];
+                const files = await commitTreeEntries(snapshot, entries, `Rename board ${oldSlug} to ${newSlug} from BoardCraft`);
+                markBoardSynced(board, newSlug, files.get(boardPath(newSlug)));
+                setSyncStatus(`Moved to ${BOARDS_ROOT}/${newSlug}`);
+                showToast(`Moved to ${BOARDS_ROOT}/${escapeHtml(newSlug)}`);
+            });
+        }
+
+        function openGitHubModal() {
+            document.getElementById('githubTokenInput').value = githubState.token;
+            document.getElementById('githubOwnerInput').value = githubState.owner;
+            document.getElementById('githubRepoInput').value = githubState.repo;
+            document.getElementById('githubCreateRepoCheckbox').checked = githubState.createIfMissing;
+            document.getElementById('githubDisconnectBtn').classList.toggle('hidden', !isGitHubConnected());
+            document.getElementById('githubSyncSection').classList.toggle('hidden', !isGitHubConnected());
+            if (!githubState.busy) setSyncStatus('');
+            document.getElementById('githubModal').classList.remove('hidden');
+        }
+
+        function closeGitHubModal() {
+            document.getElementById('githubModal').classList.add('hidden');
+        }
+
+        async function connectGitHubFromModal() {
+            const token = document.getElementById('githubTokenInput').value.trim();
+            const owner = document.getElementById('githubOwnerInput').value.trim();
+            const repo = document.getElementById('githubRepoInput').value.trim();
+            const createIfMissing = document.getElementById('githubCreateRepoCheckbox').checked;
+
+            if (!token || !owner || !repo) {
+                showToast('GitHub token, owner, and repo are required', 'error');
+                return;
+            }
+
+            try {
+                await githubRequest('/user', {}, token);
+                githubState.token = token;
+                githubState.owner = owner;
+                githubState.repo = repo;
+                githubState.createIfMissing = createIfMissing;
+                saveGitHubConfig();
+                renderHeader();
+                openGitHubModal();
+                showToast('Connected to GitHub');
+            } catch (err) {
+                showToast(escapeHtml(`GitHub connection failed: ${err.message}`), 'error');
+            }
+        }
+
+        function disconnectGitHub() {
+            clearGitHubConfig();
+            closeGitHubModal();
+            renderHeader();
+            showToast('Disconnected from GitHub', 'info');
+        }
+
+        // Initialize on DOM Ready
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
