@@ -52,6 +52,15 @@
         .modal-overlay { transition: opacity 0.15s ease-out; }
         .modal-content { transition: transform 0.15s ease-out; }
 
+        /* Practice clock (stopwatch / timer) */
+        .clock-mode-btn { color: #9ca3af; background: transparent; }
+        .clock-mode-btn.active { background-color: #ea580c; color: #fff; }
+        .clock-ctrl-btn { padding: 4px 6px; border-radius: 4px; }
+        .clock-ctrl-btn:hover:not(:disabled) { background-color: rgba(255,255,255,0.1); }
+        .clock-ctrl-btn:disabled, .clock-mode-btn:disabled { opacity: 0.35; pointer-events: none; }
+        #clockDisplay.clock-flash { animation: clockFlash 0.5s ease-in-out 6; }
+        @keyframes clockFlash { 0%, 100% { opacity: 1; color: #f87171; } 50% { opacity: 0.25; color: #f87171; } }
+
         /* Spinner */
         .spinner {
             border: 2px solid rgba(255,255,255,0.1);
@@ -170,7 +179,22 @@
 
         <!-- Editor & Output Column -->
         <div class="flex-1 flex flex-col min-w-0 bg-[#1e1e1e]" id="editor-column">
-            
+
+            <!-- Editor Toolbar: Practice Clock -->
+            <div class="flex items-center justify-end px-2 py-1 bg-gray-800 border-b border-gray-700 shrink-0">
+                <div id="clockWidget" class="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-md pl-1 pr-1.5 py-1 shrink-0" title="Practice timer">
+                    <div class="flex rounded overflow-hidden border border-gray-700 shrink-0">
+                        <button type="button" id="clockModeStopwatch" class="clock-mode-btn px-1.5 py-1" title="Stopwatch mode"><i data-lucide="timer" class="w-3.5 h-3.5"></i></button>
+                        <button type="button" id="clockModeTimer" class="clock-mode-btn px-1.5 py-1" title="Timer mode"><i data-lucide="hourglass" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                    <input type="text" id="clockTimerInput" inputmode="numeric" maxlength="6" value="05:00" title="Timer duration (MM:SS)" class="hidden w-12 bg-gray-800 text-center font-mono text-xs border border-gray-700 rounded px-1 py-0.5 text-gray-200">
+                    <span id="clockDisplay" class="font-mono text-xs sm:text-sm tabular-nums w-[50px] sm:w-[58px] text-center font-semibold text-gray-200">00:00</span>
+                    <button type="button" id="clockStartPause" class="clock-ctrl-btn text-green-500 hover:text-green-400" title="Start"><i data-lucide="play" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" id="clockStopBtn" class="clock-ctrl-btn text-gray-500 hover:text-red-500" title="Stop" disabled><i data-lucide="square" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" id="clockResetBtn" class="clock-ctrl-btn text-gray-500 hover:text-orange-400" title="Reset"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button>
+                </div>
+            </div>
+
             <!-- Editor Wrapper -->
             <div id="editor-wrapper" class="flex-1 relative min-h-[100px]">
                 <div id="monaco-editor" class="absolute inset-0"></div>
@@ -1830,6 +1854,167 @@ fn factorial(n: u64) -> u64 {
         document.querySelectorAll('.closeModal').forEach(btn => {
             btn.onclick = function () { closeModal(this.closest('.fixed')); };
         });
+
+        /* ---------------- Practice Clock (Stopwatch / Timer) ---------------- */
+        (function initClockWidget() {
+            const DEFAULT_DURATION_MS = 5 * 60 * 1000;
+            const STORAGE_MODE = 'rustplay_clock_mode';
+            const STORAGE_DURATION = 'rustplay_clock_duration_ms';
+
+            const elDisplay = document.getElementById('clockDisplay');
+            const elInput = document.getElementById('clockTimerInput');
+            const btnModeStopwatch = document.getElementById('clockModeStopwatch');
+            const btnModeTimer = document.getElementById('clockModeTimer');
+            const btnStartPause = document.getElementById('clockStartPause');
+            const btnStop = document.getElementById('clockStopBtn');
+            const btnReset = document.getElementById('clockResetBtn');
+            if (!elDisplay) return;
+
+            let mode = localStorage.getItem(STORAGE_MODE) === 'timer' ? 'timer' : 'stopwatch';
+            let durationMs = parseInt(localStorage.getItem(STORAGE_DURATION), 10) || DEFAULT_DURATION_MS;
+            let state = 'idle'; // idle | running | paused | stopped
+            let baseMs = 0;
+            let startTs = null;
+            let intervalId = null;
+
+            function formatClockTime(ms) {
+                if (ms < 0) ms = 0;
+                const totalSec = Math.floor(ms / 1000);
+                const h = Math.floor(totalSec / 3600);
+                const m = Math.floor((totalSec % 3600) / 60);
+                const s = totalSec % 60;
+                const pad = (n) => String(n).padStart(2, '0');
+                return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+            }
+
+            function parseDurationInput(str) {
+                str = (str || '').trim();
+                const m = str.match(/^(\d{1,3}):([0-5]?\d)$/);
+                if (m) {
+                    const mins = parseInt(m[1], 10), secs = parseInt(m[2], 10);
+                    return Math.min(Math.max((mins * 60 + secs) * 1000, 1000), 180 * 60000);
+                }
+                const n = parseInt(str, 10);
+                if (!isNaN(n) && n > 0) return Math.min(Math.max(n * 60000, 1000), 180 * 60000);
+                return DEFAULT_DURATION_MS;
+            }
+
+            function currentElapsed() {
+                return state === 'running' ? baseMs + (Date.now() - startTs) : baseMs;
+            }
+
+            function updateDisplay() {
+                const elapsed = currentElapsed();
+                elDisplay.textContent = mode === 'stopwatch'
+                    ? formatClockTime(elapsed)
+                    : formatClockTime(Math.max(durationMs - elapsed, 0));
+            }
+
+            function setIcon(btn, name) {
+                const icon = btn.querySelector('[data-lucide]');
+                if (icon) icon.setAttribute('data-lucide', name);
+            }
+
+            function updateButtons() {
+                setIcon(btnStartPause, state === 'running' ? 'pause' : 'play');
+                btnStartPause.title = state === 'running' ? 'Pause' : (state === 'paused' ? 'Resume' : 'Start');
+                btnStartPause.disabled = state === 'stopped';
+                btnStop.disabled = !(state === 'running' || state === 'paused');
+                btnModeStopwatch.classList.toggle('active', mode === 'stopwatch');
+                btnModeTimer.classList.toggle('active', mode === 'timer');
+                const modeLocked = state !== 'idle';
+                btnModeStopwatch.disabled = modeLocked;
+                btnModeTimer.disabled = modeLocked;
+                elInput.classList.toggle('hidden', mode !== 'timer');
+                elInput.disabled = state !== 'idle';
+                lucide.createIcons();
+            }
+
+            function clockBeep() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.type = 'sine'; o.frequency.value = 880;
+                    o.connect(g); g.connect(ctx.destination);
+                    g.gain.setValueAtTime(0.18, ctx.currentTime);
+                    o.start(); o.stop(ctx.currentTime + 0.5);
+                    o.onended = () => ctx.close();
+                } catch (e) { /* audio not available, ignore */ }
+            }
+
+            function finishTimer() {
+                baseMs = durationMs;
+                state = 'stopped';
+                clearInterval(intervalId); intervalId = null;
+                updateDisplay(); updateButtons();
+                elDisplay.classList.add('clock-flash');
+                setTimeout(() => elDisplay.classList.remove('clock-flash'), 3000);
+                clockBeep();
+                showToast("Time's up!", 'error');
+            }
+
+            function tick() {
+                updateDisplay();
+                if (mode === 'timer' && currentElapsed() >= durationMs) finishTimer();
+            }
+
+            function start() {
+                if (state === 'stopped' || state === 'running') return;
+                if (mode === 'timer' && durationMs - currentElapsed() <= 0) return;
+                state = 'running';
+                startTs = Date.now();
+                intervalId = setInterval(tick, 250);
+                updateButtons();
+            }
+
+            function pause() {
+                if (state !== 'running') return;
+                baseMs += Date.now() - startTs;
+                state = 'paused';
+                clearInterval(intervalId); intervalId = null;
+                updateDisplay(); updateButtons();
+            }
+
+            function stop() {
+                if (!(state === 'running' || state === 'paused')) return;
+                if (state === 'running') baseMs += Date.now() - startTs;
+                state = 'stopped';
+                clearInterval(intervalId); intervalId = null;
+                updateDisplay(); updateButtons();
+            }
+
+            function reset() {
+                clearInterval(intervalId); intervalId = null;
+                state = 'idle';
+                baseMs = 0;
+                startTs = null;
+                elDisplay.classList.remove('clock-flash');
+                updateDisplay(); updateButtons();
+            }
+
+            function setMode(next) {
+                if (state !== 'idle') { showToast('Reset the clock before switching modes.', 'error'); return; }
+                mode = next;
+                localStorage.setItem(STORAGE_MODE, mode);
+                updateDisplay(); updateButtons();
+            }
+
+            btnStartPause.addEventListener('click', () => (state === 'running' ? pause() : start()));
+            btnStop.addEventListener('click', stop);
+            btnReset.addEventListener('click', reset);
+            btnModeStopwatch.addEventListener('click', () => setMode('stopwatch'));
+            btnModeTimer.addEventListener('click', () => setMode('timer'));
+            elInput.addEventListener('change', () => {
+                durationMs = parseDurationInput(elInput.value);
+                elInput.value = formatClockTime(durationMs);
+                localStorage.setItem(STORAGE_DURATION, String(durationMs));
+                updateDisplay();
+            });
+
+            elInput.value = formatClockTime(durationMs);
+            updateDisplay();
+            updateButtons();
+        })();
 
         lucide.createIcons();
     </script>
