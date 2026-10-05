@@ -1567,11 +1567,20 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             els.exitCode.textContent = `Exit: ${exitCode}`;
             els.exitCode.className = exitCode === 0 ? "text-green-600 font-mono" : "text-red-600 font-bold font-mono";
 
+            // Capture codingTime (practice-clock elapsed time) only on a successful run:
+            // a successful run is the natural "stopping point" for a timed practice attempt.
+            // On failure, leave the clock running so the user's attempt keeps being timed.
+            let codingTime = null;
+            if (exitCode === 0 && window.PracticeClock && window.PracticeClock.isTracking()) {
+                codingTime = window.PracticeClock.getElapsedMs();
+                window.PracticeClock.stop();
+            }
+
             const project = getCurrentProject();
             const runData = {
                 id: Date.now(),
                 timestamp: new Date().toLocaleString(),
-                stdout, stderr, exitCode, duration
+                stdout, stderr, exitCode, duration, codingTime
             };
             project.runs.unshift(runData);
             if (project.runs.length > 10) project.runs.pop();
@@ -1740,8 +1749,9 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
                         <span>${r.timestamp.split(',')[1]}</span>
                         <span>${r.duration}ms</span>
                     </div>
-                    <div class="font-mono text-xs truncate text-gray-600 dark:text-gray-300 mb-1">
-                        Exit: ${r.exitCode}
+                    <div class="flex justify-between font-mono text-xs truncate text-gray-600 dark:text-gray-300 mb-1">
+                        <span>Exit: ${r.exitCode}</span>
+                        ${r.codingTime != null ? `<span class="text-blue-500 dark:text-blue-400" title="Coding time (practice clock)"><i class="fas fa-stopwatch"></i> ${window.PracticeClock ? window.PracticeClock.format(r.codingTime) : Math.round(r.codingTime/1000) + 's'}</span>` : ''}
                     </div>
                     <div class="max-h-16 overflow-hidden text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-black/20 p-1 rounded font-mono">
                         ${escapeHtml(stripAnsi(r.stdout || r.stderr || '(No Output)'))}
@@ -1991,6 +2001,16 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             elInput.value = formatClockTime(durationMs);
             updateDisplay();
             updateButtons();
+
+            // Exposed so run results can capture/freeze "coding time" (see finishRun()).
+            // codingTime is distinct from executionTime: it's how long the clock ran
+            // while the user was writing/debugging, not how long the code took to execute.
+            window.PracticeClock = {
+                isTracking: () => state !== 'idle',
+                getElapsedMs: () => currentElapsed(),
+                stop,
+                format: formatClockTime
+            };
         })();
 
         function updateGitHubButton() {
