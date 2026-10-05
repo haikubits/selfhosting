@@ -1773,7 +1773,10 @@ fn factorial(n: u64) -> u64 {
         async function runCode() {
             if (!editor) return;
             const code = editor.getValue();
-            
+            // Tracks whether this run compiled/ran successfully, so the practice clock
+            // can be frozen on success but left running on a compile/runtime error.
+            let runSucceeded = false;
+
             // Auto expand output if collapsed
             if (isOutputCollapsed) outputHeader.click();
 
@@ -1817,6 +1820,7 @@ fn factorial(n: u64) -> u64 {
                     outputConsole.classList.add('text-gray-400');
                     outputConsole.textContent += "(Program finished with no output)";
                 }
+                runSucceeded = true;
 
             } catch (error) {
                 outputConsole.classList.add('text-red-400');
@@ -1827,6 +1831,11 @@ fn factorial(n: u64) -> u64 {
                 runBtn.innerHTML = `<i data-lucide="play" class="w-4 h-4 fill-current"></i> <span class="hidden sm:inline">Run</span>`;
                 statusMsg.classList.add('hidden');
                 lucide.createIcons();
+                // Freeze the practice clock on success; keep it running on failure so
+                // the user's timed attempt continues until they actually get it right.
+                if (runSucceeded && window.PracticeClock && window.PracticeClock.isTracking()) {
+                    window.PracticeClock.stop();
+                }
             }
         }
 
@@ -2014,6 +2023,16 @@ fn factorial(n: u64) -> u64 {
             elInput.value = formatClockTime(durationMs);
             updateDisplay();
             updateButtons();
+
+            // Exposed so a successful run can freeze "coding time" (see runCode()).
+            // codingTime is distinct from how long the Rust Playground took to execute:
+            // it's how long the clock ran while the user was writing/debugging.
+            window.PracticeClock = {
+                isTracking: () => state !== 'idle',
+                getElapsedMs: () => currentElapsed(),
+                stop,
+                format: formatClockTime
+            };
         })();
 
         lucide.createIcons();
