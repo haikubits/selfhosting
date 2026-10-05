@@ -41,6 +41,16 @@
             z-index: 20;
         }
         .resizer-y:hover, .resizer-y.resizing { background-color: #f97316; }
+        .resizer-x:focus-visible, .resizer-y:focus-visible { outline: 2px solid #f97316; outline-offset: -2px; }
+
+        /* Toasts */
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.25s ease-out; }
+        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.25s ease-in; }
+
+        /* Modals */
+        .modal-overlay { transition: opacity 0.15s ease-out; }
+        .modal-content { transition: transform 0.15s ease-out; }
 
         /* Spinner */
         .spinner {
@@ -99,8 +109,13 @@
         </div>
         
         <div class="flex items-center gap-3">
+            <button id="github-btn" class="flex items-center gap-1.5 text-xs font-medium text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 px-2.5 py-1.5 rounded transition-colors" title="GitHub PAT Sync">
+                <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                <span id="github-btn-label" class="hidden sm:inline max-w-[140px] truncate">GitHub</span>
+                <span id="github-btn-dot" class="hidden w-1.5 h-1.5 rounded-full shrink-0"></span>
+            </button>
             <span id="status-msg" class="text-xs text-gray-400 italic hidden">Running...</span>
-            <button id="run-btn" class="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3 py-1.5 rounded shadow transition-colors text-sm font-medium">
+            <button id="run-btn" class="flex items-center gap-2 bg-orange-600 hover:bg-orange-700 active:bg-orange-800 text-white px-3 py-1.5 rounded shadow transition-colors text-sm font-medium" title="Run (Ctrl+Enter)">
                 <i data-lucide="play" class="w-4 h-4 fill-current"></i> <span class="hidden sm:inline">Run</span>
             </button>
         </div>
@@ -112,24 +127,49 @@
         <!-- Sidebar -->
         <div id="sidebar-backdrop"></div> <!-- Mobile Overlay -->
         <aside id="sidebar" class="bg-gray-800 flex flex-col border-r border-gray-700 md:relative md:transform-none md:w-64 min-w-[150px]">
-            <div class="p-3 border-b border-gray-700 bg-gray-850 flex justify-between items-center">
+            <div class="p-3 border-b border-gray-700 bg-gray-850 flex justify-between items-center shrink-0">
                 <h2 class="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
-                    <i data-lucide="book-open" class="w-4 h-4"></i> Snippets
+                    <i data-lucide="layout-grid" class="w-4 h-4"></i> RustStudio
                 </h2>
                 <button id="close-sidebar-mobile" class="md:hidden text-gray-400">
                     <i data-lucide="x" class="w-4 h-4"></i>
                 </button>
             </div>
-            <div class="overflow-y-auto flex-1 p-2 space-y-1" id="snippet-list">
-                <!-- Snippets injected by JS -->
+
+            <!-- Projects Section -->
+            <div id="projects-pane" class="flex flex-col min-h-[80px]" style="flex: 0 0 180px;">
+                <div class="px-3 py-2 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="folder" class="w-3.5 h-3.5"></i> Projects
+                    </h3>
+                    <button id="new-project-btn" class="text-gray-400 hover:text-orange-400 p-0.5 rounded" title="New project">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="overflow-y-auto flex-1 p-2 space-y-0.5" id="project-list"></div>
+            </div>
+
+            <!-- Resizer between Projects and Snippets -->
+            <div id="resizer-sidebar" class="resizer resizer-y" style="height:4px;" data-direction="row" data-target="projects-pane" data-flex="snippets-pane" data-key="sidebar_split" data-min="60" data-max-ratio="0.75" tabindex="0" role="separator" aria-orientation="horizontal" aria-label="Resize projects list"></div>
+
+            <!-- Snippets Section -->
+            <div id="snippets-pane" class="flex flex-col min-h-[80px] flex-1">
+                <div class="px-3 py-2 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="book-open" class="w-3.5 h-3.5"></i> Snippets
+                    </h3>
+                </div>
+                <div class="overflow-y-auto flex-1 p-2 space-y-1" id="snippet-list">
+                    <!-- Snippets injected by JS -->
+                </div>
             </div>
         </aside>
 
         <!-- Horizontal Resizer (Desktop) -->
-        <div id="resizer-x" class="resizer-x hidden md:block"></div>
+        <div id="resizer-x" class="resizer resizer-x hidden md:block" data-direction="col" data-target="sidebar" data-flex="editor-column" data-key="sidebar" data-min="150" data-max-ratio="0.6" tabindex="0" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div>
 
         <!-- Editor & Output Column -->
-        <div class="flex-1 flex flex-col min-w-0 bg-[#1e1e1e]">
+        <div class="flex-1 flex flex-col min-w-0 bg-[#1e1e1e]" id="editor-column">
             
             <!-- Editor Wrapper -->
             <div id="editor-wrapper" class="flex-1 relative min-h-[100px]">
@@ -137,7 +177,7 @@
             </div>
 
             <!-- Vertical Resizer -->
-            <div id="resizer-y" class="resizer-y"></div>
+            <div id="resizer-y" class="resizer resizer-y" data-direction="row" data-target="output-panel" data-flex="editor-wrapper" data-key="output" data-min="35" data-max-ratio="0.8" tabindex="0" role="separator" aria-orientation="horizontal" aria-label="Resize output panel"></div>
 
             <!-- Output Panel -->
             <div id="output-panel" class="bg-gray-900 flex flex-col h-48 min-h-[35px] border-t border-gray-700">
@@ -155,6 +195,74 @@
             </div>
         </div>
     </div>
+
+    <!-- GitHub Sync Modal -->
+    <div id="githubModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 modal-overlay opacity-0 pointer-events-none">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-[500px] max-w-[90%] p-6 scale-95 modal-content text-gray-200">
+            <h2 class="text-xl font-bold mb-2 flex items-center gap-2">
+                <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub PAT Sync
+            </h2>
+            <p class="text-sm text-gray-400 mb-4">
+                Enter a GitHub PAT and repo details. This runs directly in the browser and writes files to GitHub using the GitHub API.
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-400 mb-1">GitHub Token</label>
+                    <input id="githubTokenInput" type="password" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm" placeholder="ghp_...">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-400 mb-1">Repository Owner</label>
+                    <input id="githubOwnerInput" type="text" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm" placeholder="your-username">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-400 mb-1">Repository Name</label>
+                    <input id="githubRepoInput" type="text" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm" placeholder="rustplay-projects">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-400">
+                    <input id="githubCreateRepoCheckbox" type="checkbox" class="accent-orange-500">
+                    Create repo if it does not exist
+                </label>
+            </div>
+
+            <div id="githubSyncSection" class="hidden mt-5 pt-4 border-t border-gray-700">
+                <div class="text-xs uppercase tracking-wider text-gray-400 mb-1">Sync Projects</div>
+                <p class="text-xs text-gray-500 mb-3">
+                    Each project is stored in its own folder: <code>projects/&lt;folder&gt;/main.rs</code> + <code>meta.json</code>.
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="githubPushCurrentBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i> Push current</button>
+                    <button id="githubPushAllBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="upload" class="w-3.5 h-3.5"></i> Push all</button>
+                    <button id="githubPullBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="download" class="w-3.5 h-3.5"></i> Pull</button>
+                    <button id="githubSyncAllBtn" class="gh-sync-btn text-sm bg-orange-600 text-white rounded px-3 py-2 hover:bg-orange-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync all</button>
+                </div>
+                <button id="githubRenameFolderBtn" class="gh-sync-btn text-xs text-orange-400 hover:underline mt-3 disabled:opacity-50">Rename current project's GitHub folder to match its title</button>
+                <div id="githubSyncStatus" class="text-xs text-gray-400 mt-2 min-h-[1rem]"></div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button id="githubDisconnectBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 hidden">Disconnect</button>
+                <button id="githubConnectBtn" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700">Connect</button>
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Project Modal -->
+    <div id="renameModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 modal-overlay opacity-0 pointer-events-none">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-[400px] max-w-[90%] p-6 scale-95 modal-content text-gray-200">
+            <h2 class="text-lg font-bold mb-3">Rename Project</h2>
+            <input id="renameInput" type="text" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm mb-4">
+            <div class="flex justify-end gap-2">
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Cancel</button>
+                <button id="renameConfirmBtn" class="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-10 right-4 flex flex-col gap-2 z-[60] pointer-events-none"></div>
 
     <!-- Initialization Script -->
     <script>
@@ -577,7 +685,781 @@ fn factorial(n: u64) -> u64 {
             }
         ];
 
-        // --- 2. Monaco Editor Setup ---
+        // --- 2. Project State & GitHub Sync ---
+        // Repo layout: projects/<slug>/main.rs + projects/<slug>/meta.json (one folder per project).
+        const PROJECTS_ROOT = 'projects';
+
+        const state = {
+            projects: [],
+            currentProjectId: null,
+            editingId: null
+        };
+
+        const githubState = {
+            token: localStorage.getItem('rustplay_github_token') || '',
+            owner: localStorage.getItem('rustplay_github_owner') || '',
+            repo: localStorage.getItem('rustplay_github_repo') || '',
+            createIfMissing: localStorage.getItem('rustplay_github_create') === '1',
+            busy: false
+        };
+
+        let autoSaveTimer;
+
+        function generateProjectId() {
+            return 'rproj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function slugify(text) {
+            return String(text || '')
+                .toLowerCase()
+                .trim()
+                .replace(/\.rs$/, '')
+                .replace(/[^a-z0-9._-]+/g, '-')
+                .replace(/^[-.]+|[-.]+$/g, '')
+                .slice(0, 64) || 'project';
+        }
+
+        function uniqueSlug(base, excludeId = null, remoteFiles = null) {
+            const taken = (s) =>
+                state.projects.some(p => p.id !== excludeId && p.slug === s) ||
+                (remoteFiles && [...remoteFiles.keys()].some(k => k.startsWith(`${PROJECTS_ROOT}/${s}/`)));
+            let slug = base;
+            let i = 2;
+            while (taken(slug)) slug = `${base}-${i++}`;
+            return slug;
+        }
+
+        // Folder names are fixed once a project has been pushed; before that they follow the title.
+        function refreshSlugIfUnsynced(project) {
+            if (!project.sync) project.slug = uniqueSlug(slugify(project.title), project.id);
+        }
+
+        function projectPaths(slug) {
+            return {
+                main: `${PROJECTS_ROOT}/${slug}/main.rs`,
+                meta: `${PROJECTS_ROOT}/${slug}/meta.json`
+            };
+        }
+
+        // cyrb53-style hash of the synced fields, used to detect unpushed local edits.
+        function projectHash(p) {
+            const s = JSON.stringify([p.title || '', p.code || '']);
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
+        }
+
+        function isProjectDirty(p) {
+            return !p.sync || !!p.sync.conflict || projectHash(p) !== p.sync.hash;
+        }
+
+        function getSyncStatus(p) {
+            if (!p.sync) return 'new';
+            if (p.sync.conflict) return 'conflict';
+            return projectHash(p) !== p.sync.hash ? 'dirty' : 'synced';
+        }
+
+        function syncBadgeHTML(p) {
+            if (!isGitHubConnected()) return '';
+            const badges = {
+                new: ['cloud', 'text-gray-500 opacity-60', 'Not yet pushed to GitHub'],
+                dirty: ['cloud-upload', 'text-amber-500', 'Local changes not pushed to GitHub'],
+                conflict: ['triangle-alert', 'text-red-500', 'Conflict: changed both locally and on GitHub'],
+                synced: ['cloud', 'text-green-500', 'Synced with GitHub']
+            };
+            const [icon, cls, title] = badges[getSyncStatus(p)];
+            return `<span class="p-1 inline-flex" title="${title}"><i data-lucide="${icon}" class="w-3 h-3 ${cls}"></i></span>`;
+        }
+
+        function updateSyncBadges() {
+            document.querySelectorAll('[data-sync-badge]').forEach(el => {
+                const project = state.projects.find(p => p.id === el.dataset.syncBadge);
+                if (project) el.innerHTML = syncBadgeHTML(project);
+            });
+            lucide.createIcons();
+        }
+
+        function markProjectSynced(project, mainSha, metaSha) {
+            project.sync = {
+                mainSha: mainSha || null,
+                metaSha: metaSha || null,
+                hash: projectHash(project),
+                lastSyncedAt: new Date().toISOString(),
+                conflict: false
+            };
+        }
+
+        function markProjectConflict(project) {
+            project.sync = { ...(project.sync || {}), conflict: true };
+        }
+
+        function getCurrentProject() {
+            return state.projects.find(p => p.id === state.currentProjectId);
+        }
+
+        function createNewProject(code) {
+            const title = 'Untitled ' + (state.projects.length + 1);
+            const newProject = {
+                id: generateProjectId(),
+                slug: uniqueSlug(slugify(title)),
+                title: title,
+                code: code !== undefined ? code : snippets[0].code,
+                createdAt: new Date().toISOString()
+            };
+            state.projects.push(newProject);
+            saveData();
+            window.loadProject(newProject.id);
+            renderProjectList();
+            showToast('New project created');
+            return newProject;
+        }
+
+        function saveCurrentProjectState() {
+            const project = getCurrentProject();
+            if (project && editor) {
+                project.code = editor.getValue();
+                saveData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('rustplay_projects', JSON.stringify(state.projects));
+            if (state.currentProjectId) localStorage.setItem('rustplay_last_project_id', state.currentProjectId);
+            updateSyncBadges();
+        }
+
+        function loadData() {
+            const raw = localStorage.getItem('rustplay_projects');
+            if (raw) {
+                try { state.projects = JSON.parse(raw); } catch (e) { state.projects = []; }
+            }
+            migrateProjects();
+        }
+
+        function migrateProjects() {
+            state.projects.forEach(p => {
+                if (!p.createdAt) p.createdAt = new Date().toISOString();
+                if (!p.slug) p.slug = uniqueSlug(slugify(p.title), p.id);
+            });
+        }
+
+        function debounceSave() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                saveCurrentProjectState();
+                renderProjectList();
+            }, 1000);
+        }
+
+        function renderProjectList() {
+            const projectList = document.getElementById('project-list');
+            if (!state.projects.length) {
+                projectList.innerHTML = '<div class="text-center text-gray-500 text-xs mt-4 px-2">No projects yet. Click + to create one.</div>';
+                return;
+            }
+            projectList.innerHTML = state.projects.map(p => {
+                const isEditing = state.editingId === p.id;
+                const isActive = p.id === state.currentProjectId;
+                let contentHTML, actionsHTML;
+
+                if (isEditing) {
+                    contentHTML = `<input id="edit-${p.id}" type="text" value="${escapeHtml(p.title)}" class="w-full text-xs bg-gray-700 border border-orange-500 rounded px-1 py-0.5 text-gray-100" />`;
+                    actionsHTML = `<button class="text-green-500 hover:text-green-400 p-1 ml-1 relative z-30" onclick="saveEdit('${p.id}', event)"><i data-lucide="check" class="w-3.5 h-3.5"></i></button>`;
+                } else {
+                    contentHTML = `<div class="truncate text-xs font-medium ${isActive ? 'text-orange-400' : 'text-gray-300'} pointer-events-none">${escapeHtml(p.title)}</div>`;
+                    actionsHTML = `
+                        <div class="flex items-center">
+                            <span data-sync-badge="${p.id}">${syncBadgeHTML(p)}</span>
+                            <button class="text-gray-500 hover:text-orange-400 p-1 transition-colors relative z-20" title="Rename" onclick="startEdit('${p.id}', event)">
+                                <i data-lucide="pencil" class="w-3 h-3"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-red-500 p-1 transition-colors relative z-20" title="Delete" onclick="deleteProject('${p.id}', event)">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                            </button>
+                        </div>`;
+                }
+
+                return `
+                    <div class="group flex items-center justify-between p-1.5 rounded hover:bg-gray-700 transition relative mb-0.5 ${isActive ? 'bg-gray-700 border-l-2 border-orange-500' : ''}">
+                        <div class="absolute inset-0 z-0 cursor-pointer" onclick="loadProject('${p.id}')"></div>
+                        <div class="flex-1 min-w-0 mr-1 relative z-10 pointer-events-none">${contentHTML}</div>
+                        <div class="shrink-0 flex items-center relative z-20">${actionsHTML}</div>
+                    </div>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        window.loadProject = function(id) {
+            saveCurrentProjectState();
+            state.currentProjectId = id;
+            const project = getCurrentProject();
+            if (project && editor) {
+                editor.setValue(project.code || '');
+            }
+            renderProjectList();
+            if (window.innerWidth < 768) {
+                const sb = document.getElementById('sidebar');
+                if (sb.classList.contains('open')) toggleMobileSidebar();
+            }
+        };
+
+        window.startEdit = function(id, event) {
+            event.stopPropagation();
+            state.editingId = id;
+            renderProjectList();
+            setTimeout(() => {
+                const input = document.getElementById(`edit-${id}`);
+                if (input) { input.focus(); input.select(); }
+            }, 0);
+        };
+
+        window.saveEdit = function(id, event) {
+            event.stopPropagation();
+            const input = document.getElementById(`edit-${id}`);
+            const project = state.projects.find(p => p.id === id);
+            if (input && project && input.value.trim()) {
+                project.title = input.value.trim();
+                refreshSlugIfUnsynced(project);
+            }
+            state.editingId = null;
+            saveData();
+            renderProjectList();
+        };
+
+        window.deleteProject = function(id, event) {
+            event.stopPropagation();
+            if (!confirm('Delete this project? This cannot be undone locally (GitHub copy, if any, is untouched).')) return;
+            const idx = state.projects.findIndex(p => p.id === id);
+            if (idx === -1) return;
+            state.projects.splice(idx, 1);
+            if (state.currentProjectId === id) {
+                if (state.projects.length) {
+                    window.loadProject(state.projects[0].id);
+                } else {
+                    createNewProject();
+                }
+            }
+            saveData();
+            renderProjectList();
+            showToast('Project deleted');
+        };
+
+        function showToast(msg, type = 'info') {
+            const t = document.createElement('div');
+            t.className = `px-4 py-2 rounded shadow-lg text-white text-sm font-semibold flex items-center gap-2 pointer-events-auto ${type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-orange-600'}`;
+            t.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'toast-enter';
+            wrapper.appendChild(t);
+
+            document.getElementById('toastContainer').appendChild(wrapper);
+            requestAnimationFrame(() => wrapper.className = 'toast-enter-active');
+
+            setTimeout(() => {
+                wrapper.className = 'toast-exit-active';
+                setTimeout(() => wrapper.remove(), 300);
+            }, 3000);
+        }
+
+        function openModal(modal) {
+            modal.classList.remove('hidden', 'pointer-events-none');
+            modal.classList.add('flex');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            const content = modal.querySelector('.modal-content');
+            if (content) content.classList.remove('scale-95');
+        }
+
+        function closeModal(modal) {
+            modal.classList.add('opacity-0');
+            const content = modal.querySelector('.modal-content');
+            if (content) content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden', 'pointer-events-none');
+                modal.classList.remove('flex');
+            }, 200);
+        }
+
+        function updateGitHubButton() {
+            const btn = document.getElementById('github-btn');
+            const label = document.getElementById('github-btn-label');
+            const dot = document.getElementById('github-btn-dot');
+            if (githubState.token && githubState.owner && githubState.repo) {
+                label.textContent = `${githubState.owner}/${githubState.repo}`;
+                dot.classList.remove('hidden');
+                dot.classList.add('bg-green-500');
+                btn.title = 'GitHub PAT connected';
+            } else {
+                label.textContent = 'GitHub';
+                dot.classList.add('hidden');
+                dot.classList.remove('bg-green-500');
+                btn.title = 'GitHub PAT Sync';
+            }
+        }
+
+        function saveGitHubConfig() {
+            localStorage.setItem('rustplay_github_token', githubState.token || '');
+            localStorage.setItem('rustplay_github_owner', githubState.owner || '');
+            localStorage.setItem('rustplay_github_repo', githubState.repo || '');
+            localStorage.setItem('rustplay_github_create', githubState.createIfMissing ? '1' : '0');
+            updateGitHubButton();
+        }
+
+        function clearGitHubConfig() {
+            githubState.token = '';
+            githubState.owner = '';
+            githubState.repo = '';
+            localStorage.removeItem('rustplay_github_token');
+            localStorage.removeItem('rustplay_github_owner');
+            localStorage.removeItem('rustplay_github_repo');
+            updateGitHubButton();
+        }
+
+        function base64Encode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            bytes.forEach((b) => binary += String.fromCharCode(b));
+            return btoa(binary);
+        }
+
+        function base64Decode(b64) {
+            const binary = atob((b64 || '').replace(/\s/g, ''));
+            const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        }
+
+        async function githubRequest(path, options = {}) {
+            if (!githubState.token) throw new Error('No GitHub token configured');
+
+            const res = await fetch(`https://api.github.com${path}`, {
+                ...options,
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `token ${githubState.token}`,
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    ...(options.headers || {})
+                }
+            });
+
+            if (!res.ok) {
+                const body = await res.text();
+                let message = 'GitHub API request failed';
+                try {
+                    const json = JSON.parse(body);
+                    if (json.message) message = json.message;
+                } catch (e) {}
+                const error = new Error(message);
+                error.status = res.status;
+                throw error;
+            }
+
+            const text = await res.text();
+            return text ? JSON.parse(text) : null;
+        }
+
+        function isGitHubConnected() {
+            return !!(githubState.token && githubState.owner && githubState.repo);
+        }
+
+        function repoBase() {
+            return `/repos/${encodeURIComponent(githubState.owner)}/${encodeURIComponent(githubState.repo)}`;
+        }
+
+        function branchRefPath(branch) {
+            return branch.split('/').map(encodeURIComponent).join('/');
+        }
+
+        async function ensureGitHubRepoExists() {
+            if (!githubState.owner || !githubState.repo) throw new Error('GitHub owner and repo are required');
+            try {
+                return await githubRequest(repoBase());
+            } catch (err) {
+                if (err.status && err.status !== 404) throw err;
+                if (!githubState.createIfMissing) {
+                    throw new Error(`Repository ${githubState.owner}/${githubState.repo} does not exist. Enable "Create repo if it does not exist" in GitHub settings.`);
+                }
+                return await githubRequest('/user/repos', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: githubState.repo, private: false, auto_init: true })
+                });
+            }
+        }
+
+        // The Git Data API cannot operate on a repo with no commits, so seed one via the Contents API.
+        async function initializeEmptyRepo() {
+            await githubRequest(`${repoBase()}/contents/README.md`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    message: 'Initialize RustStudio projects repo',
+                    content: base64Encode('# RustStudio Projects\n\nEach folder under `projects/` is one RustStudio project (`main.rs` + `meta.json`).\n')
+                })
+            });
+        }
+
+        function treeToFileMap(tree) {
+            const files = new Map();
+            (tree.tree || []).forEach(entry => {
+                if (entry.type === 'blob') files.set(entry.path, entry.sha);
+            });
+            return files;
+        }
+
+        async function getRemoteSnapshot() {
+            const repoInfo = await ensureGitHubRepoExists();
+            const branch = repoInfo.default_branch || 'main';
+
+            let ref;
+            try {
+                ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+            } catch (err) {
+                if (err.status !== 404 && err.status !== 409) throw err;
+                await initializeEmptyRepo();
+                ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+            }
+
+            const commitSha = ref.object.sha;
+            const commit = await githubRequest(`${repoBase()}/git/commits/${commitSha}`);
+            const tree = await githubRequest(`${repoBase()}/git/trees/${commit.tree.sha}?recursive=1`);
+            if (tree.truncated) {
+                showToast('Repository is very large; some projects may be missing from sync', 'error');
+            }
+
+            return { branch, commitSha, treeSha: commit.tree.sha, files: treeToFileMap(tree) };
+        }
+
+        async function commitTreeEntries(snapshot, entries, message) {
+            const tree = await githubRequest(`${repoBase()}/git/trees`, {
+                method: 'POST',
+                body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries })
+            });
+            const commit = await githubRequest(`${repoBase()}/git/commits`, {
+                method: 'POST',
+                body: JSON.stringify({ message, tree: tree.sha, parents: [snapshot.commitSha] })
+            });
+            try {
+                await githubRequest(`${repoBase()}/git/refs/heads/${branchRefPath(snapshot.branch)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ sha: commit.sha })
+                });
+            } catch (err) {
+                if (err.status === 422) throw new Error('GitHub branch changed during sync. Please try again.');
+                throw err;
+            }
+            const newTree = await githubRequest(`${repoBase()}/git/trees/${tree.sha}?recursive=1`);
+            return treeToFileMap(newTree);
+        }
+
+        function buildProjectTreeEntries(project) {
+            const { main, meta } = projectPaths(project.slug);
+            const metaJson = JSON.stringify({
+                title: project.title,
+                slug: project.slug,
+                createdAt: project.createdAt,
+                updatedAt: new Date().toISOString()
+            }, null, 2) + '\n';
+            return [
+                { path: main, mode: '100644', type: 'blob', content: project.code || '' },
+                { path: meta, mode: '100644', type: 'blob', content: metaJson }
+            ];
+        }
+
+        function listRemoteProjects(files) {
+            const pattern = new RegExp(`^${PROJECTS_ROOT}/([^/]+)/(main\\.rs|meta\\.json)$`);
+            const remote = new Map();
+            files.forEach((sha, path) => {
+                const match = path.match(pattern);
+                if (!match) return;
+                const entry = remote.get(match[1]) || { mainSha: null, metaSha: null };
+                if (match[2] === 'main.rs') entry.mainSha = sha;
+                else entry.metaSha = sha;
+                remote.set(match[1], entry);
+            });
+            [...remote.keys()].forEach(slug => { if (!remote.get(slug).mainSha) remote.delete(slug); });
+            return remote;
+        }
+
+        function remoteChangedSinceSync(project, snapshot) {
+            const { main, meta } = projectPaths(project.slug);
+            const remoteMain = snapshot.files.get(main) || null;
+            const remoteMeta = snapshot.files.get(meta) || null;
+            if (!remoteMain && !remoteMeta) return false;
+            if (!project.sync) return true;
+            return remoteMain !== project.sync.mainSha || remoteMeta !== project.sync.metaSha;
+        }
+
+        async function fetchBlobText(sha) {
+            const blob = await githubRequest(`${repoBase()}/git/blobs/${sha}`);
+            return base64Decode(blob.content);
+        }
+
+        function reloadEditorFromProject(project) {
+            if (editor) editor.setValue(project.code || '');
+        }
+
+        function setSyncStatus(text) {
+            const el = document.getElementById('githubSyncStatus');
+            if (el) el.textContent = text || '';
+        }
+
+        async function runGitHubOperation(label, fn) {
+            if (!isGitHubConnected()) {
+                showToast('Connect to GitHub first', 'error');
+                return null;
+            }
+            if (githubState.busy) {
+                showToast('A GitHub sync is already in progress', 'info');
+                return null;
+            }
+
+            githubState.busy = true;
+            document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = true);
+            setSyncStatus(`${label}...`);
+
+            try {
+                saveCurrentProjectState();
+                return await fn();
+            } catch (err) {
+                showToast(`GitHub ${label.toLowerCase()} failed: ${err.message}`, 'error');
+                setSyncStatus(`${label} failed: ${err.message}`);
+                return null;
+            } finally {
+                githubState.busy = false;
+                document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = false);
+                saveData();
+                renderProjectList();
+            }
+        }
+
+        // Pushes the given projects in one commit. Projects whose ids are in `force` overwrite GitHub without prompting.
+        async function pushProjectsCore(projects, snapshot, force = new Set()) {
+            const conflicts = projects.filter(p => !force.has(p.id) && remoteChangedSinceSync(p, snapshot));
+            let toPush = projects;
+
+            if (conflicts.length) {
+                const names = conflicts.map(p => `• ${p.title} (${PROJECTS_ROOT}/${p.slug})`).join('\n');
+                const overwrite = confirm(`These projects were changed on GitHub since your last sync:\n\n${names}\n\nOK = overwrite GitHub with your local version\nCancel = skip them (use Pull to get the GitHub version)`);
+                if (!overwrite) {
+                    conflicts.forEach(markProjectConflict);
+                    toPush = projects.filter(p => !conflicts.includes(p));
+                }
+            }
+
+            if (!toPush.length) return 0;
+
+            const entries = toPush.flatMap(buildProjectTreeEntries);
+            const message = toPush.length === 1
+                ? `Update ${toPush[0].slug} from RustStudio`
+                : `Sync ${toPush.length} projects from RustStudio`;
+            const files = await commitTreeEntries(snapshot, entries, message);
+
+            toPush.forEach(p => {
+                const { main, meta } = projectPaths(p.slug);
+                markProjectSynced(p, files.get(main), files.get(meta));
+            });
+            return toPush.length;
+        }
+
+        // mode 'pull': conflicts keep local and get flagged. mode 'sync': conflicts kept locally are returned for force-push.
+        async function pullProjectsCore(snapshot, mode = 'pull') {
+            const remote = listRemoteProjects(snapshot.files);
+            const keepLocal = new Set();
+            let added = 0, updated = 0, conflicts = 0;
+
+            for (const [slug, r] of remote) {
+                let local = state.projects.find(p => p.slug === slug);
+
+                if (local && local.sync && local.sync.mainSha === r.mainSha && local.sync.metaSha === r.metaSha) {
+                    continue;
+                }
+
+                if (local && isProjectDirty(local)) {
+                    const useRemote = confirm(mode === 'sync'
+                        ? `"${local.title}" changed both locally and on GitHub.\n\nOK = use the GitHub version (discard local changes)\nCancel = keep your local version (it will overwrite GitHub)`
+                        : `"${local.title}" has local changes, and GitHub has a different version.\n\nOK = replace local with the GitHub version\nCancel = keep local (marked as conflict)`);
+                    if (!useRemote) {
+                        if (mode === 'sync') {
+                            keepLocal.add(local.id);
+                        } else {
+                            markProjectConflict(local);
+                            conflicts++;
+                        }
+                        continue;
+                    }
+                }
+
+                setSyncStatus(`Downloading ${PROJECTS_ROOT}/${slug}...`);
+                const code = await fetchBlobText(r.mainSha);
+                let meta = {};
+                if (r.metaSha) {
+                    try { meta = JSON.parse(await fetchBlobText(r.metaSha)) || {}; } catch (e) { meta = {}; }
+                }
+
+                if (!local) {
+                    local = {
+                        id: generateProjectId(),
+                        slug,
+                        title: slug,
+                        code: '',
+                        createdAt: meta.createdAt || new Date().toISOString()
+                    };
+                    state.projects.push(local);
+                    added++;
+                } else {
+                    updated++;
+                }
+
+                local.title = (typeof meta.title === 'string' && meta.title.trim()) ? meta.title.trim() : (local.title || slug);
+                local.code = code;
+                markProjectSynced(local, r.mainSha, r.metaSha);
+
+                if (local.id === state.currentProjectId) reloadEditorFromProject(local);
+            }
+
+            return { added, updated, conflicts, keepLocal };
+        }
+
+        async function pushProjects(projects) {
+            return runGitHubOperation('Push', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const pushed = await pushProjectsCore(projects, snapshot);
+                const skipped = projects.length - pushed;
+                const msg = `Pushed ${pushed} project${pushed === 1 ? '' : 's'}` + (skipped ? `, skipped ${skipped}` : '');
+                setSyncStatus(msg);
+                showToast(msg, pushed ? 'success' : 'info');
+                return pushed;
+            });
+        }
+
+        async function pullProjects() {
+            return runGitHubOperation('Pull', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const { added, updated, conflicts } = await pullProjectsCore(snapshot, 'pull');
+                const msg = `Pulled: ${added} new, ${updated} updated` + (conflicts ? `, ${conflicts} conflict${conflicts === 1 ? '' : 's'}` : '');
+                setSyncStatus(msg);
+                showToast(msg, conflicts ? 'error' : 'success');
+            });
+        }
+
+        async function syncAllProjects() {
+            return runGitHubOperation('Sync', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const { added, updated, keepLocal } = await pullProjectsCore(snapshot, 'sync');
+                const toPush = state.projects.filter(p => isProjectDirty(p) || keepLocal.has(p.id));
+                setSyncStatus(`Pushing ${toPush.length} project${toPush.length === 1 ? '' : 's'}...`);
+                const pushed = toPush.length ? await pushProjectsCore(toPush, snapshot, keepLocal) : 0;
+                const msg = `Sync complete: ${added} new, ${updated} updated from GitHub, ${pushed} pushed`;
+                setSyncStatus(msg);
+                showToast(msg, 'success');
+            });
+        }
+
+        async function renameRemoteFolder() {
+            const project = getCurrentProject();
+            if (!project) return;
+
+            if (!project.sync) {
+                refreshSlugIfUnsynced(project);
+                saveData();
+                showToast(`Folder will be ${PROJECTS_ROOT}/${project.slug} on first push`, 'info');
+                return;
+            }
+
+            return runGitHubOperation('Rename', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const oldSlug = project.slug;
+                const newSlug = uniqueSlug(slugify(project.title), project.id, snapshot.files);
+                if (slugify(project.title) === oldSlug) {
+                    setSyncStatus(`Folder already matches: ${PROJECTS_ROOT}/${oldSlug}`);
+                    return;
+                }
+                if (!confirm(`Move ${PROJECTS_ROOT}/${oldSlug} to ${PROJECTS_ROOT}/${newSlug} on GitHub?\n\nThe current local version will be written to the new folder.`)) {
+                    setSyncStatus('');
+                    return;
+                }
+
+                const deletions = [...snapshot.files.keys()]
+                    .filter(path => path.startsWith(`${PROJECTS_ROOT}/${oldSlug}/`))
+                    .map(path => ({ path, mode: '100644', type: 'blob', sha: null }));
+                const entries = [...deletions, ...buildProjectTreeEntries({ ...project, slug: newSlug })];
+                const files = await commitTreeEntries(snapshot, entries, `Rename ${oldSlug} to ${newSlug} from RustStudio`);
+                project.slug = newSlug;
+                const { main, meta } = projectPaths(newSlug);
+                markProjectSynced(project, files.get(main), files.get(meta));
+                setSyncStatus(`Moved to ${PROJECTS_ROOT}/${newSlug}`);
+                showToast(`Moved to ${PROJECTS_ROOT}/${newSlug}`, 'success');
+            });
+        }
+
+        function openGitHubModal() {
+            document.getElementById('githubTokenInput').value = githubState.token;
+            document.getElementById('githubOwnerInput').value = githubState.owner;
+            document.getElementById('githubRepoInput').value = githubState.repo;
+            document.getElementById('githubCreateRepoCheckbox').checked = githubState.createIfMissing;
+            document.getElementById('githubDisconnectBtn').classList.toggle('hidden', !(githubState.token && githubState.owner && githubState.repo));
+            document.getElementById('githubSyncSection').classList.toggle('hidden', !isGitHubConnected());
+            if (!githubState.busy) setSyncStatus('');
+            openModal(document.getElementById('githubModal'));
+            lucide.createIcons();
+        }
+
+        async function connectGitHubFromModal() {
+            const token = document.getElementById('githubTokenInput').value.trim();
+            const owner = document.getElementById('githubOwnerInput').value.trim();
+            const repo = document.getElementById('githubRepoInput').value.trim();
+            const createIfMissing = document.getElementById('githubCreateRepoCheckbox').checked;
+
+            if (!token || !owner || !repo) {
+                showToast('GitHub token, owner, and repo are required', 'error');
+                return;
+            }
+
+            try {
+                const userResp = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `token ${token}`,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+
+                if (!userResp.ok) {
+                    const body = await userResp.text();
+                    throw new Error(body || 'Invalid GitHub token');
+                }
+
+                githubState.token = token;
+                githubState.owner = owner;
+                githubState.repo = repo;
+                githubState.createIfMissing = createIfMissing;
+                saveGitHubConfig();
+                closeModal(document.getElementById('githubModal'));
+                showToast('Connected to GitHub', 'success');
+                updateGitHubButton();
+                renderProjectList();
+            } catch (err) {
+                showToast(`GitHub connection failed: ${err.message}`, 'error');
+            }
+        }
+
+        function disconnectGitHub() {
+            clearGitHubConfig();
+            closeModal(document.getElementById('githubModal'));
+            renderProjectList();
+            showToast('Disconnected from GitHub', 'info');
+        }
+
+        // --- 3. Monaco Editor Setup ---
         let editor;
         
         require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
@@ -607,7 +1489,25 @@ fn factorial(n: u64) -> u64 {
                 scrollBeyondLastLine: false,
                 fontFamily: "'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace"
             });
-            
+
+            // Load persisted projects (or create a starter project) and show the current one.
+            loadData();
+            if (!state.projects.length) {
+                createNewProject(snippets[0].code);
+            } else {
+                const lastId = localStorage.getItem('rustplay_last_project_id');
+                const toLoad = state.projects.find(p => p.id === lastId) || state.projects[0];
+                window.loadProject(toLoad.id);
+            }
+            renderProjectList();
+            updateGitHubButton();
+
+            editor.onDidChangeModelContent(() => debounceSave());
+
+            // Monaco binds Ctrl/Cmd+Enter to "insert line below" by default; override it to Run
+            // so the shortcut works the same whether focus is inside the editor or elsewhere.
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runCode());
+
             // Initial layout calculation
             setTimeout(() => editor.layout(), 100);
             
@@ -617,9 +1517,10 @@ fn factorial(n: u64) -> u64 {
             });
 
             renderSnippets();
+            initResizers();
         });
 
-        // --- 3. UI Logic & Resizing ---
+        // --- 4. UI Logic & Resizing ---
         const snippetList = document.getElementById('snippet-list');
         const outputConsole = document.getElementById('output-console');
         const runBtn = document.getElementById('run-btn');
@@ -641,82 +1542,119 @@ fn factorial(n: u64) -> u64 {
         const outputHeader = document.getElementById('output-header');
         const outputChevron = document.getElementById('output-chevron');
 
-        // --- Resizing Logic ---
-        
-        // Horizontal Resize (Sidebar)
-        let isResizingX = false;
-        resizerX.addEventListener('mousedown', (e) => {
-            isResizingX = true;
-            document.body.style.cursor = 'col-resize';
-            resizerX.classList.add('resizing');
-            e.preventDefault(); // Prevent text selection
-        });
+        // --- Resizable Panes ---
+        // A .resizer sits between flex siblings and sets an explicit size on its data-target pane.
+        // data-direction: 'col' (width) or 'row' (height). data-flex names the sibling that absorbs
+        // the remaining space (kept above a minimum). Size and position persist via localStorage.
+        const FLEX_MIN = { col: 150, row: 60 };
 
-        // Vertical Resize (Output)
-        let isResizingY = false;
-        let startY, startHeight;
+        function getResizerStorageKey(r, dir) {
+            return `rustplay_layout_${r.dataset.key}_${dir}`;
+        }
 
-        const startResizeY = (y) => {
-            isResizingY = true;
-            startY = y;
-            startHeight = outputPanel.offsetHeight;
-            document.body.style.cursor = 'row-resize';
-            resizerY.classList.add('resizing');
-        };
+        function getPaneSize(el, dir) {
+            const rect = el.getBoundingClientRect();
+            return dir === 'col' ? rect.width : rect.height;
+        }
 
-        resizerY.addEventListener('mousedown', (e) => {
-            startResizeY(e.clientY);
-            e.preventDefault();
-        });
-        
-        // Touch support for resizing output on mobile
-        resizerY.addEventListener('touchstart', (e) => {
-            startResizeY(e.touches[0].clientY);
-            e.preventDefault();
-        });
-
-        // Global Mouse/Touch Move
-        const onMove = (clientX, clientY) => {
-            if (isResizingX) {
-                const newWidth = clientX;
-                if (newWidth > 150 && newWidth < 600) {
-                    sidebar.style.width = `${newWidth}px`;
-                    editor.layout();
-                }
+        function setPaneSize(r, dir, px) {
+            const target = document.getElementById(r.dataset.target);
+            const flex = r.dataset.flex ? document.getElementById(r.dataset.flex) : null;
+            const total = getPaneSize(r.parentElement, dir);
+            const min = parseFloat(r.dataset.min) || 60;
+            let max = total * (parseFloat(r.dataset.maxRatio) || 0.6);
+            if (flex) {
+                max = Math.min(max, getPaneSize(target, dir) + getPaneSize(flex, dir) - FLEX_MIN[dir]);
             }
-            if (isResizingY) {
-                const deltaY = startY - clientY; // Dragging up increases height
-                const newHeight = startHeight + deltaY;
-                
-                // Constraints
-                const maxH = workspace.offsetHeight - 100;
-                if (newHeight > 35 && newHeight < maxH) {
-                    outputPanel.style.height = `${newHeight}px`;
-                    editor.layout();
-                }
-            }
-        };
+            const size = Math.round(Math.min(Math.max(max, min), Math.max(min, px)));
+            target.style[dir === 'col' ? 'width' : 'height'] = size + 'px';
+            return size;
+        }
 
-        document.addEventListener('mousemove', (e) => onMove(e.clientX, e.clientY));
-        document.addEventListener('touchmove', (e) => {
-            if(isResizingY) onMove(e.touches[0].clientX, e.touches[0].clientY);
-        });
+        function refreshEditorLayout() {
+            if (editor) editor.layout();
+        }
 
-        // Global Mouse/Touch Up
-        const onUp = () => {
-            if (isResizingX || isResizingY) {
-                isResizingX = false;
-                isResizingY = false;
-                document.body.style.cursor = '';
-                resizerX.classList.remove('resizing');
-                resizerY.classList.remove('resizing');
-                if (editor) editor.layout();
-            }
-        };
+        function applyPaneLayout() {
+            const resizers = [...document.querySelectorAll('.resizer')];
+            resizers.forEach(r => {
+                const target = document.getElementById(r.dataset.target);
+                target.style.width = '';
+                target.style.height = '';
+            });
+            resizers.forEach(r => {
+                if (r.offsetParent === null) return;
+                const dir = r.dataset.direction;
+                const saved = parseFloat(localStorage.getItem(getResizerStorageKey(r, dir)));
+                if (!isNaN(saved)) setPaneSize(r, dir, saved);
+            });
+            refreshEditorLayout();
+        }
 
-        document.addEventListener('mouseup', onUp);
-        document.addEventListener('touchend', onUp);
+        function initResizers() {
+            document.querySelectorAll('.resizer').forEach(r => {
+                const target = document.getElementById(r.dataset.target);
+                const dir = r.dataset.direction;
 
+                r.addEventListener('pointerdown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const startSize = getPaneSize(target, dir);
+                    const startPos = dir === 'col' ? e.clientX : e.clientY;
+                    let size = startSize;
+                    let moved = false;
+                    let frame = null;
+
+                    r.setPointerCapture(e.pointerId);
+                    r.classList.add('dragging');
+                    document.body.classList.add(dir === 'col' ? 'resizing-col' : 'resizing-row');
+
+                    const onMove = (ev) => {
+                        const pos = dir === 'col' ? ev.clientX : ev.clientY;
+                        if (!moved && Math.abs(pos - startPos) < 2) return;
+                        moved = true;
+                        size = setPaneSize(r, dir, startSize + (pos - startPos));
+                        if (!frame) frame = requestAnimationFrame(() => { frame = null; refreshEditorLayout(); });
+                    };
+                    const onUp = () => {
+                        r.removeEventListener('pointermove', onMove);
+                        r.removeEventListener('pointerup', onUp);
+                        r.removeEventListener('pointercancel', onUp);
+                        r.classList.remove('dragging');
+                        document.body.classList.remove(dir === 'col' ? 'resizing-col' : 'resizing-row');
+                        if (moved) localStorage.setItem(getResizerStorageKey(r, dir), size);
+                        refreshEditorLayout();
+                    };
+
+                    r.addEventListener('pointermove', onMove);
+                    r.addEventListener('pointerup', onUp);
+                    r.addEventListener('pointercancel', onUp);
+                });
+
+                r.addEventListener('keydown', (e) => {
+                    const keys = dir === 'col' ? { ArrowLeft: -1, ArrowRight: 1 } : { ArrowUp: -1, ArrowDown: 1 };
+                    if (!(e.key in keys)) return;
+                    e.preventDefault();
+                    const step = e.shiftKey ? 64 : 16;
+                    const size = setPaneSize(r, dir, getPaneSize(target, dir) + keys[e.key] * step);
+                    localStorage.setItem(getResizerStorageKey(r, dir), size);
+                    refreshEditorLayout();
+                });
+
+                r.addEventListener('dblclick', () => {
+                    localStorage.removeItem(getResizerStorageKey(r, dir));
+                    target.style[dir === 'col' ? 'width' : 'height'] = '';
+                    refreshEditorLayout();
+                });
+            });
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(applyPaneLayout, 100);
+            });
+            applyPaneLayout();
+        }
 
         // --- Collapse/Toggle Logic ---
 
@@ -788,6 +1726,7 @@ fn factorial(n: u64) -> u64 {
                     document.querySelectorAll('#snippet-list button').forEach(b => b.classList.remove('bg-gray-700', 'text-white'));
                     btn.classList.add('bg-gray-700', 'text-white');
                     if (editor) editor.setValue(s.code);
+                    debounceSave();
                     
                     // Close mobile sidebar on selection
                     if (window.innerWidth < 768) {
@@ -807,7 +1746,7 @@ fn factorial(n: u64) -> u64 {
         };
 
         // --- Execution Logic ---
-        runBtn.onclick = async () => {
+        async function runCode() {
             if (!editor) return;
             const code = editor.getValue();
             
@@ -865,7 +1804,32 @@ fn factorial(n: u64) -> u64 {
                 statusMsg.classList.add('hidden');
                 lucide.createIcons();
             }
-        };
+        }
+
+        runBtn.onclick = runCode;
+
+        // Ctrl/Cmd+Enter runs the current code from anywhere, including inside the editor.
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                runCode();
+            }
+        });
+
+        // --- New Project & GitHub Sync Wiring ---
+        document.getElementById('new-project-btn').onclick = () => createNewProject();
+        document.getElementById('github-btn').onclick = openGitHubModal;
+        document.getElementById('githubConnectBtn').onclick = connectGitHubFromModal;
+        document.getElementById('githubDisconnectBtn').onclick = disconnectGitHub;
+        document.getElementById('githubPushCurrentBtn').onclick = () => { const p = getCurrentProject(); if (p) pushProjects([p]); };
+        document.getElementById('githubPushAllBtn').onclick = () => pushProjects([...state.projects]);
+        document.getElementById('githubPullBtn').onclick = pullProjects;
+        document.getElementById('githubSyncAllBtn').onclick = syncAllProjects;
+        document.getElementById('githubRenameFolderBtn').onclick = renameRemoteFolder;
+
+        document.querySelectorAll('.closeModal').forEach(btn => {
+            btn.onclick = function () { closeModal(this.closest('.fixed')); };
+        });
 
         lucide.createIcons();
     </script>
