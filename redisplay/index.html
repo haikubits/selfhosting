@@ -1,0 +1,1972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>RedisPlay - Client-Side Redis & Lua Playground</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#dc382d',
+                        accent: '#f59e0b',
+                        darkbg: '#1e1e1e',
+                        darkpanel: '#252526',
+                    },
+                    fontFamily: {
+                        mono: ['"Fira Code"', 'monospace'],
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- CodeMirror 5 (Lua mode for scripting) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/theme/dracula.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/lua/lua.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/closebrackets.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/edit/matchbrackets.min.js"></script>
+
+    <!-- Fengari: pure-JS Lua 5.3 VM, used to execute EVAL / EVALSHA scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/fengari-web@0.1.4/dist/fengari-web.js"></script>
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+
+        html, body { height: 100%; margin: 0; }
+        body { background: #1e1e1e; color: #d4d4d8; }
+
+        .CodeMirror {
+            position: absolute !important;
+            top: 0; left: 0; right: 0; bottom: 0;
+            height: 100% !important;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+        }
+
+        /* Draggable pane resizers (ported verbatim from PyPlay/RustPlay) */
+        .resizer { flex-shrink: 0; position: relative; z-index: 20; touch-action: none; background-color: transparent; transition: background-color 0.15s; }
+        .resizer:hover, .resizer.dragging, .resizer:focus-visible { background-color: #dc382d; outline: none; }
+        body.resizing-col, body.resizing-col * { cursor: col-resize !important; user-select: none !important; }
+        body.resizing-row, body.resizing-row * { cursor: row-resize !important; user-select: none !important; }
+        .resizer[data-direction="col"], .resizer[data-direction="auto"] { width: 6px; cursor: col-resize; }
+        .resizer[data-direction="row"] { height: 6px; cursor: row-resize; }
+        @media (max-width: 767px) {
+            .resizer[data-direction="auto"] { width: auto; height: 6px; cursor: row-resize; }
+        }
+
+        .modal-content { max-height: 90vh; overflow-y: auto; }
+
+        .toast-enter { opacity: 0; transform: translateY(10px); }
+        .toast-enter-active { opacity: 1; transform: translateY(0); transition: all 0.25s ease-out; }
+        .toast-exit-active { opacity: 0; transform: translateY(10px); transition: all 0.25s ease-in; }
+
+        /* Terminal */
+        #termOutput { font-family: 'Fira Code', monospace; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+        .term-line-cmd { color: #60a5fa; }
+        .term-line-err { color: #f87171; }
+        .term-line-ok { color: #4ade80; }
+        .term-line-info { color: #9ca3af; }
+        #termPrompt::placeholder { color: #6b7280; }
+
+        .key-row:hover { background: #2a2a2d; }
+        .key-row.active { background: #3a2422; }
+
+        pre.snippet { background: #111827; color: #d1fae5; padding: 10px; border-radius: 6px; font-size: 12px; overflow-x: auto; }
+
+        .tab-btn.active { border-color: #dc382d; color: #fff; }
+    </style>
+</head>
+<body class="bg-darkbg text-gray-200 h-screen overflow-hidden flex flex-col">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between px-4 py-2 bg-darkpanel border-b border-gray-700 flex-shrink-0 gap-2 flex-wrap">
+        <div class="flex items-center gap-2">
+            <i class="fas fa-layer-group text-primary text-xl"></i>
+            <span class="font-bold text-lg text-white">RedisPlay</span>
+            <span id="connBadge" class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-700 text-gray-300 ml-2">Simulated</span>
+        </div>
+        <div class="flex items-center gap-1 flex-wrap">
+            <button id="btnNewSession" class="px-3 py-1.5 text-sm rounded border border-gray-600 hover:bg-gray-700" title="New Session"><i class="fas fa-plus mr-1"></i>New Session</button>
+            <button id="btnConnection" class="px-3 py-1.5 text-sm rounded border border-gray-600 hover:bg-gray-700" title="Connection Setup"><i class="fas fa-plug mr-1"></i>Connection</button>
+            <button id="btnGitHub" class="px-3 py-1.5 text-sm rounded border border-gray-600 hover:bg-gray-700" title="GitHub Sync"><i class="fab fa-github mr-1"></i>GitHub</button>
+            <button id="btnHelp" class="px-3 py-1.5 text-sm rounded border border-gray-600 hover:bg-gray-700" title="Command Reference"><i class="fas fa-circle-question mr-1"></i>Help</button>
+        </div>
+    </header>
+
+    <!-- Main 3-pane layout -->
+    <div id="app" class="flex flex-1 min-h-0 flex-col md:flex-row">
+
+        <!-- LEFT PANE: Sessions + Keyspace quick stats -->
+        <div id="sidebar" class="flex flex-col bg-darkpanel border-gray-700 md:border-r flex-shrink-0 overflow-hidden" style="width: 260px; min-height:160px;">
+            <div class="px-3 py-2 border-b border-gray-700 flex items-center justify-between">
+                <span class="text-xs font-bold uppercase tracking-wider text-gray-400">Sessions</span>
+                <button id="btnRenameSession" class="text-gray-500 hover:text-gray-200" title="Rename session"><i class="fas fa-pen text-xs"></i></button>
+            </div>
+            <div id="sessionList" class="flex-1 overflow-y-auto"></div>
+            <div class="px-3 py-2 border-t border-gray-700 text-[11px] text-gray-500">
+                <div>DB: <select id="dbSelect" class="bg-gray-800 border border-gray-600 rounded text-gray-200 text-xs px-1"></select></div>
+                <div class="mt-1" id="dbSizeInfo">0 keys</div>
+            </div>
+        </div>
+
+        <div class="resizer" data-direction="auto" data-target="sidebar" data-flex="editorSection" data-key="sidebar" data-min="180" data-max-ratio="0.4" tabindex="0" role="separator" aria-label="Resize sessions panel"></div>
+
+        <!-- MIDDLE PANE: Lua script editor -->
+        <div id="editorSection" class="flex flex-col flex-1 min-w-0 min-h-[200px] overflow-hidden">
+            <div class="px-3 py-2 bg-darkpanel border-b border-gray-700 flex items-center gap-2 flex-wrap">
+                <select id="scriptSelect" class="bg-gray-800 border border-gray-600 rounded text-xs px-2 py-1 text-gray-200"></select>
+                <button id="btnNewScript" class="px-2 py-1 text-xs rounded border border-gray-600 hover:bg-gray-700"><i class="fas fa-file mr-1"></i>New</button>
+                <button id="btnSaveScript" class="px-2 py-1 text-xs rounded border border-gray-600 hover:bg-gray-700"><i class="fas fa-save mr-1"></i>Save</button>
+                <button id="btnDeleteScript" class="px-2 py-1 text-xs rounded border border-gray-600 hover:bg-gray-700"><i class="fas fa-trash mr-1"></i>Delete</button>
+                <span class="flex-1"></span>
+                <button id="btnRunScript" class="px-3 py-1 text-xs rounded bg-primary text-white hover:bg-red-700"><i class="fas fa-play mr-1"></i>Run Script (Ctrl+Enter)</button>
+            </div>
+            <div class="px-3 py-2 bg-darkbg border-b border-gray-800 flex items-center gap-2 text-xs flex-wrap">
+                <label class="text-gray-400">KEYS <span class="text-gray-600">(comma-separated)</span></label>
+                <input id="scriptKeys" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 flex-1 min-w-[120px]" placeholder="mykey,other">
+                <label class="text-gray-400">ARGV</label>
+                <input id="scriptArgv" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 flex-1 min-w-[120px]" placeholder="val1,val2">
+            </div>
+            <div id="scriptEditorHost" class="relative flex-1 min-h-0"></div>
+        </div>
+
+        <div class="resizer" data-direction="auto" data-side="after" data-target="rightSection" data-flex="editorSection" data-key="output" data-min="260" data-max-ratio="0.6" tabindex="0" role="separator" aria-label="Resize results panel"></div>
+
+        <!-- RIGHT PANE: Terminal (REPL) + Keyspace Explorer (row split) -->
+        <div id="rightSection" class="flex flex-col flex-shrink-0 md:border-l border-gray-700 overflow-hidden" style="width: 420px; min-height: 240px;">
+
+            <div id="terminalSection" class="flex flex-col min-h-[120px] overflow-hidden" style="flex: 1 1 auto;">
+                <div class="px-3 py-2 bg-darkpanel border-b border-gray-700 flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-gray-400"><i class="fas fa-terminal mr-1"></i>Terminal</span>
+                    <button id="btnClearTerm" class="text-gray-500 hover:text-gray-200 text-xs" title="Clear"><i class="fas fa-eraser"></i></button>
+                </div>
+                <div id="termOutput" class="flex-1 overflow-y-auto px-3 py-2"></div>
+                <div class="relative border-t border-gray-700">
+                    <div id="autocompleteBox" class="hidden absolute bottom-full left-0 right-0 bg-gray-800 border border-gray-600 rounded-t max-h-40 overflow-y-auto text-xs"></div>
+                    <div class="flex items-center px-3 py-2 gap-2">
+                        <span class="text-primary font-mono text-sm" id="termPromptLabel">&gt;</span>
+                        <input id="termPrompt" autocomplete="off" spellcheck="false" class="flex-1 bg-transparent outline-none font-mono text-sm text-gray-100" placeholder="Type a Redis command, e.g. SET foo bar">
+                    </div>
+                </div>
+            </div>
+
+            <div class="resizer" data-direction="row" data-target="keyspaceSection" data-flex="terminalSection" data-key="keyspace" data-min="100" data-max-ratio="0.7" tabindex="0" role="separator" aria-label="Resize keyspace panel"></div>
+
+            <div id="keyspaceSection" class="flex flex-col border-t border-gray-700 overflow-hidden" style="height: 220px;">
+                <div class="px-3 py-2 bg-darkpanel border-b border-gray-700 flex items-center justify-between">
+                    <span class="text-xs font-bold uppercase tracking-wider text-gray-400"><i class="fas fa-key mr-1"></i>Keyspace</span>
+                    <button id="btnRefreshKeys" class="text-gray-500 hover:text-gray-200 text-xs" title="Refresh"><i class="fas fa-rotate"></i></button>
+                </div>
+                <div id="keyList" class="flex-1 overflow-y-auto text-xs"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Key Detail Modal -->
+    <div id="keyDetailModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none">
+        <div class="bg-darkpanel rounded-lg shadow-xl w-[560px] max-w-[92%] p-5 transform transition-all scale-95 modal-content border border-gray-700">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-lg font-bold text-white" id="keyDetailTitle">Key</h2>
+                <span id="keyDetailType" class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-gray-700 text-gray-300"></span>
+            </div>
+            <pre id="keyDetailValue" class="snippet max-h-64 overflow-y-auto"></pre>
+            <div class="flex items-center gap-2 mt-3 text-xs">
+                <span class="text-gray-400">TTL:</span>
+                <span id="keyDetailTtl" class="text-gray-200">none</span>
+                <input id="keyDetailTtlInput" type="number" min="1" class="bg-gray-800 border border-gray-600 rounded px-2 py-1 w-24 ml-2" placeholder="seconds">
+                <button id="btnSetTtl" class="px-2 py-1 border border-gray-600 rounded hover:bg-gray-700">Set</button>
+                <button id="btnPersistTtl" class="px-2 py-1 border border-gray-600 rounded hover:bg-gray-700">Persist</button>
+            </div>
+            <div class="mt-5 flex justify-end gap-2">
+                <button id="btnDeleteKey" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"><i class="fas fa-trash mr-1"></i>Delete Key</button>
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Setup Modal -->
+    <div id="connectionModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none">
+        <div class="bg-darkpanel rounded-lg shadow-xl w-[640px] max-w-[94%] p-6 transform transition-all scale-95 modal-content border border-gray-700">
+            <h2 class="text-xl font-bold mb-1 text-white">Connection Setup</h2>
+            <p class="text-sm text-gray-400 mb-4">Choose how this session's Redis commands are executed.</p>
+
+            <div class="flex gap-2 border-b border-gray-700 mb-4" id="connTabs">
+                <button data-tab="simulated" class="tab-btn active px-3 py-2 text-sm border-b-2 border-transparent">Simulated</button>
+                <button data-tab="upstash" class="tab-btn px-3 py-2 text-sm border-b-2 border-transparent">Upstash REST</button>
+                <button data-tab="docker" class="tab-btn px-3 py-2 text-sm border-b-2 border-transparent">Local Docker</button>
+            </div>
+
+            <div data-pane="simulated" class="conn-pane text-sm text-gray-300 space-y-2">
+                <p>A full Redis engine (strings, hashes, lists, sets, sorted sets, expiry, transactions) runs entirely in your browser via JavaScript. Lua <code>EVAL</code>/<code>EVALSHA</code> run through an embedded Lua 5.3 VM (Fengari). No server, no signup, data persists to this browser's local storage.</p>
+                <p class="text-gray-500">This is the default and recommended mode for learning.</p>
+            </div>
+
+            <div data-pane="upstash" class="conn-pane hidden text-sm text-gray-300 space-y-2">
+                <p>Connect to a real <a href="https://upstash.com" target="_blank" class="text-primary underline">Upstash</a> Redis database over its REST API (works from the browser, free tier available).</p>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 mb-1">REST URL</label>
+                    <input id="upstashUrlInput" type="text" class="w-full p-2 border rounded bg-gray-800 border-gray-600 text-sm" placeholder="https://us1-xxxx.upstash.io">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 mb-1">REST Token</label>
+                    <input id="upstashTokenInput" type="password" class="w-full p-2 border rounded bg-gray-800 border-gray-600 text-sm" placeholder="AX...">
+                </div>
+            </div>
+
+            <div data-pane="docker" class="conn-pane hidden text-sm text-gray-300 space-y-3">
+                <p>Run the official Redis image locally, fronted by <code>webdis</code> (an HTTP&harr;Redis bridge, since browsers cannot open raw TCP sockets). Bound to <code>127.0.0.1</code> only for safety.</p>
+                <div>
+                    <div class="flex items-center justify-between"><span class="text-xs uppercase tracking-wider text-gray-500">1. docker-compose.yml</span><button class="copyBtn text-primary text-xs hover:underline" data-target="snippetCompose">Copy</button></div>
+                    <pre id="snippetCompose" class="snippet">services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+  webdis:
+    image: nicolas/webdis
+    volumes:
+      - ./webdis.json:/etc/webdis.json
+    ports:
+      - "127.0.0.1:7379:7379"
+    depends_on:
+      - redis</pre>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between"><span class="text-xs uppercase tracking-wider text-gray-500">2. webdis.json (enables CORS)</span><button class="copyBtn text-primary text-xs hover:underline" data-target="snippetWebdis">Copy</button></div>
+                    <pre id="snippetWebdis" class="snippet">{
+  "redis_host": "redis",
+  "redis_port": 6379,
+  "http_host": "0.0.0.0",
+  "http_port": 7379,
+  "threads": 2,
+  "http_headers": {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS"
+  }
+}</pre>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between"><span class="text-xs uppercase tracking-wider text-gray-500">3. Run it</span><button class="copyBtn text-primary text-xs hover:underline" data-target="snippetRun">Copy</button></div>
+                    <pre id="snippetRun" class="snippet">docker compose up -d
+# or without compose:
+docker run -d --name redisplay-redis -p 127.0.0.1:6379:6379 redis:7-alpine
+docker run -d --name redisplay-webdis -p 127.0.0.1:7379:7379 \
+  -v "$PWD/webdis.json:/etc/webdis.json" nicolas/webdis</pre>
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 mb-1">Webdis URL</label>
+                    <input id="dockerUrlInput" type="text" class="w-full p-2 border rounded bg-gray-800 border-gray-600 text-sm" value="http://127.0.0.1:7379">
+                </div>
+                <p class="text-amber-500 text-xs"><i class="fas fa-triangle-exclamation mr-1"></i>MULTI/EXEC transactions are not supported over HTTP bridges (each request is a separate connection); use Simulated mode to practice transactions. EVAL and all single commands work normally.</p>
+            </div>
+
+            <div class="flex items-center justify-between mt-5 pt-4 border-t border-gray-700">
+                <div id="connTestStatus" class="text-xs text-gray-400"></div>
+                <div class="flex gap-2">
+                    <button id="btnTestConnection" class="px-3 py-2 text-sm rounded border border-gray-600 hover:bg-gray-700">Test Connection (PING)</button>
+                    <button id="btnSaveConnection" class="px-4 py-2 text-sm rounded bg-primary text-white hover:bg-red-700">Save &amp; Use</button>
+                    <button class="bg-gray-700 px-4 py-2 rounded closeModal text-sm">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub Sync Modal -->
+    <div id="githubModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none">
+        <div class="bg-darkpanel rounded-lg shadow-xl w-[500px] max-w-[90%] p-6 transform transition-all scale-95 modal-content border border-gray-700">
+            <h2 class="text-xl font-bold mb-2 text-white">GitHub PAT Sync</h2>
+            <p class="text-sm text-gray-400 mb-4">
+                Enter a GitHub PAT and repo details. This runs directly in the browser and writes files to GitHub using the GitHub API.
+            </p>
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 mb-1">GitHub Token</label>
+                    <input id="githubTokenInput" type="password" class="w-full p-2 border rounded bg-gray-800 border-gray-600" placeholder="ghp_...">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 mb-1">Repository Owner</label>
+                    <input id="githubOwnerInput" type="text" class="w-full p-2 border rounded bg-gray-800 border-gray-600" placeholder="your-username">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-500 mb-1">Repository Name</label>
+                    <input id="githubRepoInput" type="text" class="w-full p-2 border rounded bg-gray-800 border-gray-600" placeholder="redisplay-sessions">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-400">
+                    <input id="githubCreateRepoCheckbox" type="checkbox" class="accent-primary">
+                    Create repo if it does not exist
+                </label>
+            </div>
+
+            <div id="githubSyncSection" class="hidden mt-5 pt-4 border-t border-gray-700">
+                <div class="text-xs uppercase tracking-wider text-gray-500 mb-1">Sync Sessions</div>
+                <p class="text-xs text-gray-500 mb-3">
+                    Each session is stored in its own folder: <code>projects/&lt;folder&gt;/session.json</code> + <code>meta.json</code>.
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="githubPushCurrentBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50"><i class="fas fa-arrow-up mr-1"></i> Push current</button>
+                    <button id="githubPushAllBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50"><i class="fas fa-upload mr-1"></i> Push all</button>
+                    <button id="githubPullBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50"><i class="fas fa-download mr-1"></i> Pull</button>
+                    <button id="githubSyncAllBtn" class="gh-sync-btn text-sm bg-primary text-white rounded px-3 py-2 hover:bg-red-700 disabled:opacity-50"><i class="fas fa-rotate mr-1"></i> Sync all</button>
+                </div>
+                <button id="githubRenameFolderBtn" class="gh-sync-btn text-xs text-primary hover:underline mt-3 disabled:opacity-50">Rename current session's GitHub folder to match its title</button>
+                <div id="githubSyncStatus" class="text-xs text-gray-500 mt-2 min-h-[1rem]"></div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button id="githubDisconnectBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 hidden">Disconnect</button>
+                <button id="githubConnectBtn" class="bg-primary text-white px-4 py-2 rounded hover:bg-red-700">Connect</button>
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Help / Command Reference Modal -->
+    <div id="helpModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50 transition-opacity opacity-0 pointer-events-none">
+        <div class="bg-darkpanel rounded-lg shadow-xl w-[640px] max-w-[94%] p-6 transform transition-all scale-95 modal-content border border-gray-700">
+            <h2 class="text-xl font-bold mb-3 text-white">Command Reference</h2>
+            <div class="grid grid-cols-2 gap-x-6 gap-y-3 text-xs text-gray-300 max-h-[60vh] overflow-y-auto">
+                <div><div class="text-primary font-bold mb-1">Generic</div>DEL EXISTS EXPIRE PEXPIRE TTL PTTL PERSIST KEYS TYPE RENAME SCAN DBSIZE FLUSHDB FLUSHALL RANDOMKEY</div>
+                <div><div class="text-primary font-bold mb-1">Strings</div>SET GET APPEND STRLEN INCR DECR INCRBY DECRBY GETSET SETNX SETEX MSET MGET</div>
+                <div><div class="text-primary font-bold mb-1">Hashes</div>HSET HGET HDEL HGETALL HKEYS HVALS HEXISTS HLEN HINCRBY HMSET HMGET</div>
+                <div><div class="text-primary font-bold mb-1">Lists</div>LPUSH RPUSH LPOP RPOP LRANGE LLEN LINDEX LSET LREM</div>
+                <div><div class="text-primary font-bold mb-1">Sets</div>SADD SREM SMEMBERS SISMEMBER SCARD SINTER SUNION SDIFF</div>
+                <div><div class="text-primary font-bold mb-1">Sorted Sets</div>ZADD ZREM ZRANGE ZREVRANGE ZSCORE ZCARD ZRANK ZINCRBY</div>
+                <div><div class="text-primary font-bold mb-1">Transactions</div>MULTI EXEC DISCARD (Simulated mode only)</div>
+                <div><div class="text-primary font-bold mb-1">Scripting</div>EVAL EVALSHA SCRIPT LOAD|EXISTS|FLUSH</div>
+                <div><div class="text-primary font-bold mb-1">Server</div>PING ECHO SELECT</div>
+                <div><div class="text-primary font-bold mb-1">Terminal</div>CLEAR, &uarr;/&darr; history, Tab to autocomplete</div>
+            </div>
+            <div class="mt-5 flex justify-end">
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-4 right-4 flex flex-col gap-2 z-[60] pointer-events-none"></div>
+
+    <script>
+    /* ====================== UTILITIES ====================== */
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function showToast(msg, type = 'info') {
+        const t = document.createElement('div');
+        t.className = `px-4 py-2 rounded shadow-lg text-white text-sm font-semibold flex items-center gap-2 pointer-events-auto ${type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600'}`;
+        t.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'toast-enter';
+        wrapper.appendChild(t);
+        document.getElementById('toastContainer').appendChild(wrapper);
+        requestAnimationFrame(() => wrapper.className = 'toast-enter-active');
+        setTimeout(() => {
+            wrapper.className = 'toast-exit-active';
+            setTimeout(() => wrapper.remove(), 300);
+        }, 3200);
+    }
+
+    function openModal(modal) {
+        modal.classList.remove('hidden', 'pointer-events-none');
+        modal.classList.add('flex');
+        void modal.offsetWidth;
+        modal.classList.remove('opacity-0');
+        const content = modal.querySelector('.modal-content');
+        if (content) content.classList.remove('scale-95');
+    }
+
+    function closeModal(modal) {
+        modal.classList.add('opacity-0');
+        const content = modal.querySelector('.modal-content');
+        if (content) content.classList.add('scale-95');
+        setTimeout(() => {
+            modal.classList.add('hidden', 'pointer-events-none');
+            modal.classList.remove('flex');
+        }, 200);
+    }
+
+    document.querySelectorAll('.closeModal').forEach(btn => {
+        btn.addEventListener('click', () => closeModal(btn.closest('.fixed')));
+    });
+
+    function slugify(text) {
+        return String(text || '')
+            .toLowerCase()
+            .trim()
+            .replace(/[^a-z0-9._-]+/g, '-')
+            .replace(/^[-.]+|[-.]+$/g, '')
+            .slice(0, 64) || 'session';
+    }
+
+    function generateId(prefix) {
+        return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    }
+
+    function base64Encode(str) {
+        const bytes = new TextEncoder().encode(str);
+        let binary = '';
+        bytes.forEach(b => binary += String.fromCharCode(b));
+        return btoa(binary);
+    }
+
+    function base64Decode(b64) {
+        const binary = atob((b64 || '').replace(/\s/g, ''));
+        const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+        return new TextDecoder().decode(bytes);
+    }
+
+    // cyrb53-style hash of the synced fields, used to detect unpushed local edits.
+    function hashString(s) {
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0; i < s.length; i++) {
+            const ch = s.charCodeAt(i);
+            h1 = Math.imul(h1 ^ ch, 2654435761);
+            h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
+    }
+
+    // Pure-JS synchronous SHA-1 (needed for SCRIPT LOAD / EVALSHA / redis.sha1hex -
+    // crypto.subtle is async and Lua execution here must stay synchronous).
+    function sha1hex(message) {
+        function rotl(n, b) { return (n << b) | (n >>> (32 - b)); }
+        const msgBytes = new TextEncoder().encode(message);
+        const bitLen = msgBytes.length * 8;
+        const withOne = new Uint8Array(((msgBytes.length + 9 + 63) & ~63));
+        withOne.set(msgBytes);
+        withOne[msgBytes.length] = 0x80;
+        const view = new DataView(withOne.buffer);
+        view.setUint32(withOne.length - 4, bitLen >>> 0);
+        view.setUint32(withOne.length - 8, Math.floor(bitLen / 0x100000000));
+        let h0 = 0x67452301, h1 = 0xEFCDAB89, h2 = 0x98BADCFE, h3 = 0x10325476, h4 = 0xC3D2E1F0;
+        const w = new Array(80);
+        for (let chunk = 0; chunk < withOne.length; chunk += 64) {
+            for (let i = 0; i < 16; i++) w[i] = view.getUint32(chunk + i * 4);
+            for (let i = 16; i < 80; i++) w[i] = rotl(w[i - 3] ^ w[i - 8] ^ w[i - 14] ^ w[i - 16], 1);
+            let a = h0, b = h1, c = h2, d = h3, e = h4;
+            for (let i = 0; i < 80; i++) {
+                let f, k;
+                if (i < 20) { f = (b & c) | (~b & d); k = 0x5A827999; }
+                else if (i < 40) { f = b ^ c ^ d; k = 0x6ED9EBA1; }
+                else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDC; }
+                else { f = b ^ c ^ d; k = 0xCA62C1D6; }
+                const temp = (rotl(a, 5) + f + e + k + w[i]) >>> 0;
+                e = d; d = c; c = rotl(b, 30); b = a; a = temp;
+            }
+            h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0; h4 = (h4 + e) >>> 0;
+        }
+        return [h0, h1, h2, h3, h4].map(x => x.toString(16).padStart(8, '0')).join('');
+    }
+
+    /* ====================== REDIS ENGINE (SIMULATED) ======================
+       Each DB is a plain JS object keyed by Redis key -> { type, value, expireAt }.
+       `value` shapes: string -> string; hash -> object; list -> array;
+       set -> array of unique strings; zset -> array of [member, score] pairs.
+       Plain objects/arrays only (no Map/Set) so the whole keyspace can be
+       JSON.stringify'd directly for localStorage / GitHub sync persistence. */
+    class RedisError extends Error {}
+
+    const STATUS_OK = { __status: 'OK' };
+    function STATUS(s) { return { __status: s }; }
+
+    function globToRegex(glob) {
+        let re = '^';
+        for (const ch of glob) {
+            if (ch === '*') re += '.*';
+            else if (ch === '?') re += '.';
+            else re += ch.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+        }
+        return new RegExp(re + '$');
+    }
+
+    function tokenize(line) {
+        const tokens = [];
+        let i = 0;
+        while (i < line.length) {
+            while (i < line.length && /\s/.test(line[i])) i++;
+            if (i >= line.length) break;
+            let quote = null;
+            if (line[i] === '"' || line[i] === "'") { quote = line[i]; i++; }
+            let tok = '';
+            if (quote) {
+                while (i < line.length && line[i] !== quote) {
+                    if (line[i] === '\\' && i + 1 < line.length) { tok += line[i + 1]; i += 2; }
+                    else { tok += line[i]; i++; }
+                }
+                i++;
+            } else {
+                while (i < line.length && !/\s/.test(line[i])) { tok += line[i]; i++; }
+            }
+            tokens.push(tok);
+        }
+        return tokens;
+    }
+
+    function newDb() { return {}; }
+
+    function getEntry(db, key, expectedTypes = null) {
+        const e = db[key];
+        if (!e) return null;
+        if (e.expireAt !== null && e.expireAt <= Date.now()) { delete db[key]; return null; }
+        if (expectedTypes && !expectedTypes.includes(e.type)) {
+            throw new RedisError('WRONGTYPE Operation against a key holding the wrong kind of value');
+        }
+        return e;
+    }
+
+    function setEntry(db, key, type, value, ttlMs = undefined) {
+        const existing = db[key];
+        db[key] = { type, value, expireAt: ttlMs !== undefined ? Date.now() + ttlMs : (existing ? existing.expireAt : null) };
+        return db[key];
+    }
+
+    function ensure(db, key, type, factory) {
+        let e = getEntry(db, key, [type]);
+        if (!e) { e = { type, value: factory(), expireAt: null }; db[key] = e; }
+        return e;
+    }
+
+    function sortedInsert(zset, member, score) {
+        const idx = zset.findIndex(p => p[0] === member);
+        if (idx >= 0) zset.splice(idx, 1);
+        zset.push([member, score]);
+        zset.sort((a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    }
+
+    const COMMANDS = {};
+    function def(name, minArgs, fn) {
+        COMMANDS[name] = { minArgs, fn };
+    }
+
+    function argErr(cmd) { throw new RedisError(`ERR wrong number of arguments for '${cmd.toLowerCase()}' command`); }
+
+    // --- Generic ---
+    def('PING', 0, (db, a) => a.length ? a[0] : STATUS('PONG'));
+    def('ECHO', 1, (db, a) => a[0]);
+    def('SELECT', 1, (db, a, ctx) => { ctx.requestedDb = parseInt(a[0], 10); return STATUS_OK; });
+    def('DEL', 1, (db, a) => a.reduce((n, k) => (getEntry(db, k) ? (delete db[k], n + 1) : n), 0));
+    def('EXISTS', 1, (db, a) => a.reduce((n, k) => n + (getEntry(db, k) ? 1 : 0), 0));
+    def('TYPE', 1, (db, a) => { const e = getEntry(db, a[0]); return STATUS(e ? e.type : 'none'); });
+    def('KEYS', 1, (db, a) => { const re = globToRegex(a[0]); return Object.keys(db).filter(k => getEntry(db, k) && re.test(k)); });
+    def('SCAN', 1, (db) => ['0', Object.keys(db).filter(k => getEntry(db, k))]);
+    def('DBSIZE', 0, (db) => Object.keys(db).filter(k => getEntry(db, k)).length);
+    def('RANDOMKEY', 0, (db) => { const ks = Object.keys(db).filter(k => getEntry(db, k)); return ks.length ? ks[Math.floor(Math.random() * ks.length)] : null; });
+    def('FLUSHDB', 0, (db) => { Object.keys(db).forEach(k => delete db[k]); return STATUS_OK; });
+    def('RENAME', 2, (db, a) => { const e = getEntry(db, a[0]); if (!e) throw new RedisError('ERR no such key'); db[a[1]] = e; delete db[a[0]]; return STATUS_OK; });
+    def('EXPIRE', 2, (db, a) => { const e = getEntry(db, a[0]); if (!e) return 0; e.expireAt = Date.now() + parseInt(a[1], 10) * 1000; return 1; });
+    def('PEXPIRE', 2, (db, a) => { const e = getEntry(db, a[0]); if (!e) return 0; e.expireAt = Date.now() + parseInt(a[1], 10); return 1; });
+    def('PERSIST', 1, (db, a) => { const e = getEntry(db, a[0]); if (!e || e.expireAt === null) return 0; e.expireAt = null; return 1; });
+    def('TTL', 1, (db, a) => { const e = getEntry(db, a[0]); if (!e) return -2; if (e.expireAt === null) return -1; return Math.ceil((e.expireAt - Date.now()) / 1000); });
+    def('PTTL', 1, (db, a) => { const e = getEntry(db, a[0]); if (!e) return -2; if (e.expireAt === null) return -1; return e.expireAt - Date.now(); });
+
+    // --- Strings ---
+    def('SET', 2, (db, a) => {
+        let ttlMs;
+        for (let i = 2; i < a.length; i++) {
+            const opt = a[i].toUpperCase();
+            if (opt === 'EX') ttlMs = parseInt(a[++i], 10) * 1000;
+            else if (opt === 'PX') ttlMs = parseInt(a[++i], 10);
+        }
+        setEntry(db, a[0], 'string', a[1], ttlMs);
+        return STATUS_OK;
+    });
+    def('SETNX', 2, (db, a) => { if (getEntry(db, a[0])) return 0; setEntry(db, a[0], 'string', a[1]); return 1; });
+    def('SETEX', 3, (db, a) => { setEntry(db, a[0], 'string', a[2], parseInt(a[1], 10) * 1000); return STATUS_OK; });
+    def('GET', 1, (db, a) => { const e = getEntry(db, a[0], ['string']); return e ? e.value : null; });
+    def('GETSET', 2, (db, a) => { const e = getEntry(db, a[0], ['string']); const old = e ? e.value : null; setEntry(db, a[0], 'string', a[1]); return old; });
+    def('APPEND', 2, (db, a) => { const e = getEntry(db, a[0], ['string']); const v = (e ? e.value : '') + a[1]; setEntry(db, a[0], 'string', v); return v.length; });
+    def('STRLEN', 1, (db, a) => { const e = getEntry(db, a[0], ['string']); return e ? e.value.length : 0; });
+    def('INCRBY', 2, (db, a) => { const e = getEntry(db, a[0], ['string']); const n = (e ? parseInt(e.value, 10) : 0) + parseInt(a[1], 10); setEntry(db, a[0], 'string', String(n)); return n; });
+    def('DECRBY', 2, (db, a) => { const e = getEntry(db, a[0], ['string']); const n = (e ? parseInt(e.value, 10) : 0) - parseInt(a[1], 10); setEntry(db, a[0], 'string', String(n)); return n; });
+    def('INCR', 1, (db, a) => COMMANDS.INCRBY.fn(db, [a[0], '1']));
+    def('DECR', 1, (db, a) => COMMANDS.DECRBY.fn(db, [a[0], '1']));
+    def('MSET', 2, (db, a) => { for (let i = 0; i < a.length; i += 2) setEntry(db, a[i], 'string', a[i + 1]); return STATUS_OK; });
+    def('MGET', 1, (db, a) => a.map(k => { const e = getEntry(db, k, ['string']); return e ? e.value : null; }));
+
+    // --- Hashes ---
+    def('HSET', 3, (db, a) => { const e = ensure(db, a[0], 'hash', () => ({})); let added = 0; for (let i = 1; i < a.length; i += 2) { if (!(a[i] in e.value)) added++; e.value[a[i]] = a[i + 1]; } return added; });
+    def('HMSET', 3, (db, a) => { COMMANDS.HSET.fn(db, a); return STATUS_OK; });
+    def('HGET', 2, (db, a) => { const e = getEntry(db, a[0], ['hash']); return e && (a[1] in e.value) ? e.value[a[1]] : null; });
+    def('HMGET', 2, (db, a) => { const e = getEntry(db, a[0], ['hash']); return a.slice(1).map(f => e && (f in e.value) ? e.value[f] : null); });
+    def('HDEL', 2, (db, a) => { const e = getEntry(db, a[0], ['hash']); if (!e) return 0; let n = 0; a.slice(1).forEach(f => { if (f in e.value) { delete e.value[f]; n++; } }); return n; });
+    def('HGETALL', 1, (db, a) => { const e = getEntry(db, a[0], ['hash']); return e ? Object.entries(e.value).flat() : []; });
+    def('HKEYS', 1, (db, a) => { const e = getEntry(db, a[0], ['hash']); return e ? Object.keys(e.value) : []; });
+    def('HVALS', 1, (db, a) => { const e = getEntry(db, a[0], ['hash']); return e ? Object.values(e.value) : []; });
+    def('HEXISTS', 2, (db, a) => { const e = getEntry(db, a[0], ['hash']); return e && (a[1] in e.value) ? 1 : 0; });
+    def('HLEN', 1, (db, a) => { const e = getEntry(db, a[0], ['hash']); return e ? Object.keys(e.value).length : 0; });
+    def('HINCRBY', 3, (db, a) => { const e = ensure(db, a[0], 'hash', () => ({})); const n = (parseInt(e.value[a[1]], 10) || 0) + parseInt(a[2], 10); e.value[a[1]] = String(n); return n; });
+
+    // --- Lists ---
+    def('LPUSH', 2, (db, a) => { const e = ensure(db, a[0], 'list', () => []); a.slice(1).forEach(v => e.value.unshift(v)); return e.value.length; });
+    def('RPUSH', 2, (db, a) => { const e = ensure(db, a[0], 'list', () => []); a.slice(1).forEach(v => e.value.push(v)); return e.value.length; });
+    def('LPOP', 1, (db, a) => { const e = getEntry(db, a[0], ['list']); if (!e || !e.value.length) return null; return e.value.shift(); });
+    def('RPOP', 1, (db, a) => { const e = getEntry(db, a[0], ['list']); if (!e || !e.value.length) return null; return e.value.pop(); });
+    def('LLEN', 1, (db, a) => { const e = getEntry(db, a[0], ['list']); return e ? e.value.length : 0; });
+    def('LINDEX', 2, (db, a) => { const e = getEntry(db, a[0], ['list']); if (!e) return null; let i = parseInt(a[1], 10); if (i < 0) i += e.value.length; return e.value[i] ?? null; });
+    def('LSET', 3, (db, a) => { const e = getEntry(db, a[0], ['list']); if (!e) throw new RedisError('ERR no such key'); let i = parseInt(a[1], 10); if (i < 0) i += e.value.length; if (i < 0 || i >= e.value.length) throw new RedisError('ERR index out of range'); e.value[i] = a[2]; return STATUS_OK; });
+    def('LREM', 3, (db, a) => { const e = getEntry(db, a[0], ['list']); if (!e) return 0; const count = parseInt(a[1], 10); const val = a[2]; let removed = 0; if (count >= 0) { for (let i = e.value.length - 1; i >= 0; i--) if (e.value[i] === val && (count === 0 || removed < count)) { e.value.splice(i, 1); removed++; } } else { for (let i = 0; i < e.value.length; i++) if (e.value[i] === val && removed < -count) { e.value.splice(i, 1); i--; removed++; } } return removed; });
+    def('LRANGE', 3, (db, a) => {
+        const e = getEntry(db, a[0], ['list']); if (!e) return [];
+        let [start, stop] = [parseInt(a[1], 10), parseInt(a[2], 10)];
+        const len = e.value.length;
+        if (start < 0) start += len; if (stop < 0) stop += len;
+        start = Math.max(0, start); stop = Math.min(len - 1, stop);
+        return start > stop ? [] : e.value.slice(start, stop + 1);
+    });
+
+    // --- Sets ---
+    def('SADD', 2, (db, a) => { const e = ensure(db, a[0], 'set', () => []); let added = 0; a.slice(1).forEach(m => { if (!e.value.includes(m)) { e.value.push(m); added++; } }); return added; });
+    def('SREM', 2, (db, a) => { const e = getEntry(db, a[0], ['set']); if (!e) return 0; let n = 0; a.slice(1).forEach(m => { const i = e.value.indexOf(m); if (i >= 0) { e.value.splice(i, 1); n++; } }); return n; });
+    def('SMEMBERS', 1, (db, a) => { const e = getEntry(db, a[0], ['set']); return e ? [...e.value] : []; });
+    def('SISMEMBER', 2, (db, a) => { const e = getEntry(db, a[0], ['set']); return e && e.value.includes(a[1]) ? 1 : 0; });
+    def('SCARD', 1, (db, a) => { const e = getEntry(db, a[0], ['set']); return e ? e.value.length : 0; });
+    def('SINTER', 1, (db, a) => { const sets = a.map(k => new Set(getEntry(db, k, ['set'])?.value || [])); return [...sets.reduce((acc, s) => new Set([...acc].filter(x => s.has(x))))]; });
+    def('SUNION', 1, (db, a) => { const out = new Set(); a.forEach(k => (getEntry(db, k, ['set'])?.value || []).forEach(m => out.add(m))); return [...out]; });
+    def('SDIFF', 1, (db, a) => { const first = new Set(getEntry(db, a[0], ['set'])?.value || []); a.slice(1).forEach(k => (getEntry(db, k, ['set'])?.value || []).forEach(m => first.delete(m))); return [...first]; });
+
+    // --- Sorted sets ---
+    def('ZADD', 3, (db, a) => { const e = ensure(db, a[0], 'zset', () => []); let added = 0; for (let i = 1; i < a.length; i += 2) { if (!e.value.some(p => p[0] === a[i + 1])) added++; sortedInsert(e.value, a[i + 1], parseFloat(a[i])); } return added; });
+    def('ZREM', 2, (db, a) => { const e = getEntry(db, a[0], ['zset']); if (!e) return 0; let n = 0; a.slice(1).forEach(m => { const i = e.value.findIndex(p => p[0] === m); if (i >= 0) { e.value.splice(i, 1); n++; } }); return n; });
+    def('ZSCORE', 2, (db, a) => { const e = getEntry(db, a[0], ['zset']); const p = e && e.value.find(p => p[0] === a[1]); return p ? String(p[1]) : null; });
+    def('ZCARD', 1, (db, a) => { const e = getEntry(db, a[0], ['zset']); return e ? e.value.length : 0; });
+    def('ZRANK', 2, (db, a) => { const e = getEntry(db, a[0], ['zset']); if (!e) return null; const i = e.value.findIndex(p => p[0] === a[1]); return i >= 0 ? i : null; });
+    def('ZINCRBY', 3, (db, a) => { const e = ensure(db, a[0], 'zset', () => []); const p = e.value.find(p => p[0] === a[2]); const score = (p ? p[1] : 0) + parseFloat(a[1]); sortedInsert(e.value, a[2], score); return String(score); });
+    function zrange(db, a, reverse) {
+        const e = getEntry(db, a[0], ['zset']); if (!e) return [];
+        let [start, stop] = [parseInt(a[1], 10), parseInt(a[2], 10)];
+        const list = reverse ? [...e.value].reverse() : e.value;
+        const len = list.length;
+        if (start < 0) start += len; if (stop < 0) stop += len;
+        start = Math.max(0, start); stop = Math.min(len - 1, stop);
+        const slice = start > stop ? [] : list.slice(start, stop + 1);
+        const withScores = a[3] && a[3].toUpperCase() === 'WITHSCORES';
+        return withScores ? slice.flatMap(p => [p[0], String(p[1])]) : slice.map(p => p[0]);
+    }
+    def('ZRANGE', 3, (db, a) => zrange(db, a, false));
+    def('ZREVRANGE', 3, (db, a) => zrange(db, a, true));
+
+    // --- Transactions (simulated mode only) ---
+    def('MULTI', 0, (db, a, ctx) => { ctx.session.multi = { queue: [] }; return STATUS_OK; });
+    def('DISCARD', 0, (db, a, ctx) => { if (!ctx.session.multi) throw new RedisError('ERR DISCARD without MULTI'); ctx.session.multi = null; return STATUS_OK; });
+    def('EXEC', 0, (db, a, ctx) => {
+        if (!ctx.session.multi) throw new RedisError('ERR EXEC without MULTI');
+        const queue = ctx.session.multi.queue;
+        ctx.session.multi = null;
+        return queue.map(argv => { try { return execCommand(ctx.session, argv, true); } catch (err) { return STATUS('(error) ' + err.message); } });
+    });
+
+    // --- Scripting ---
+    def('SCRIPT', 1, (db, a, ctx) => {
+        const sub = a[0].toUpperCase();
+        if (sub === 'LOAD') { const sha = sha1hex(a[1]); ctx.session.scriptCache[sha] = a[1]; return sha; }
+        if (sub === 'EXISTS') return a.slice(1).map(sha => ctx.session.scriptCache[sha] ? 1 : 0);
+        if (sub === 'FLUSH') { ctx.session.scriptCache = {}; return STATUS_OK; }
+        throw new RedisError('ERR unknown SCRIPT subcommand');
+    });
+
+    /* ====================== COMMAND DISPATCH ====================== */
+    function getSessionDb(session, index) {
+        if (!session.data[index]) session.data[index] = newDb();
+        return session.data[index];
+    }
+
+    // argv: array of strings, argv[0] is the command name. ctx.session carries
+    // per-session state (current db index, MULTI queue, script cache).
+    function execCommand(session, argv, insideExec = false) {
+        if (!argv.length) throw new RedisError('ERR empty command');
+        const name = argv[0].toUpperCase();
+        if (name === 'EVAL' || name === 'EVALSHA') return runEvalCommand(session, name, argv.slice(1));
+        const spec = COMMANDS[name];
+        if (!spec) throw new RedisError(`ERR unknown command '${argv[0]}'`);
+        const args = argv.slice(1);
+        if (args.length < spec.minArgs) argErr(name);
+
+        if (session.multi && !insideExec && name !== 'EXEC' && name !== 'DISCARD' && name !== 'MULTI') {
+            session.multi.queue.push(argv);
+            return STATUS('QUEUED');
+        }
+
+        const ctx = { session, requestedDb: undefined };
+        const db = getSessionDb(session, session.currentDb);
+        const result = spec.fn(db, args, ctx);
+        if (ctx.requestedDb !== undefined) session.currentDb = ctx.requestedDb;
+        return result;
+    }
+
+    /* ====================== LUA SCRIPTING (Fengari) ======================
+       redis.call()/redis.pcall() semantics match real Redis:
+       Lua nil/false -> bulk nil, Lua true -> integer 1, Lua table w/ .err ->
+       error reply, Lua table w/ .ok -> status reply, array-like table -> array. */
+    function replyToLua(val) {
+        if (val === null || val === undefined) return false;
+        if (val && val.__status !== undefined) return { ok: val.__status };
+        if (Array.isArray(val)) return val.map(replyToLua);
+        return val;
+    }
+
+    function luaResultToReply(val) {
+        if (val === false || val === null || val === undefined) return null;
+        if (val === true) return 1;
+        if (typeof val === 'number') return Math.trunc(val);
+        if (typeof val === 'string') return val;
+        if (Array.isArray(val)) {
+            const out = [];
+            for (const v of val) { if (v === undefined || v === null) break; out.push(luaResultToReply(v)); }
+            return out;
+        }
+        if (typeof val === 'object') {
+            if ('err' in val) throw new RedisError(String(val.err));
+            if ('ok' in val) return STATUS(String(val.ok));
+            // Lua tables from cjson.decode or manual construction without 1..n keys
+            const out = [];
+            for (let i = 1; val[i] !== undefined; i++) out.push(luaResultToReply(val[i]));
+            return out;
+        }
+        return null;
+    }
+
+    // NOTE: we deliberately avoid fengari-interop's push()/tojs() proxy layer for
+    // marshalling redis.call()/KEYS/ARGV/cjson values: plain JS functions pushed via
+    // interop.push() are invoked from Lua through a __call metamethod that shifts the
+    // first Lua argument into `this` (breaking normal arg order), and plain JS arrays
+    // pushed via interop.push() are wrapped as opaque JS-object userdata (1-off index
+    // bugs when read back from Lua) rather than becoming real 1-based Lua tables.
+    // Instead we register redis.call/pcall/etc as raw lua_CFunctions and marshal the
+    // Lua stack <-> JS values manually, which is correct and avoids both pitfalls.
+    function pushLuaValue(fengari, L, val) {
+        const { lua, to_luastring } = fengari;
+        if (val === null || val === undefined) { lua.lua_pushnil(L); return; }
+        if (typeof val === 'boolean') { lua.lua_pushboolean(L, val); return; }
+        if (typeof val === 'number') { lua.lua_pushnumber(L, val); return; }
+        if (typeof val === 'string') { lua.lua_pushstring(L, to_luastring(val)); return; }
+        if (Array.isArray(val)) {
+            lua.lua_newtable(L);
+            val.forEach((item, idx) => {
+                pushLuaValue(fengari, L, item);
+                lua.lua_seti(L, -2, idx + 1);
+            });
+            return;
+        }
+        if (typeof val === 'object') {
+            lua.lua_newtable(L);
+            for (const k of Object.keys(val)) {
+                pushLuaValue(fengari, L, val[k]);
+                lua.lua_setfield(L, -2, to_luastring(k));
+            }
+            return;
+        }
+        lua.lua_pushnil(L);
+    }
+
+    function luaValueFromStack(fengari, L, idx) {
+        const { lua, to_jsstring } = fengari;
+        const t = lua.lua_type(L, idx);
+        switch (t) {
+            case lua.LUA_TNIL:
+            case lua.LUA_TNONE:
+                return null;
+            case lua.LUA_TBOOLEAN:
+                return lua.lua_toboolean(L, idx);
+            case lua.LUA_TNUMBER:
+                return lua.lua_tonumber(L, idx);
+            case lua.LUA_TSTRING:
+                return lua.lua_tojsstring(L, idx);
+            case lua.LUA_TTABLE:
+                return luaTableFromStack(fengari, L, idx);
+            default:
+                return null;
+        }
+    }
+
+    function luaTableFromStack(fengari, L, idx) {
+        const { lua, to_jsstring } = fengari;
+        idx = lua.lua_absindex(L, idx);
+        // Array-like: read contiguous 1..n entries (standard Redis/Lua convention).
+        const arr = [];
+        let i = 1;
+        for (;;) {
+            lua.lua_geti(L, idx, i);
+            if (lua.lua_isnil(L, -1)) { lua.lua_pop(L, 1); break; }
+            arr.push(luaValueFromStack(fengari, L, -1));
+            lua.lua_pop(L, 1);
+            i++;
+        }
+        if (arr.length > 0) return arr;
+        // Otherwise treat as a plain object (covers {err=...}, {ok=...}, cjson tables).
+        const obj = {};
+        let any = false;
+        lua.lua_pushnil(L);
+        while (lua.lua_next(L, idx) !== 0) {
+            any = true;
+            let key;
+            if (lua.lua_type(L, -2) === lua.LUA_TSTRING) key = lua.lua_tojsstring(L, -2);
+            else key = String(lua.lua_tonumber(L, -2));
+            obj[key] = luaValueFromStack(fengari, L, -1);
+            lua.lua_pop(L, 1); // pop value, keep key for lua_next
+        }
+        return any ? obj : [];
+    }
+
+    function luaArgToString(fengari, L, i) {
+        const { lua, to_jsstring } = fengari;
+        const t = lua.lua_type(L, i);
+        if (t === lua.LUA_TSTRING) return lua.lua_tojsstring(L, i);
+        if (t === lua.LUA_TNUMBER) return String(lua.lua_tonumber(L, i));
+        throw new RedisError('ERR Lua redis lib command arguments must be strings or integers');
+    }
+
+    /* redis.call()/redis.pcall() semantics match real Redis:
+       Lua nil/false -> bulk nil, Lua true -> integer 1, Lua table w/ .err ->
+       error reply, Lua table w/ .ok -> status reply, array-like table -> array. */
+    function replyToLua(val) {
+        if (val === null || val === undefined) return false;
+        if (val && val.__status !== undefined) return { ok: val.__status };
+        if (Array.isArray(val)) return val.map(replyToLua);
+        return val;
+    }
+
+    function luaResultToReply(val) {
+        if (val === false || val === null || val === undefined) return null;
+        if (val === true) return 1;
+        if (typeof val === 'number') return Math.trunc(val);
+        if (typeof val === 'string') return val;
+        if (Array.isArray(val)) {
+            const out = [];
+            for (const v of val) { if (v === undefined || v === null) break; out.push(luaResultToReply(v)); }
+            return out;
+        }
+        if (typeof val === 'object') {
+            if ('err' in val) throw new RedisError(String(val.err));
+            if ('ok' in val) return STATUS(String(val.ok));
+            // Lua tables from cjson.decode or manual construction without 1..n keys
+            const out = [];
+            for (let i = 1; val[i] !== undefined; i++) out.push(luaResultToReply(val[i]));
+            return out;
+        }
+        return null;
+    }
+
+    function runLuaScript(session, script, keys, argv) {
+        const fengariLib = fengari;
+        const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengariLib;
+        const L = lauxlib.luaL_newstate();
+        lualib.luaL_openlibs(L);
+
+        pushLuaValue(fengariLib, L, keys);
+        lua.lua_setglobal(L, to_luastring('KEYS'));
+        pushLuaValue(fengariLib, L, argv);
+        lua.lua_setglobal(L, to_luastring('ARGV'));
+
+        function callCFunction(pcall) {
+            return function (L2) {
+                const n = lua.lua_gettop(L2);
+                const strArgs = [];
+                for (let i = 1; i <= n; i++) strArgs.push(luaArgToString(fengariLib, L2, i));
+                try {
+                    const reply = execCommand(session, strArgs, true);
+                    pushLuaValue(fengariLib, L2, replyToLua(reply));
+                } catch (err) {
+                    if (pcall) { pushLuaValue(fengariLib, L2, { err: err.message }); }
+                    else {
+                        // Note: lauxlib.luaL_error() fails to propagate across a
+                        // pcall() boundary correctly in this Fengari build when the
+                        // erroring call is in tail position; raw lua_error() works.
+                        lua.lua_pushstring(L2, to_luastring(String(err.message)));
+                        return lua.lua_error(L2);
+                    }
+                }
+                return 1;
+            };
+        }
+
+        lua.lua_newtable(L);
+        lua.lua_pushcfunction(L, callCFunction(false));
+        lua.lua_setfield(L, -2, to_luastring('call'));
+        lua.lua_pushcfunction(L, callCFunction(true));
+        lua.lua_setfield(L, -2, to_luastring('pcall'));
+        lua.lua_pushcfunction(L, function (L2) {
+            const s = luaArgToString(fengariLib, L2, 1);
+            lua.lua_pushstring(L2, to_luastring(sha1hex(s)));
+            return 1;
+        });
+        lua.lua_setfield(L, -2, to_luastring('sha1hex'));
+        lua.lua_pushcfunction(L, function () { /* log: no-op */ return 0; });
+        lua.lua_setfield(L, -2, to_luastring('log'));
+        lua.lua_pushcfunction(L, function (L2) {
+            const s = luaArgToString(fengariLib, L2, 1);
+            pushLuaValue(fengariLib, L2, { err: s });
+            return 1;
+        });
+        lua.lua_setfield(L, -2, to_luastring('error_reply'));
+        lua.lua_pushcfunction(L, function (L2) {
+            const s = luaArgToString(fengariLib, L2, 1);
+            pushLuaValue(fengariLib, L2, { ok: s });
+            return 1;
+        });
+        lua.lua_setfield(L, -2, to_luastring('status_reply'));
+        lua.lua_pushinteger(L, 2);
+        lua.lua_setfield(L, -2, to_luastring('REPL_ALL'));
+        lua.lua_pushcfunction(L, function () { return 0; });
+        lua.lua_setfield(L, -2, to_luastring('setresp'));
+        lua.lua_pushcfunction(L, function () { return 0; });
+        lua.lua_setfield(L, -2, to_luastring('replicate_commands'));
+        lua.lua_setglobal(L, to_luastring('redis'));
+
+        lua.lua_newtable(L);
+        lua.lua_pushcfunction(L, function (L2) {
+            const v = luaValueFromStack(fengariLib, L2, 1);
+            lua.lua_pushstring(L2, to_luastring(JSON.stringify(v)));
+            return 1;
+        });
+        lua.lua_setfield(L, -2, to_luastring('encode'));
+        lua.lua_pushcfunction(L, function (L2) {
+            const s = luaArgToString(fengariLib, L2, 1);
+            pushLuaValue(fengariLib, L2, JSON.parse(s));
+            return 1;
+        });
+        lua.lua_setfield(L, -2, to_luastring('decode'));
+        lua.lua_setglobal(L, to_luastring('cjson'));
+
+        const loadStatus = lauxlib.luaL_loadstring(L, to_luastring(script));
+        if (loadStatus !== lua.LUA_OK) {
+            const msg = to_jsstring(lua.lua_tostring(L, -1));
+            throw new RedisError('ERR Error compiling script: ' + msg);
+        }
+        const callStatus = lua.lua_pcall(L, 0, 1, 0);
+        if (callStatus !== lua.LUA_OK) {
+            const msg = to_jsstring(lua.lua_tostring(L, -1));
+            throw new RedisError(msg.startsWith('ERR') ? msg : 'ERR ' + msg);
+        }
+        const jsVal = luaValueFromStack(fengariLib, L, -1);
+        return luaResultToReply(jsVal);
+    }
+
+    function runEvalCommand(session, name, args) {
+        let script;
+        let rest;
+        if (name === 'EVAL') { script = args[0]; rest = args.slice(1); }
+        else {
+            const sha = args[0];
+            script = session.scriptCache[sha];
+            if (!script) throw new RedisError('NOSCRIPT No matching script. Please use EVAL.');
+            rest = args.slice(1);
+        }
+        const numkeys = parseInt(rest[0], 10) || 0;
+        const keys = rest.slice(1, 1 + numkeys);
+        const argv = rest.slice(1 + numkeys);
+        if (name === 'EVAL') session.scriptCache[sha1hex(script)] = script;
+        return runLuaScript(session, script, keys, argv);
+    }
+
+    /* ====================== REPLY FORMATTING (redis-cli style) ====================== */
+    function formatReply(val, indent = 0) {
+        const pad = '  '.repeat(indent);
+        if (val === null || val === undefined) return '(nil)';
+        if (typeof val === 'number') return `(integer) ${val}`;
+        if (val && typeof val === 'object' && val.__status !== undefined) return val.__status;
+        if (typeof val === 'string') return JSON.stringify(val);
+        if (Array.isArray(val)) {
+            if (!val.length) return '(empty array)';
+            return val.map((v, i) => `${pad}${i + 1}) ${formatReply(v, indent + 1)}`).join('\n');
+        }
+        return String(val);
+    }
+
+    /* ====================== BACKEND ABSTRACTION ======================
+       executeViaBackend() is the single entry point the UI calls; it hides
+       whether the session is Simulated / Upstash REST / local Docker+webdis. */
+    function webdisValueToReply(raw) {
+        if (raw === null) return null;
+        if (Array.isArray(raw)) {
+            if (raw.length === 2 && raw[0] === true && typeof raw[1] === 'string') return STATUS(raw[1]);
+            return raw.map(webdisValueToReply);
+        }
+        return raw;
+    }
+
+    async function upstashExec(session, argv) {
+        const res = await fetch(session.connection.upstashUrl.replace(/\/+$/, ''), {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${session.connection.upstashToken}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(argv)
+        });
+        const json = await res.json();
+        if (json.error) throw new RedisError(String(json.error));
+        return json.result === null ? null : json.result;
+    }
+
+    async function dockerExec(session, argv) {
+        const base = session.connection.dockerUrl.replace(/\/+$/, '');
+        const cmd = argv[0].toUpperCase();
+        const res = await fetch(`${base}/${encodeURIComponent(cmd)}`, {
+            method: 'POST',
+            body: argv.slice(1).join('\n')
+        });
+        const json = await res.json();
+        const value = json[cmd] ?? json[cmd.toLowerCase()];
+        if (value && typeof value === 'object' && !Array.isArray(value) && 'error' in value) throw new RedisError(String(value.error));
+        return webdisValueToReply(value === undefined ? null : value);
+    }
+
+    async function executeViaBackend(session, argv) {
+        const mode = session.connection.mode;
+        if (mode === 'upstash') return upstashExec(session, argv);
+        if (mode === 'docker') return dockerExec(session, argv);
+        return execCommand(session, argv);
+    }
+
+    /* ====================== STATE & PERSISTENCE ====================== */
+    const STORAGE_KEY = 'redisplay_state';
+    const state = {
+        sessions: [],
+        currentSessionId: null
+    };
+
+    function defaultSession(title) {
+        return {
+            id: generateId('sess'),
+            title: title || 'Session 1',
+            slug: null,
+            data: { 0: newDb() },
+            currentDb: 0,
+            multi: null,
+            scriptCache: {},
+            scripts: [{ id: generateId('script'), name: 'script.lua', body: "-- Try:\n-- redis.call('SET', KEYS[1], ARGV[1])\n-- return redis.call('GET', KEYS[1])\nreturn 1 + 1" }],
+            currentScriptId: null,
+            history: [],
+            connection: { mode: 'simulated', upstashUrl: '', upstashToken: '', dockerUrl: 'http://127.0.0.1:7379' },
+            createdAt: new Date().toISOString(),
+            sync: null
+        };
+    }
+
+    function serializeSessionForStorage(s) {
+        // scriptCache/multi/history are ephemeral/runtime-only; not persisted.
+        return {
+            id: s.id, title: s.title, slug: s.slug, data: s.data, currentDb: s.currentDb,
+            scripts: s.scripts, currentScriptId: s.currentScriptId,
+            connection: { ...s.connection, upstashToken: s.connection.upstashToken }, // kept locally only, never pushed to GitHub
+            createdAt: s.createdAt, sync: s.sync
+        };
+    }
+
+    function saveData() {
+        const payload = { currentSessionId: state.currentSessionId, sessions: state.sessions.map(serializeSessionForStorage) };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    }
+
+    function loadData() {
+        let raw = null;
+        try { raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch (e) {}
+        if (!raw || !Array.isArray(raw.sessions) || !raw.sessions.length) {
+            state.sessions = [defaultSession('Session 1')];
+            state.currentSessionId = state.sessions[0].id;
+            return;
+        }
+        state.sessions = raw.sessions.map(s => ({
+            ...defaultSession(s.title),
+            ...s,
+            multi: null,
+            scriptCache: {},
+            history: []
+        }));
+        state.currentSessionId = raw.currentSessionId || state.sessions[0].id;
+    }
+
+    function getCurrentSession() {
+        return state.sessions.find(s => s.id === state.currentSessionId) || state.sessions[0];
+    }
+
+    /* ====================== DOM REFS ====================== */
+    const els = {
+        connBadge: document.getElementById('connBadge'),
+        sessionList: document.getElementById('sessionList'),
+        dbSelect: document.getElementById('dbSelect'),
+        dbSizeInfo: document.getElementById('dbSizeInfo'),
+        termOutput: document.getElementById('termOutput'),
+        termPrompt: document.getElementById('termPrompt'),
+        autocompleteBox: document.getElementById('autocompleteBox'),
+        keyList: document.getElementById('keyList'),
+        scriptSelect: document.getElementById('scriptSelect'),
+        scriptKeys: document.getElementById('scriptKeys'),
+        scriptArgv: document.getElementById('scriptArgv'),
+        connectionModal: document.getElementById('connectionModal'),
+        githubModal: document.getElementById('githubModal'),
+        helpModal: document.getElementById('helpModal'),
+        keyDetailModal: document.getElementById('keyDetailModal'),
+        connTestStatus: document.getElementById('connTestStatus'),
+        githubSyncStatus: document.getElementById('githubSyncStatus'),
+        githubTokenInput: document.getElementById('githubTokenInput'),
+        githubOwnerInput: document.getElementById('githubOwnerInput'),
+        githubRepoInput: document.getElementById('githubRepoInput'),
+        githubCreateRepoCheckbox: document.getElementById('githubCreateRepoCheckbox'),
+        githubDisconnectBtn: document.getElementById('githubDisconnectBtn'),
+        githubSyncSection: document.getElementById('githubSyncSection'),
+        btnGitHub: document.getElementById('btnGitHub'),
+    };
+
+    let scriptEditor;
+    let keyDetailCurrentKey = null;
+
+    /* ====================== SESSIONS UI ====================== */
+    function switchSession(id) {
+        state.currentSessionId = id;
+        const s = getCurrentSession();
+        if (!s.currentScriptId && s.scripts.length) s.currentScriptId = s.scripts[0].id;
+        renderSessionList();
+        renderDbSelect();
+        renderScriptSelect();
+        loadCurrentScriptIntoEditor();
+        renderTerminalHistory();
+        refreshKeyspace();
+        updateConnBadge();
+        saveData();
+    }
+
+    function renderSessionList() {
+        els.sessionList.innerHTML = state.sessions.map(s => `
+            <div class="flex items-center justify-between px-3 py-2 cursor-pointer text-sm ${s.id === state.currentSessionId ? 'bg-gray-700 text-white' : 'hover:bg-gray-800 text-gray-300'}" data-session="${s.id}">
+                <span class="truncate flex-1"><i class="fas fa-database mr-2 text-primary text-xs"></i>${escapeHtml(s.title)}</span>
+                <button class="deleteSessionBtn text-gray-500 hover:text-red-400 ml-2" data-session="${s.id}" title="Delete session"><i class="fas fa-xmark text-xs"></i></button>
+            </div>
+        `).join('');
+        els.sessionList.querySelectorAll('[data-session]').forEach(el => {
+            el.addEventListener('click', (e) => { if (!e.target.closest('.deleteSessionBtn')) switchSession(el.dataset.session); });
+        });
+        els.sessionList.querySelectorAll('.deleteSessionBtn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (state.sessions.length <= 1) { showToast('At least one session is required', 'error'); return; }
+                if (!confirm('Delete this session? This cannot be undone.')) return;
+                state.sessions = state.sessions.filter(s => s.id !== btn.dataset.session);
+                if (state.currentSessionId === btn.dataset.session) state.currentSessionId = state.sessions[0].id;
+                switchSession(state.currentSessionId);
+            });
+        });
+    }
+
+    function renderDbSelect() {
+        const s = getCurrentSession();
+        els.dbSelect.innerHTML = Array.from({ length: 16 }, (_, i) => `<option value="${i}" ${i === s.currentDb ? 'selected' : ''}>${i}</option>`).join('');
+    }
+
+    function updateConnBadge() {
+        const mode = getCurrentSession().connection.mode;
+        const labels = { simulated: 'Simulated', upstash: 'Upstash', docker: 'Local Docker' };
+        els.connBadge.textContent = labels[mode] || mode;
+    }
+
+    document.getElementById('btnNewSession').addEventListener('click', () => {
+        const title = prompt('Session name:', `Session ${state.sessions.length + 1}`);
+        if (!title) return;
+        const s = defaultSession(title);
+        state.sessions.push(s);
+        switchSession(s.id);
+    });
+
+    document.getElementById('btnRenameSession').addEventListener('click', () => {
+        const s = getCurrentSession();
+        const title = prompt('Rename session:', s.title);
+        if (!title) return;
+        s.title = title;
+        renderSessionList();
+        saveData();
+    });
+
+    els.dbSelect.addEventListener('change', () => {
+        const s = getCurrentSession();
+        s.currentDb = parseInt(els.dbSelect.value, 10);
+        refreshKeyspace();
+        saveData();
+    });
+
+    /* ====================== TERMINAL (REPL) ====================== */
+    const ALL_COMMAND_NAMES = () => Object.keys(COMMANDS).concat(['EVAL', 'EVALSHA', 'CLEAR']).sort();
+    let historyIndex = -1;
+
+    function appendTermLine(text, cls = '') {
+        const div = document.createElement('div');
+        div.className = cls;
+        div.textContent = text;
+        els.termOutput.appendChild(div);
+        els.termOutput.scrollTop = els.termOutput.scrollHeight;
+    }
+
+    function renderTerminalHistory() {
+        els.termOutput.innerHTML = '';
+        appendTermLine(`RedisPlay ready. DB ${getCurrentSession().currentDb}. Type HELP commands via the Help button, or just start typing (e.g. SET foo bar).`, 'term-line-info');
+    }
+
+    async function runTerminalCommand(line) {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        appendTermLine('> ' + trimmed, 'term-line-cmd');
+        const s = getCurrentSession();
+        s.history.push(trimmed);
+        historyIndex = s.history.length;
+
+        if (trimmed.toUpperCase() === 'CLEAR') { renderTerminalHistory(); return; }
+
+        const argv = tokenize(trimmed);
+        try {
+            const reply = await executeViaBackend(s, argv);
+            appendTermLine(formatReply(reply), reply && reply.__status ? 'term-line-ok' : '');
+            const mutating = ['SET', 'DEL', 'HSET', 'LPUSH', 'RPUSH', 'SADD', 'ZADD', 'EXPIRE', 'FLUSHDB', 'RENAME', 'HDEL', 'SREM', 'ZREM', 'LPOP', 'RPOP', 'PERSIST', 'EVAL', 'EVALSHA', 'INCR', 'DECR', 'INCRBY', 'DECRBY', 'APPEND', 'SETNX', 'SETEX', 'MSET', 'LSET', 'LREM', 'HINCRBY', 'ZINCRBY', 'EXEC'];
+            // Don't query the keyspace while a MULTI transaction is still queuing commands -
+            // doing so would itself get queued as part of the transaction.
+            if (!s.multi && mutating.includes(argv[0].toUpperCase())) refreshKeyspace();
+        } catch (err) {
+            appendTermLine('(error) ' + err.message, 'term-line-err');
+        }
+        saveData();
+    }
+
+    els.termPrompt.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            const line = els.termPrompt.value;
+            els.termPrompt.value = '';
+            els.autocompleteBox.classList.add('hidden');
+            runTerminalCommand(line);
+        } else if (e.key === 'ArrowUp') {
+            const s = getCurrentSession();
+            if (historyIndex > 0) { historyIndex--; els.termPrompt.value = s.history[historyIndex] || ''; }
+            e.preventDefault();
+        } else if (e.key === 'ArrowDown') {
+            const s = getCurrentSession();
+            if (historyIndex < s.history.length - 1) { historyIndex++; els.termPrompt.value = s.history[historyIndex] || ''; }
+            else { historyIndex = s.history.length; els.termPrompt.value = ''; }
+            e.preventDefault();
+        } else if (e.key === 'Tab') {
+            e.preventDefault();
+            const match = ALL_COMMAND_NAMES().find(c => c.startsWith(els.termPrompt.value.trim().toUpperCase()));
+            if (match) els.termPrompt.value = match + ' ';
+            els.autocompleteBox.classList.add('hidden');
+        }
+    });
+
+    els.termPrompt.addEventListener('input', () => {
+        const v = els.termPrompt.value.trim().toUpperCase();
+        if (!v || v.includes(' ')) { els.autocompleteBox.classList.add('hidden'); return; }
+        const matches = ALL_COMMAND_NAMES().filter(c => c.startsWith(v)).slice(0, 8);
+        if (!matches.length) { els.autocompleteBox.classList.add('hidden'); return; }
+        els.autocompleteBox.innerHTML = matches.map(m => `<div class="px-3 py-1 hover:bg-gray-700 cursor-pointer" data-ac="${m}">${m}</div>`).join('');
+        els.autocompleteBox.classList.remove('hidden');
+        els.autocompleteBox.querySelectorAll('[data-ac]').forEach(el => el.addEventListener('click', () => {
+            els.termPrompt.value = el.dataset.ac + ' ';
+            els.autocompleteBox.classList.add('hidden');
+            els.termPrompt.focus();
+        }));
+    });
+
+    document.getElementById('btnClearTerm').addEventListener('click', renderTerminalHistory);
+
+    /* ====================== SCRIPT EDITOR (Lua) ====================== */
+    function renderScriptSelect() {
+        const s = getCurrentSession();
+        els.scriptSelect.innerHTML = s.scripts.map(sc => `<option value="${sc.id}" ${sc.id === s.currentScriptId ? 'selected' : ''}>${escapeHtml(sc.name)}</option>`).join('');
+    }
+
+    function loadCurrentScriptIntoEditor() {
+        const s = getCurrentSession();
+        const sc = s.scripts.find(x => x.id === s.currentScriptId) || s.scripts[0];
+        if (sc) { s.currentScriptId = sc.id; scriptEditor.setValue(sc.body || ''); }
+    }
+
+    function initScriptEditor() {
+        const host = document.createElement('div');
+        host.style.position = 'absolute'; host.style.inset = '0';
+        document.getElementById('scriptEditorHost').appendChild(host);
+        scriptEditor = CodeMirror(host, {
+            value: '', mode: 'lua', theme: 'dracula', lineNumbers: true,
+            autoCloseBrackets: true, matchBrackets: true, tabSize: 2, indentUnit: 2
+        });
+        scriptEditor.on('change', () => {
+            const s = getCurrentSession();
+            const sc = s.scripts.find(x => x.id === s.currentScriptId);
+            if (sc) sc.body = scriptEditor.getValue();
+        });
+        scriptEditor.setOption('extraKeys', {
+            'Ctrl-Enter': runCurrentScript,
+            'Cmd-Enter': runCurrentScript
+        });
+    }
+
+    document.getElementById('scriptSelect').addEventListener('change', (e) => {
+        saveScriptBody();
+        getCurrentSession().currentScriptId = e.target.value;
+        loadCurrentScriptIntoEditor();
+    });
+
+    function saveScriptBody() {
+        const s = getCurrentSession();
+        const sc = s.scripts.find(x => x.id === s.currentScriptId);
+        if (sc) sc.body = scriptEditor.getValue();
+    }
+
+    document.getElementById('btnNewScript').addEventListener('click', () => {
+        const name = prompt('Script name:', 'script.lua') || 'script.lua';
+        const s = getCurrentSession();
+        const sc = { id: generateId('script'), name, body: "return 'hello'" };
+        s.scripts.push(sc);
+        s.currentScriptId = sc.id;
+        renderScriptSelect();
+        loadCurrentScriptIntoEditor();
+        saveData();
+    });
+
+    document.getElementById('btnSaveScript').addEventListener('click', () => {
+        saveScriptBody();
+        saveData();
+        showToast('Script saved', 'success');
+    });
+
+    document.getElementById('btnDeleteScript').addEventListener('click', () => {
+        const s = getCurrentSession();
+        if (s.scripts.length <= 1) { showToast('At least one script is required', 'error'); return; }
+        if (!confirm('Delete this script?')) return;
+        s.scripts = s.scripts.filter(x => x.id !== s.currentScriptId);
+        s.currentScriptId = s.scripts[0].id;
+        renderScriptSelect();
+        loadCurrentScriptIntoEditor();
+        saveData();
+    });
+
+    async function runCurrentScript() {
+        saveScriptBody();
+        const s = getCurrentSession();
+        const sc = s.scripts.find(x => x.id === s.currentScriptId);
+        const keys = els.scriptKeys.value.split(',').map(x => x.trim()).filter(Boolean);
+        const argv = els.scriptArgv.value.split(',').map(x => x.trim()).filter(Boolean);
+        const cmdArgv = ['EVAL', sc.body, String(keys.length), ...keys, ...argv];
+        appendTermLine(`> EVAL (script: ${sc.name})`, 'term-line-cmd');
+        try {
+            const reply = await executeViaBackend(s, cmdArgv);
+            appendTermLine(formatReply(reply));
+            refreshKeyspace();
+            showToast('Script executed', 'success');
+        } catch (err) {
+            appendTermLine('(error) ' + err.message, 'term-line-err');
+            showToast('Script error: ' + err.message, 'error');
+        }
+        saveData();
+    }
+    document.getElementById('btnRunScript').addEventListener('click', runCurrentScript);
+
+    /* ====================== KEYSPACE EXPLORER ====================== */
+    async function refreshKeyspace() {
+        const s = getCurrentSession();
+        els.dbSizeInfo.textContent = '...';
+        let keys;
+        try {
+            keys = await executeViaBackend(s, ['KEYS', '*']);
+        } catch (err) {
+            els.keyList.innerHTML = `<div class="p-3 text-red-400">${escapeHtml(err.message)}</div>`;
+            els.dbSizeInfo.textContent = 'error';
+            return;
+        }
+        keys = Array.isArray(keys) ? keys.slice().sort() : [];
+        els.dbSizeInfo.textContent = `${keys.length} key${keys.length === 1 ? '' : 's'}`;
+        if (!keys.length) { els.keyList.innerHTML = `<div class="p-3 text-gray-600">No keys yet. Try: SET foo bar</div>`; return; }
+
+        const rows = await Promise.all(keys.map(async k => {
+            let type = 'string', ttl = -1;
+            try {
+                type = (await executeViaBackend(s, ['TYPE', k]))?.__status || 'string';
+                ttl = await executeViaBackend(s, ['TTL', k]);
+            } catch (e) {}
+            return { key: k, type, ttl };
+        }));
+
+        els.keyList.innerHTML = rows.map(r => `
+            <div class="key-row flex items-center justify-between px-3 py-1.5 cursor-pointer border-b border-gray-800" data-key="${escapeHtml(r.key)}">
+                <span class="truncate flex-1">${escapeHtml(r.key)}</span>
+                <span class="text-gray-500 ml-2">${r.type}</span>
+                ${r.ttl >= 0 ? `<span class="text-amber-500 ml-2"><i class="fas fa-clock"></i> ${r.ttl}s</span>` : ''}
+            </div>
+        `).join('');
+        els.keyList.querySelectorAll('[data-key]').forEach(el => el.addEventListener('click', () => openKeyDetail(el.dataset.key)));
+    }
+    document.getElementById('btnRefreshKeys').addEventListener('click', refreshKeyspace);
+
+    async function openKeyDetail(key) {
+        const s = getCurrentSession();
+        keyDetailCurrentKey = key;
+        const type = (await executeViaBackend(s, ['TYPE', key]))?.__status || 'string';
+        const ttl = await executeViaBackend(s, ['TTL', key]);
+        let value;
+        if (type === 'string') value = await executeViaBackend(s, ['GET', key]);
+        else if (type === 'hash') value = await executeViaBackend(s, ['HGETALL', key]);
+        else if (type === 'list') value = await executeViaBackend(s, ['LRANGE', key, '0', '-1']);
+        else if (type === 'set') value = await executeViaBackend(s, ['SMEMBERS', key]);
+        else if (type === 'zset') value = await executeViaBackend(s, ['ZRANGE', key, '0', '-1', 'WITHSCORES']);
+
+        document.getElementById('keyDetailTitle').textContent = key;
+        document.getElementById('keyDetailType').textContent = type;
+        document.getElementById('keyDetailValue').textContent = formatReply(value);
+        document.getElementById('keyDetailTtl').textContent = ttl >= 0 ? `${ttl}s` : 'none';
+        document.getElementById('keyDetailTtlInput').value = '';
+        openModal(els.keyDetailModal);
+    }
+
+    document.getElementById('btnDeleteKey').addEventListener('click', async () => {
+        const s = getCurrentSession();
+        await executeViaBackend(s, ['DEL', keyDetailCurrentKey]);
+        closeModal(els.keyDetailModal);
+        refreshKeyspace();
+        showToast('Key deleted', 'success');
+    });
+    document.getElementById('btnSetTtl').addEventListener('click', async () => {
+        const secs = parseInt(document.getElementById('keyDetailTtlInput').value, 10);
+        if (!secs) return;
+        await executeViaBackend(getCurrentSession(), ['EXPIRE', keyDetailCurrentKey, String(secs)]);
+        openKeyDetail(keyDetailCurrentKey);
+        refreshKeyspace();
+    });
+    document.getElementById('btnPersistTtl').addEventListener('click', async () => {
+        await executeViaBackend(getCurrentSession(), ['PERSIST', keyDetailCurrentKey]);
+        openKeyDetail(keyDetailCurrentKey);
+        refreshKeyspace();
+    });
+
+    /* ====================== CONNECTION MODAL ====================== */
+    document.getElementById('btnConnection').addEventListener('click', () => {
+        const conn = getCurrentSession().connection;
+        document.querySelectorAll('#connTabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === conn.mode));
+        document.querySelectorAll('.conn-pane').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== conn.mode));
+        document.getElementById('upstashUrlInput').value = conn.upstashUrl;
+        document.getElementById('upstashTokenInput').value = conn.upstashToken;
+        document.getElementById('dockerUrlInput').value = conn.dockerUrl;
+        els.connTestStatus.textContent = '';
+        openModal(els.connectionModal);
+    });
+
+    document.querySelectorAll('#connTabs .tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('#connTabs .tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+            document.querySelectorAll('.conn-pane').forEach(p => p.classList.toggle('hidden', p.dataset.pane !== btn.dataset.tab));
+        });
+    });
+
+    document.querySelectorAll('.copyBtn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const text = document.getElementById(btn.dataset.target).textContent;
+            navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard', 'success'));
+        });
+    });
+
+    function connectionFromModal() {
+        const mode = document.querySelector('#connTabs .tab-btn.active').dataset.tab;
+        return {
+            mode,
+            upstashUrl: document.getElementById('upstashUrlInput').value.trim(),
+            upstashToken: document.getElementById('upstashTokenInput').value.trim(),
+            dockerUrl: document.getElementById('dockerUrlInput').value.trim() || 'http://127.0.0.1:7379'
+        };
+    }
+
+    document.getElementById('btnTestConnection').addEventListener('click', async () => {
+        const conn = connectionFromModal();
+        els.connTestStatus.textContent = 'Testing...';
+        const tempSession = { ...getCurrentSession(), connection: conn };
+        try {
+            const reply = await executeViaBackend(tempSession, ['PING']);
+            els.connTestStatus.textContent = `OK: ${formatReply(reply)}`;
+            els.connTestStatus.className = 'text-xs text-green-400';
+        } catch (err) {
+            els.connTestStatus.textContent = 'Failed: ' + err.message;
+            els.connTestStatus.className = 'text-xs text-red-400';
+        }
+    });
+
+    document.getElementById('btnSaveConnection').addEventListener('click', () => {
+        const s = getCurrentSession();
+        s.connection = connectionFromModal();
+        updateConnBadge();
+        saveData();
+        closeModal(els.connectionModal);
+        refreshKeyspace();
+        showToast(`Connection set to ${s.connection.mode}`, 'success');
+    });
+
+    /* ====================== HELP MODAL ====================== */
+    document.getElementById('btnHelp').addEventListener('click', () => openModal(els.helpModal));
+
+    /* ====================== RESIZABLE PANES ======================
+       Ported verbatim from PyPlay/RustPlay: a .resizer sits between flex
+       siblings and sets an explicit size on its data-target pane. */
+    const desktopQuery = window.matchMedia('(min-width: 768px)');
+    const FLEX_MIN = { col: 240, row: 100 };
+
+    function getResizerDirection(r) {
+        const d = r.dataset.direction;
+        return d === 'auto' ? (desktopQuery.matches ? 'col' : 'row') : d;
+    }
+    function getResizerStorageKey(r, dir) { return `redisplay_layout_${r.dataset.key}_${dir}`; }
+    function getPaneSize(el, dir) { const rect = el.getBoundingClientRect(); return dir === 'col' ? rect.width : rect.height; }
+
+    function setPaneSize(r, dir, px) {
+        const target = document.getElementById(r.dataset.target);
+        const flex = document.getElementById(r.dataset.flex);
+        const total = getPaneSize(r.parentElement, dir);
+        const min = parseFloat(r.dataset.min) || 120;
+        let max = total * (parseFloat(r.dataset.maxRatio) || 0.6);
+        if (flex) max = Math.min(max, getPaneSize(target, dir) + getPaneSize(flex, dir) - FLEX_MIN[dir]);
+        const size = Math.round(Math.min(Math.max(max, min), Math.max(min, px)));
+        target.style[dir === 'col' ? 'width' : 'height'] = size + 'px';
+        return size;
+    }
+
+    function refreshEditorLayout() { if (scriptEditor) scriptEditor.refresh(); }
+
+    function applyPaneLayout() {
+        const resizers = [...document.querySelectorAll('.resizer')];
+        resizers.forEach(r => {
+            const target = document.getElementById(r.dataset.target);
+            target.style.width = ''; target.style.height = '';
+            r.setAttribute('aria-orientation', getResizerDirection(r) === 'col' ? 'vertical' : 'horizontal');
+        });
+        resizers.forEach(r => {
+            if (r.offsetParent === null) return;
+            const dir = getResizerDirection(r);
+            const saved = parseFloat(localStorage.getItem(getResizerStorageKey(r, dir)));
+            if (!isNaN(saved)) setPaneSize(r, dir, saved);
+        });
+        refreshEditorLayout();
+    }
+
+    function initResizers() {
+        document.querySelectorAll('.resizer').forEach(r => {
+            const target = document.getElementById(r.dataset.target);
+            const sign = r.dataset.side === 'after' ? -1 : 1;
+
+            r.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                const dir = getResizerDirection(r);
+                const startSize = getPaneSize(target, dir);
+                const startPos = dir === 'col' ? e.clientX : e.clientY;
+                let size = startSize, moved = false, frame = null;
+
+                r.setPointerCapture(e.pointerId);
+                r.classList.add('dragging');
+                document.body.classList.add(`resizing-${dir}`);
+
+                const onMove = (ev) => {
+                    const pos = dir === 'col' ? ev.clientX : ev.clientY;
+                    if (!moved && Math.abs(pos - startPos) < 2) return;
+                    moved = true;
+                    size = setPaneSize(r, dir, startSize + sign * (pos - startPos));
+                    if (!frame) frame = requestAnimationFrame(() => { frame = null; refreshEditorLayout(); });
+                };
+                const onUp = () => {
+                    r.removeEventListener('pointermove', onMove);
+                    r.removeEventListener('pointerup', onUp);
+                    r.removeEventListener('pointercancel', onUp);
+                    r.classList.remove('dragging');
+                    document.body.classList.remove(`resizing-${dir}`);
+                    if (moved) localStorage.setItem(getResizerStorageKey(r, dir), size);
+                    refreshEditorLayout();
+                };
+                r.addEventListener('pointermove', onMove);
+                r.addEventListener('pointerup', onUp);
+                r.addEventListener('pointercancel', onUp);
+            });
+
+            r.addEventListener('keydown', (e) => {
+                const dir = getResizerDirection(r);
+                const keys = dir === 'col' ? { ArrowLeft: -1, ArrowRight: 1 } : { ArrowUp: -1, ArrowDown: 1 };
+                if (!(e.key in keys)) return;
+                e.preventDefault();
+                const step = e.shiftKey ? 64 : 16;
+                const size = setPaneSize(r, dir, getPaneSize(target, dir) + keys[e.key] * step * sign);
+                localStorage.setItem(getResizerStorageKey(r, dir), size);
+                refreshEditorLayout();
+            });
+
+            r.addEventListener('dblclick', () => {
+                const dir = getResizerDirection(r);
+                localStorage.removeItem(getResizerStorageKey(r, dir));
+                target.style[dir === 'col' ? 'width' : 'height'] = '';
+                refreshEditorLayout();
+            });
+        });
+
+        let resizeTimer;
+        window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(applyPaneLayout, 100); });
+        applyPaneLayout();
+    }
+
+    /* ====================== GITHUB PROJECT SYNC ======================
+       Repo layout: projects/<slug>/session.json + projects/<slug>/meta.json.
+       Writes go through the Git Data API so a multi-session push is one atomic commit. */
+    const githubState = {
+        token: localStorage.getItem('redisplay_github_token') || '',
+        owner: localStorage.getItem('redisplay_github_owner') || '',
+        repo: localStorage.getItem('redisplay_github_repo') || '',
+        createIfMissing: false,
+        busy: false
+    };
+    const PROJECTS_ROOT = 'projects';
+
+    function isGitHubConnected() { return !!(githubState.token && githubState.owner && githubState.repo); }
+    function repoBase() { return `/repos/${encodeURIComponent(githubState.owner)}/${encodeURIComponent(githubState.repo)}`; }
+    function branchRefPath(branch) { return branch.split('/').map(encodeURIComponent).join('/'); }
+
+    async function githubRequest(path, options = {}) {
+        if (!githubState.token) throw new Error('No GitHub token configured');
+        const res = await fetch(`https://api.github.com${path}`, {
+            ...options,
+            headers: {
+                'Accept': 'application/vnd.github+json',
+                'Authorization': `Bearer ${githubState.token}`,
+                'X-GitHub-Api-Version': '2022-11-28',
+                ...(options.headers || {})
+            }
+        });
+        if (!res.ok) {
+            const body = await res.text();
+            let message = 'GitHub API request failed';
+            try { const json = JSON.parse(body); if (json.message) message = json.message; } catch (e) {}
+            const error = new Error(message);
+            error.status = res.status;
+            throw error;
+        }
+        const text = await res.text();
+        return text ? JSON.parse(text) : null;
+    }
+
+    function uniqueSlug(base, excludeId = null, remoteFiles = null) {
+        const taken = (s) => state.sessions.some(p => p.id !== excludeId && p.slug === s) ||
+            (remoteFiles && [...remoteFiles.keys()].some(k => k.startsWith(`${PROJECTS_ROOT}/${s}/`)));
+        let slug = base, i = 2;
+        while (taken(slug)) slug = `${base}-${i++}`;
+        return slug;
+    }
+
+    function refreshSlugIfUnsynced(session) {
+        if (!session.sync) session.slug = uniqueSlug(slugify(session.title), session.id);
+    }
+
+    function sessionPaths(slug) {
+        return { main: `${PROJECTS_ROOT}/${slug}/session.json`, meta: `${PROJECTS_ROOT}/${slug}/meta.json` };
+    }
+
+    function sessionHash(s) {
+        return hashString(JSON.stringify([s.title || '', JSON.stringify(s.data), JSON.stringify(s.scripts)]));
+    }
+    function isSessionDirty(s) { return !s.sync || !!s.sync.conflict || sessionHash(s) !== s.sync.hash; }
+    function getSyncStatus(s) {
+        if (!s.sync) return 'new';
+        if (s.sync.conflict) return 'conflict';
+        return sessionHash(s) !== s.sync.hash ? 'dirty' : 'synced';
+    }
+
+    function markSessionSynced(session, mainSha, metaSha) {
+        session.sync = { mainSha: mainSha || null, metaSha: metaSha || null, hash: sessionHash(session), lastSyncedAt: new Date().toISOString(), conflict: false };
+    }
+    function markSessionConflict(session) { session.sync = { ...(session.sync || {}), conflict: true }; }
+
+    async function ensureGitHubRepoExists() {
+        if (!githubState.owner || !githubState.repo) throw new Error('GitHub owner and repo are required');
+        try {
+            return await githubRequest(repoBase());
+        } catch (err) {
+            if (err.status && err.status !== 404) throw err;
+            if (!githubState.createIfMissing) throw new Error(`Repository ${githubState.owner}/${githubState.repo} does not exist. Enable "Create repo if it does not exist".`);
+            return await githubRequest('/user/repos', { method: 'POST', body: JSON.stringify({ name: githubState.repo, private: false, auto_init: true }) });
+        }
+    }
+
+    async function initializeEmptyRepo() {
+        await githubRequest(`${repoBase()}/contents/README.md`, {
+            method: 'PUT',
+            body: JSON.stringify({ message: 'Initialize RedisPlay sessions repo', content: base64Encode('# RedisPlay Sessions\n\nEach folder under `projects/` is one RedisPlay session (`session.json` + `meta.json`).\n') })
+        });
+    }
+
+    function treeToFileMap(tree) {
+        const files = new Map();
+        (tree.tree || []).forEach(entry => { if (entry.type === 'blob') files.set(entry.path, entry.sha); });
+        return files;
+    }
+
+    async function getRemoteSnapshot() {
+        const repoInfo = await ensureGitHubRepoExists();
+        const branch = repoInfo.default_branch || 'main';
+        let ref;
+        try {
+            ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+        } catch (err) {
+            if (err.status !== 404 && err.status !== 409) throw err;
+            await initializeEmptyRepo();
+            ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+        }
+        const commitSha = ref.object.sha;
+        const commit = await githubRequest(`${repoBase()}/git/commits/${commitSha}`);
+        const tree = await githubRequest(`${repoBase()}/git/trees/${commit.tree.sha}?recursive=1`);
+        if (tree.truncated) showToast('Repository is very large; some sessions may be missing from sync', 'error');
+        return { branch, commitSha, treeSha: commit.tree.sha, files: treeToFileMap(tree) };
+    }
+
+    async function commitTreeEntries(snapshot, entries, message) {
+        const tree = await githubRequest(`${repoBase()}/git/trees`, { method: 'POST', body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries }) });
+        const commit = await githubRequest(`${repoBase()}/git/commits`, { method: 'POST', body: JSON.stringify({ message, tree: tree.sha, parents: [snapshot.commitSha] }) });
+        try {
+            await githubRequest(`${repoBase()}/git/refs/heads/${branchRefPath(snapshot.branch)}`, { method: 'PATCH', body: JSON.stringify({ sha: commit.sha }) });
+        } catch (err) {
+            if (err.status === 422) throw new Error('GitHub branch changed during sync. Please try again.');
+            throw err;
+        }
+        const newTree = await githubRequest(`${repoBase()}/git/trees/${tree.sha}?recursive=1`);
+        return treeToFileMap(newTree);
+    }
+
+    function buildSessionTreeEntries(session) {
+        const { main, meta } = sessionPaths(session.slug);
+        const sessionJson = JSON.stringify({ data: session.data, currentDb: session.currentDb, scripts: session.scripts }, null, 2) + '\n';
+        const metaJson = JSON.stringify({ title: session.title, slug: session.slug, createdAt: session.createdAt, updatedAt: new Date().toISOString() }, null, 2) + '\n';
+        return [
+            { path: main, mode: '100644', type: 'blob', content: sessionJson },
+            { path: meta, mode: '100644', type: 'blob', content: metaJson }
+        ];
+    }
+
+    function listRemoteSessions(files) {
+        const pattern = new RegExp(`^${PROJECTS_ROOT}/([^/]+)/(session\\.json|meta\\.json)$`);
+        const remote = new Map();
+        files.forEach((sha, path) => {
+            const match = path.match(pattern);
+            if (!match) return;
+            const entry = remote.get(match[1]) || { mainSha: null, metaSha: null };
+            if (match[2] === 'session.json') entry.mainSha = sha; else entry.metaSha = sha;
+            remote.set(match[1], entry);
+        });
+        [...remote.keys()].forEach(slug => { if (!remote.get(slug).mainSha) remote.delete(slug); });
+        return remote;
+    }
+
+    function remoteChangedSinceSync(session, snapshot) {
+        const { main, meta } = sessionPaths(session.slug);
+        const remoteMain = snapshot.files.get(main) || null;
+        const remoteMeta = snapshot.files.get(meta) || null;
+        if (!remoteMain && !remoteMeta) return false;
+        if (!session.sync) return true;
+        return remoteMain !== session.sync.mainSha || remoteMeta !== session.sync.metaSha;
+    }
+
+    async function fetchBlobText(sha) { const blob = await githubRequest(`${repoBase()}/git/blobs/${sha}`); return base64Decode(blob.content); }
+
+    function setSyncStatus(text) { els.githubSyncStatus.textContent = text || ''; }
+
+    async function runGitHubOperation(label, fn) {
+        if (!isGitHubConnected()) { showToast('Connect to GitHub first', 'error'); return null; }
+        if (githubState.busy) { showToast('A GitHub sync is already in progress', 'info'); return null; }
+        githubState.busy = true;
+        document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = true);
+        els.btnGitHub.classList.add('opacity-60');
+        setSyncStatus(`${label}...`);
+        try {
+            saveData();
+            return await fn();
+        } catch (err) {
+            showToast(`GitHub ${label.toLowerCase()} failed: ${err.message}`, 'error');
+            setSyncStatus(`${label} failed: ${err.message}`);
+            return null;
+        } finally {
+            githubState.busy = false;
+            document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = false);
+            els.btnGitHub.classList.remove('opacity-60');
+            saveData();
+            renderSessionList();
+        }
+    }
+
+    async function pushSessionsCore(sessions, snapshot, force = new Set()) {
+        const conflicts = sessions.filter(p => !force.has(p.id) && remoteChangedSinceSync(p, snapshot));
+        let toPush = sessions;
+        if (conflicts.length) {
+            const names = conflicts.map(p => `• ${p.title} (${PROJECTS_ROOT}/${p.slug})`).join('\n');
+            const overwrite = confirm(`These sessions were changed on GitHub since your last sync:\n\n${names}\n\nOK = overwrite GitHub with your local version\nCancel = skip them (use Pull to get the GitHub version)`);
+            if (!overwrite) { conflicts.forEach(markSessionConflict); toPush = sessions.filter(p => !conflicts.includes(p)); }
+        }
+        if (!toPush.length) return 0;
+        const entries = toPush.flatMap(buildSessionTreeEntries);
+        const message = toPush.length === 1 ? `Update ${toPush[0].slug} from RedisPlay` : `Sync ${toPush.length} sessions from RedisPlay`;
+        const files = await commitTreeEntries(snapshot, entries, message);
+        toPush.forEach(p => { const { main, meta } = sessionPaths(p.slug); markSessionSynced(p, files.get(main), files.get(meta)); });
+        return toPush.length;
+    }
+
+    async function pullSessionsCore(snapshot, mode = 'pull') {
+        const remote = listRemoteSessions(snapshot.files);
+        const keepLocal = new Set();
+        let added = 0, updated = 0, conflicts = 0;
+        for (const [slug, r] of remote) {
+            let local = state.sessions.find(p => p.slug === slug);
+            if (local && local.sync && local.sync.mainSha === r.mainSha && local.sync.metaSha === r.metaSha) continue;
+            if (local && isSessionDirty(local)) {
+                const useRemote = confirm(mode === 'sync'
+                    ? `"${local.title}" changed both locally and on GitHub.\n\nOK = use the GitHub version (discard local changes)\nCancel = keep your local version (it will overwrite GitHub)`
+                    : `"${local.title}" has local changes, and GitHub has a different version.\n\nOK = replace local with the GitHub version\nCancel = keep local (marked as conflict)`);
+                if (!useRemote) {
+                    if (mode === 'sync') keepLocal.add(local.id); else { markSessionConflict(local); conflicts++; }
+                    continue;
+                }
+            }
+            setSyncStatus(`Downloading ${PROJECTS_ROOT}/${slug}...`);
+            let sessionData = {}, meta = {};
+            try { sessionData = JSON.parse(await fetchBlobText(r.mainSha)) || {}; } catch (e) { sessionData = {}; }
+            if (r.metaSha) { try { meta = JSON.parse(await fetchBlobText(r.metaSha)) || {}; } catch (e) { meta = {}; } }
+            if (!local) {
+                local = defaultSession(meta.title || slug);
+                local.slug = slug;
+                local.createdAt = meta.createdAt || new Date().toISOString();
+                state.sessions.push(local);
+                added++;
+            } else updated++;
+            local.title = (typeof meta.title === 'string' && meta.title.trim()) ? meta.title.trim() : (local.title || slug);
+            local.data = sessionData.data || { 0: newDb() };
+            local.currentDb = sessionData.currentDb || 0;
+            local.scripts = sessionData.scripts && sessionData.scripts.length ? sessionData.scripts : local.scripts;
+            local.currentScriptId = local.scripts[0].id;
+            markSessionSynced(local, r.mainSha, r.metaSha);
+            if (local.id === state.currentSessionId) switchSession(local.id);
+        }
+        return { added, updated, conflicts, keepLocal };
+    }
+
+    async function pushSessions(sessions) {
+        return runGitHubOperation('Push', async () => {
+            const snapshot = await getRemoteSnapshot();
+            const pushed = await pushSessionsCore(sessions, snapshot);
+            const skipped = sessions.length - pushed;
+            const msg = `Pushed ${pushed} session${pushed === 1 ? '' : 's'}` + (skipped ? `, skipped ${skipped}` : '');
+            setSyncStatus(msg); showToast(msg, pushed ? 'success' : 'info');
+            return pushed;
+        });
+    }
+    async function pullSessions() {
+        return runGitHubOperation('Pull', async () => {
+            const snapshot = await getRemoteSnapshot();
+            const { added, updated, conflicts } = await pullSessionsCore(snapshot, 'pull');
+            const msg = `Pulled: ${added} new, ${updated} updated` + (conflicts ? `, ${conflicts} conflict${conflicts === 1 ? '' : 's'}` : '');
+            setSyncStatus(msg); showToast(msg, conflicts ? 'error' : 'success');
+        });
+    }
+    async function syncAllSessions() {
+        return runGitHubOperation('Sync', async () => {
+            const snapshot = await getRemoteSnapshot();
+            const { added, updated, keepLocal } = await pullSessionsCore(snapshot, 'sync');
+            const toPush = state.sessions.filter(p => isSessionDirty(p) || keepLocal.has(p.id));
+            setSyncStatus(`Pushing ${toPush.length} session${toPush.length === 1 ? '' : 's'}...`);
+            const pushed = toPush.length ? await pushSessionsCore(toPush, snapshot, keepLocal) : 0;
+            const msg = `Sync complete: ${added} new, ${updated} updated from GitHub, ${pushed} pushed`;
+            setSyncStatus(msg); showToast(msg, 'success');
+        });
+    }
+
+    function openGitHubModal() {
+        els.githubTokenInput.value = githubState.token;
+        els.githubOwnerInput.value = githubState.owner;
+        els.githubRepoInput.value = githubState.repo;
+        els.githubCreateRepoCheckbox.checked = githubState.createIfMissing;
+        els.githubDisconnectBtn.classList.toggle('hidden', !(githubState.token && githubState.owner && githubState.repo));
+        els.githubSyncSection.classList.toggle('hidden', !isGitHubConnected());
+        if (!githubState.busy) setSyncStatus('');
+        openModal(els.githubModal);
+    }
+
+    document.getElementById('btnGitHub').addEventListener('click', openGitHubModal);
+    document.getElementById('githubConnectBtn').addEventListener('click', () => {
+        const token = els.githubTokenInput.value.trim();
+        const owner = els.githubOwnerInput.value.trim();
+        const repo = els.githubRepoInput.value.trim();
+        if (!token || !owner || !repo) { showToast('Token, owner and repo are all required', 'error'); return; }
+        githubState.token = token; githubState.owner = owner; githubState.repo = repo;
+        githubState.createIfMissing = els.githubCreateRepoCheckbox.checked;
+        localStorage.setItem('redisplay_github_token', token);
+        localStorage.setItem('redisplay_github_owner', owner);
+        localStorage.setItem('redisplay_github_repo', repo);
+        els.githubDisconnectBtn.classList.remove('hidden');
+        els.githubSyncSection.classList.remove('hidden');
+        showToast('Connected to GitHub', 'success');
+    });
+    document.getElementById('githubDisconnectBtn').addEventListener('click', () => {
+        githubState.token = ''; githubState.owner = ''; githubState.repo = '';
+        localStorage.removeItem('redisplay_github_token'); localStorage.removeItem('redisplay_github_owner'); localStorage.removeItem('redisplay_github_repo');
+        els.githubTokenInput.value = ''; els.githubOwnerInput.value = ''; els.githubRepoInput.value = '';
+        els.githubDisconnectBtn.classList.add('hidden'); els.githubSyncSection.classList.add('hidden');
+        showToast('Disconnected from GitHub', 'info');
+    });
+    document.getElementById('githubPushCurrentBtn').addEventListener('click', () => { refreshSlugIfUnsynced(getCurrentSession()); pushSessions([getCurrentSession()]); });
+    document.getElementById('githubPushAllBtn').addEventListener('click', () => { state.sessions.forEach(refreshSlugIfUnsynced); pushSessions(state.sessions); });
+    document.getElementById('githubPullBtn').addEventListener('click', pullSessions);
+    document.getElementById('githubSyncAllBtn').addEventListener('click', () => { state.sessions.forEach(refreshSlugIfUnsynced); syncAllSessions(); });
+    document.getElementById('githubRenameFolderBtn').addEventListener('click', async () => {
+        const session = getCurrentSession();
+        if (!session.sync) { refreshSlugIfUnsynced(session); saveData(); showToast(`Folder will be ${PROJECTS_ROOT}/${session.slug} on first push`, 'info'); return; }
+        return runGitHubOperation('Rename', async () => {
+            const snapshot = await getRemoteSnapshot();
+            const oldSlug = session.slug;
+            const newSlug = uniqueSlug(slugify(session.title), session.id, snapshot.files);
+            if (slugify(session.title) === oldSlug) { setSyncStatus(`Folder already matches: ${PROJECTS_ROOT}/${oldSlug}`); return; }
+            if (!confirm(`Move ${PROJECTS_ROOT}/${oldSlug} to ${PROJECTS_ROOT}/${newSlug} on GitHub?`)) { setSyncStatus(''); return; }
+            const deletions = [...snapshot.files.keys()].filter(path => path.startsWith(`${PROJECTS_ROOT}/${oldSlug}/`)).map(path => ({ path, mode: '100644', type: 'blob', sha: null }));
+            const entries = [...deletions, ...buildSessionTreeEntries({ ...session, slug: newSlug })];
+            const files = await commitTreeEntries(snapshot, entries, `Rename ${oldSlug} to ${newSlug} from RedisPlay`);
+            session.slug = newSlug;
+            const { main, meta } = sessionPaths(newSlug);
+            markSessionSynced(session, files.get(main), files.get(meta));
+            setSyncStatus(`Moved to ${PROJECTS_ROOT}/${newSlug}`);
+            showToast(`Moved to ${PROJECTS_ROOT}/${newSlug}`, 'success');
+        });
+    });
+
+    /* ====================== INIT ====================== */
+    function init() {
+        loadData();
+        initScriptEditor();
+        const s = getCurrentSession();
+        if (!s.currentScriptId && s.scripts.length) s.currentScriptId = s.scripts[0].id;
+        renderSessionList();
+        renderDbSelect();
+        renderScriptSelect();
+        loadCurrentScriptIntoEditor();
+        renderTerminalHistory();
+        updateConnBadge();
+        refreshKeyspace();
+        initResizers();
+        els.termPrompt.focus();
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.activeElement && document.activeElement.closest('#editorSection')) {
+                e.preventDefault();
+                runCurrentScript();
+            }
+        });
+
+        document.querySelectorAll('.fixed').forEach(modal => {
+            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(modal); });
+        });
+    }
+
+    init();
+    </script>
+</body>
+</html>
