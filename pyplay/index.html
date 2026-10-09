@@ -180,8 +180,11 @@
         <!-- MAIN LAYOUT -->
         <main class="flex-1 flex flex-col md:flex-row overflow-hidden relative min-h-0">
             
+            <!-- Mobile Sidebar Backdrop (click to close) -->
+            <div id="sidebarBackdrop" class="hidden fixed inset-0 bg-black/40 z-30 md:hidden"></div>
+
             <!-- SIDEBAR (Projects/History) -->
-            <aside id="sidebar" class="w-72 shrink-0 bg-gray-50 dark:bg-darkpanel border-r border-gray-200 dark:border-gray-700 flex flex-col transform -translate-x-full md:translate-x-0 transition-transform duration-200 ease-in-out">
+            <aside id="sidebar" class="fixed top-14 bottom-0 left-0 z-40 w-72 max-w-[85vw] shrink-0 bg-gray-50 dark:bg-darkpanel border-r border-gray-200 dark:border-gray-700 flex flex-col transform -translate-x-full transition-transform duration-200 ease-in-out md:static md:z-auto md:top-auto md:bottom-auto md:max-w-none md:translate-x-0">
                 <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
                     <span class="font-semibold text-xs uppercase tracking-wider text-gray-500">Projects</span>
                     <button id="sidebarClose" class="md:hidden text-gray-500 p-2"><i class="fas fa-times"></i></button>
@@ -1332,6 +1335,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             
             if (window.innerWidth < 768) {
                 els.sidebar.classList.add('-translate-x-full');
+                document.getElementById('sidebarBackdrop').classList.add('hidden');
             }
         };
 
@@ -2682,6 +2686,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
 
             const toggleSidebar = () => {
                 els.sidebar.classList.toggle('-translate-x-full');
+                document.getElementById('sidebarBackdrop').classList.toggle('hidden');
             };
             
             const hamburger = document.createElement('button');
@@ -2690,6 +2695,7 @@ sys.stdin = StringIO('''${input.replace(/'/g, "\\'")}''')
             hamburger.onclick = toggleSidebar;
             document.querySelector('header > div').prepend(hamburger);
             els.sidebarClose.onclick = toggleSidebar;
+            document.getElementById('sidebarBackdrop').onclick = toggleSidebar;
 
             document.addEventListener('keydown', (e) => {
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
