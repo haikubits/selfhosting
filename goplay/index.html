@@ -1,0 +1,3654 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Go Playground & Learning Studio</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Monaco Editor Loader -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+
+    <style>
+        body, html { height: 100%; margin: 0; overflow: hidden; background-color: #111827; }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+
+        /* Resizers */
+        .resizer-x {
+            width: 4px;
+            cursor: col-resize;
+            background-color: #374151;
+            transition: background 0.2s;
+            z-index: 20;
+        }
+        .resizer-x:hover, .resizer-x.resizing { background-color: #06b6d4; } /* Cyan-500 */
+
+        .resizer-y {
+            height: 4px;
+            cursor: row-resize;
+            background-color: #374151;
+            transition: background 0.2s;
+            z-index: 20;
+        }
+        .resizer-y:hover, .resizer-y.resizing { background-color: #06b6d4; }
+        .resizer-x:focus-visible, .resizer-y:focus-visible { outline: 2px solid #06b6d4; outline-offset: -2px; }
+
+        /* Toasts */
+        .toast-enter { transform: translateY(100%); opacity: 0; }
+        .toast-enter-active { transform: translateY(0); opacity: 1; transition: all 0.25s ease-out; }
+        .toast-exit-active { transform: translateY(100%); opacity: 0; transition: all 0.25s ease-in; }
+
+        /* Modals */
+        .modal-overlay { transition: opacity 0.15s ease-out; }
+        .modal-content { transition: transform 0.15s ease-out; }
+
+        /* Practice clock (stopwatch / timer) */
+        .clock-mode-btn { color: #9ca3af; background: transparent; }
+        .clock-mode-btn.active { background-color: #0891b2; color: #fff; }
+        .clock-ctrl-btn { padding: 4px 6px; border-radius: 4px; }
+        .clock-ctrl-btn:hover:not(:disabled) { background-color: rgba(255,255,255,0.1); }
+        .clock-ctrl-btn:disabled, .clock-mode-btn:disabled { opacity: 0.35; pointer-events: none; }
+        #clockDisplay.clock-flash { animation: clockFlash 0.5s ease-in-out 6; }
+        @keyframes clockFlash { 0%, 100% { opacity: 1; color: #f87171; } 50% { opacity: 0.25; color: #f87171; } }
+
+        /* Spinner */
+        .spinner {
+            border: 2px solid rgba(255,255,255,0.1);
+            border-left-color: #fff;
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Mobile Adjustments */
+        @media (max-width: 768px) {
+            .resizer-x { display: none; } /* Disable sidebar resize on mobile, use toggle */
+            #sidebar {
+                position: absolute;
+                top: 50px; /* Header height */
+                bottom: 0;
+                left: 0;
+                width: 80%;
+                max-width: 300px;
+                z-index: 50;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease-in-out;
+                box-shadow: 4px 0 15px rgba(0,0,0,0.5);
+            }
+            #sidebar.open { transform: translateX(0); }
+            #sidebar-backdrop {
+                display: none;
+                position: absolute;
+                top: 50px; left: 0; right: 0; bottom: 0;
+                background: rgba(0,0,0,0.5);
+                z-index: 40;
+            }
+            #sidebar-backdrop.open { display: block; }
+        }
+    </style>
+</head>
+<body class="text-white font-sans flex flex-col h-screen select-none">
+
+    <!-- Header -->
+    <header class="flex items-center justify-between px-4 h-[50px] bg-gray-900 border-b border-gray-700 shrink-0 z-30">
+        <div class="flex items-center gap-3">
+            <button id="mobile-menu-btn" class="md:hidden text-gray-400 hover:text-white">
+                <i data-lucide="menu" class="w-6 h-6"></i>
+            </button>
+            <div class="flex items-center gap-2">
+                <i data-lucide="rabbit" class="text-cyan-500 w-5 h-5"></i>
+                <h1 class="text-base font-bold tracking-wide text-gray-100 hidden sm:block">Go<span class="text-cyan-500">Studio</span></h1>
+            </div>
+            <!-- Desktop Sidebar Toggle -->
+            <button id="desktop-sidebar-toggle" class="hidden md:flex p-1 hover:bg-gray-700 rounded text-gray-400" title="Toggle Sidebar">
+                <i data-lucide="panel-left" class="w-5 h-5"></i>
+            </button>
+        </div>
+        
+        <div class="flex items-center gap-3">
+            <button id="github-btn" class="flex items-center gap-1.5 text-xs font-medium text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 px-2.5 py-1.5 rounded transition-colors" title="GitHub PAT Sync">
+                <svg class="w-3.5 h-3.5 shrink-0" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                <span id="github-btn-label" class="hidden sm:inline max-w-[140px] truncate">GitHub</span>
+                <span id="github-btn-dot" class="hidden w-1.5 h-1.5 rounded-full shrink-0"></span>
+            </button>
+            <span id="status-msg" class="text-xs text-gray-400 italic hidden">Running...</span>
+            <button id="fmt-btn" class="flex items-center gap-1.5 text-xs font-medium text-gray-300 hover:text-white bg-gray-800 hover:bg-gray-700 border border-gray-700 px-2.5 py-1.5 rounded transition-colors disabled:opacity-50" title="Format with gofmt (Shift+Alt+F)">
+                <i data-lucide="wand-2" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Format</span>
+            </button>
+            <button id="run-btn" class="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white px-3 py-1.5 rounded shadow transition-colors text-sm font-medium" title="Run (Ctrl+Enter)">
+                <i data-lucide="play" class="w-4 h-4 fill-current"></i> <span class="hidden sm:inline">Run</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="flex flex-1 overflow-hidden relative" id="workspace">
+        
+        <!-- Sidebar -->
+        <div id="sidebar-backdrop"></div> <!-- Mobile Overlay -->
+        <aside id="sidebar" class="bg-gray-800 flex flex-col border-r border-gray-700 md:relative md:transform-none md:w-64 min-w-[150px]">
+            <div class="p-3 border-b border-gray-700 bg-gray-850 flex justify-between items-center shrink-0">
+                <h2 class="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                    <i data-lucide="layout-grid" class="w-4 h-4"></i> GoStudio
+                </h2>
+                <button id="close-sidebar-mobile" class="md:hidden text-gray-400">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <!-- Projects Section -->
+            <div id="projects-pane" class="flex flex-col min-h-[80px]" style="flex: 0 0 180px;">
+                <div class="px-3 py-2 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="folder" class="w-3.5 h-3.5"></i> Projects
+                    </h3>
+                    <button id="new-project-btn" class="text-gray-400 hover:text-cyan-400 p-0.5 rounded" title="New project">
+                        <i data-lucide="plus" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div class="overflow-y-auto flex-1 p-2 space-y-0.5" id="project-list"></div>
+            </div>
+
+            <!-- Resizer between Projects and Snippets -->
+            <div id="resizer-sidebar" class="resizer resizer-y" style="height:4px;" data-direction="row" data-target="projects-pane" data-flex="snippets-pane" data-key="sidebar_split" data-min="60" data-max-ratio="0.75" tabindex="0" role="separator" aria-orientation="horizontal" aria-label="Resize projects list"></div>
+
+            <!-- Snippets Section -->
+            <div id="snippets-pane" class="flex flex-col min-h-[80px] flex-1">
+                <div class="px-3 py-2 border-b border-gray-700 flex justify-between items-center shrink-0">
+                    <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider flex items-center gap-2">
+                        <i data-lucide="book-open" class="w-3.5 h-3.5"></i> Snippets
+                    </h3>
+                </div>
+                <div class="overflow-y-auto flex-1 p-2 space-y-1" id="snippet-list">
+                    <!-- Snippets injected by JS -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- Horizontal Resizer (Desktop) -->
+        <div id="resizer-x" class="resizer resizer-x hidden md:block" data-direction="col" data-target="sidebar" data-flex="editor-column" data-key="sidebar" data-min="150" data-max-ratio="0.6" tabindex="0" role="separator" aria-orientation="vertical" aria-label="Resize sidebar"></div>
+
+        <!-- Editor & Output Column -->
+        <div class="flex-1 flex flex-col min-w-0 bg-[#1e1e1e]" id="editor-column">
+
+            <!-- Editor Toolbar: Practice Clock -->
+            <div class="flex items-center justify-end px-2 py-1 bg-gray-800 border-b border-gray-700 shrink-0">
+                <div id="clockWidget" class="flex items-center gap-1 bg-gray-900 border border-gray-700 rounded-md pl-1 pr-1.5 py-1 shrink-0" title="Practice timer">
+                    <div class="flex rounded overflow-hidden border border-gray-700 shrink-0">
+                        <button type="button" id="clockModeStopwatch" class="clock-mode-btn px-1.5 py-1" title="Stopwatch mode"><i data-lucide="timer" class="w-3.5 h-3.5"></i></button>
+                        <button type="button" id="clockModeTimer" class="clock-mode-btn px-1.5 py-1" title="Timer mode"><i data-lucide="hourglass" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                    <input type="text" id="clockTimerInput" inputmode="numeric" maxlength="6" value="05:00" title="Timer duration (MM:SS)" class="hidden w-12 bg-gray-800 text-center font-mono text-xs border border-gray-700 rounded px-1 py-0.5 text-gray-200">
+                    <span id="clockDisplay" class="font-mono text-xs sm:text-sm tabular-nums w-[50px] sm:w-[58px] text-center font-semibold text-gray-200">00:00</span>
+                    <button type="button" id="clockStartPause" class="clock-ctrl-btn text-green-500 hover:text-green-400" title="Start"><i data-lucide="play" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" id="clockStopBtn" class="clock-ctrl-btn text-gray-500 hover:text-red-500" title="Stop" disabled><i data-lucide="square" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" id="clockResetBtn" class="clock-ctrl-btn text-gray-500 hover:text-cyan-400" title="Reset"><i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i></button>
+                </div>
+            </div>
+
+            <!-- Editor Wrapper -->
+            <div id="editor-wrapper" class="flex-1 relative min-h-[100px]">
+                <div id="monaco-editor" class="absolute inset-0"></div>
+            </div>
+
+            <!-- Vertical Resizer -->
+            <div id="resizer-y" class="resizer resizer-y" data-direction="row" data-target="output-panel" data-flex="editor-wrapper" data-key="output" data-min="35" data-max-ratio="0.8" tabindex="0" role="separator" aria-orientation="horizontal" aria-label="Resize output panel"></div>
+
+            <!-- Output Panel -->
+            <div id="output-panel" class="bg-gray-900 flex flex-col h-48 min-h-[35px] border-t border-gray-700">
+                <div class="px-3 py-1 bg-gray-800 border-b border-gray-700 flex justify-between items-center h-[35px] shrink-0 cursor-pointer" id="output-header">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="terminal" class="w-4 h-4 text-gray-400"></i>
+                        <span class="text-xs font-semibold text-gray-400 uppercase">Console</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                         <button id="clear-btn" class="text-xs text-gray-500 hover:text-white px-2 py-0.5 rounded hover:bg-gray-700 transition-colors">Clear</button>
+                        <i id="output-chevron" data-lucide="chevron-down" class="w-4 h-4 text-gray-500 hover:text-white transition-transform"></i>
+                    </div>
+                </div>
+                <pre id="output-console" class="flex-1 p-3 font-mono text-sm overflow-auto text-gray-300 whitespace-pre-wrap"></pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- GitHub Sync Modal -->
+    <div id="githubModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 modal-overlay opacity-0 pointer-events-none">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-[500px] max-w-[90%] p-6 scale-95 modal-content text-gray-200">
+            <h2 class="text-xl font-bold mb-2 flex items-center gap-2">
+                <svg class="w-5 h-5" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+                GitHub PAT Sync
+            </h2>
+            <p class="text-sm text-gray-400 mb-4">
+                Enter a GitHub PAT and repo details. This runs directly in the browser and writes files to GitHub using the GitHub API.
+            </p>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-400 mb-1">GitHub Token</label>
+                    <input id="githubTokenInput" type="password" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm" placeholder="ghp_...">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-400 mb-1">Repository Owner</label>
+                    <input id="githubOwnerInput" type="text" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm" placeholder="your-username">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-gray-400 mb-1">Repository Name</label>
+                    <input id="githubRepoInput" type="text" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm" placeholder="goplay-projects">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-400">
+                    <input id="githubCreateRepoCheckbox" type="checkbox" class="accent-cyan-500">
+                    Create repo if it does not exist
+                </label>
+            </div>
+
+            <div id="githubSyncSection" class="hidden mt-5 pt-4 border-t border-gray-700">
+                <div class="text-xs uppercase tracking-wider text-gray-400 mb-1">Sync Projects</div>
+                <p class="text-xs text-gray-500 mb-3">
+                    Each project is stored in its own folder: <code>projects/&lt;folder&gt;/main.go</code> + <code>meta.json</code>.
+                </p>
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="githubPushCurrentBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="arrow-up" class="w-3.5 h-3.5"></i> Push current</button>
+                    <button id="githubPushAllBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="upload" class="w-3.5 h-3.5"></i> Push all</button>
+                    <button id="githubPullBtn" class="gh-sync-btn text-sm border border-gray-600 rounded px-3 py-2 hover:bg-gray-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="download" class="w-3.5 h-3.5"></i> Pull</button>
+                    <button id="githubSyncAllBtn" class="gh-sync-btn text-sm bg-cyan-600 text-white rounded px-3 py-2 hover:bg-cyan-700 disabled:opacity-50 flex items-center justify-center gap-1"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sync all</button>
+                </div>
+                <button id="githubRenameFolderBtn" class="gh-sync-btn text-xs text-cyan-400 hover:underline mt-3 disabled:opacity-50">Rename current project's GitHub folder to match its title</button>
+                <div id="githubSyncStatus" class="text-xs text-gray-400 mt-2 min-h-[1rem]"></div>
+            </div>
+
+            <div class="mt-6 flex justify-end gap-2">
+                <button id="githubDisconnectBtn" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 hidden">Disconnect</button>
+                <button id="githubConnectBtn" class="bg-cyan-600 text-white px-4 py-2 rounded hover:bg-cyan-700">Connect</button>
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Rename Project Modal -->
+    <div id="renameModal" class="fixed inset-0 bg-black bg-opacity-60 hidden items-center justify-center z-50 modal-overlay opacity-0 pointer-events-none">
+        <div class="bg-gray-800 border border-gray-700 rounded-lg shadow-xl w-[400px] max-w-[90%] p-6 scale-95 modal-content text-gray-200">
+            <h2 class="text-lg font-bold mb-3">Rename Project</h2>
+            <input id="renameInput" type="text" class="w-full p-2 border rounded bg-gray-700 border-gray-600 text-sm mb-4">
+            <div class="flex justify-end gap-2">
+                <button class="bg-gray-700 px-4 py-2 rounded closeModal">Cancel</button>
+                <button id="renameConfirmBtn" class="bg-cyan-600 text-white px-4 py-2 rounded hover:bg-cyan-700">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed bottom-10 right-4 flex flex-col gap-2 z-[60] pointer-events-none"></div>
+
+    <!-- Initialization Script -->
+    <script>
+        // --- 1. Tutorial Snippets ---
+        // Ordered as a learning path. Code uses String.raw so Go escapes like \n stay intact
+        // (Go source here must avoid backticks and "${", which String.raw can't hold).
+        const snippets = [
+            {
+                category: "1 · Basics",
+                title: "Hello, World",
+                desc: "Program structure: package main, imports, func main()",
+                code: String.raw`// Lesson: Hello, World!
+// Every runnable Go program lives in package main and starts at func main().
+// Imports pull in standard-library packages; fmt handles formatted I/O.
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("Hello, Gopher!")
+
+	// Println puts spaces between arguments and ends with a newline.
+	fmt.Println("Go", "is", "fun")
+
+	// Printf uses format verbs: %s string, %d integer, %v any value.
+	language := "Go"
+	year := 2009
+	fmt.Printf("%s was announced in %d\n", language, year)
+	fmt.Printf("%v and %v\n", language, year)
+}`
+            },
+            {
+                category: "1 · Basics",
+                title: "Variables & Constants",
+                desc: "var, :=, zero values, multiple assignment, const and iota",
+                code: String.raw`// Lesson: Variables & Constants
+package main
+
+import "fmt"
+
+// Package-level constant
+const Pi = 3.14159
+
+// iota auto-increments inside a const block - handy for enums
+const (
+	Sunday = iota // 0
+	Monday        // 1
+	Tuesday       // 2
+)
+
+func main() {
+	// 1. Full declaration with an explicit type
+	var name string = "Gopher"
+
+	// 2. Type inferred from the value
+	var age = 13
+
+	// 3. Short declaration := (only inside functions) - the most common style
+	city := "Mountain View"
+
+	// 4. Several at once
+	var x, y int = 10, 20
+	a, b := "left", "right"
+
+	// 5. Zero values: a variable declared without a value gets a default
+	var count int     // 0
+	var ratio float64 // 0
+	var ok bool       // false
+	var label string  // "" (empty string)
+
+	fmt.Println(name, age, city)
+	fmt.Println(x, y, a, b)
+	fmt.Printf("zero values: %d %v %t %q\n", count, ratio, ok, label)
+
+	// Variables can be reassigned (same type only)
+	age = age + 1
+	x, y = y, x // swap in one line!
+	fmt.Println("age:", age, "| swapped:", x, y)
+
+	fmt.Println("Pi:", Pi, "| weekdays:", Sunday, Monday, Tuesday)
+
+	// Pi = 3     // compile error: cannot assign to a constant
+	// unused := 1 // compile error: Go rejects unused local variables
+}`
+            },
+            {
+                category: "1 · Basics",
+                title: "Data Types & Conversion",
+                desc: "int/float/bool/string/byte/rune, %T, explicit conversion, strconv",
+                code: String.raw`// Lesson: Basic Data Types
+package main
+
+import (
+	"fmt"
+	"math"
+	"strconv"
+)
+
+func main() {
+	// Integers: int, int8, int16, int32, int64 (+ unsigned uint, uint8...)
+	var small int8 = 127
+	var big int64 = math.MaxInt64
+	var u uint = 42
+	fmt.Println("ints:", small, big, u)
+
+	// Floating point: float32, float64 (default for decimal literals)
+	f := 3.75
+	fmt.Printf("float: %.2f (type %T)\n", f, f)
+
+	// Booleans and logic operators
+	isGoFun := true
+	fmt.Println("bool:", isGoFun, !isGoFun, isGoFun && false, isGoFun || false)
+
+	// Strings are immutable, UTF-8 encoded byte sequences
+	s := "héllo"
+	fmt.Println("string:", s, "| len in bytes:", len(s))
+
+	// byte = alias for uint8, rune = alias for int32 (a Unicode code point)
+	var b byte = 'A'
+	var r rune = 'é'
+	fmt.Printf("byte: %d %c | rune: %d %c\n", b, b, r, r)
+
+	// Complex numbers are built in
+	c := complex(1, 2)
+	fmt.Println("complex:", c, "real:", real(c), "imag:", imag(c))
+
+	// Type conversion is ALWAYS explicit in Go
+	i := 10
+	asFloat := float64(i) / 4
+	price := 9.99
+	truncated := int(price) // float -> int truncates toward zero
+	fmt.Println("conversions:", asFloat, truncated)
+
+	// String <-> number conversion uses the strconv package
+	n, err := strconv.Atoi("123")
+	fmt.Println("Atoi:", n+1, "err:", err)
+	fmt.Println("Itoa:", strconv.Itoa(456)+"!")
+	pi, _ := strconv.ParseFloat("3.14", 64)
+	fmt.Println("ParseFloat:", pi*2)
+	if _, err := strconv.Atoi("abc"); err != nil {
+		fmt.Println("bad Atoi:", err)
+	}
+
+	// %T prints the type of any value
+	fmt.Printf("%T %T %T %T %T\n", 1, 1.0, "x", 'x', true)
+}`
+            },
+            {
+                category: "1 · Basics",
+                title: "Strings & Formatting",
+                desc: "strings package, indexing vs ranging, Builder, Printf verbs",
+                code: String.raw`// Lesson: Strings & Formatting
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+func main() {
+	s := "Go is expressive, concise, clean, and efficient"
+
+	fmt.Println(strings.ToUpper(s))
+	fmt.Println("contains 'clean'?", strings.Contains(s, "clean"))
+	fmt.Println("index of 'concise':", strings.Index(s, "concise"))
+	fmt.Println(strings.ReplaceAll(s, ",", ";"))
+	fmt.Println(strings.Split("a,b,c", ","))
+	fmt.Println(strings.Join([]string{"x", "y", "z"}, "-"))
+	fmt.Printf("%q\n", strings.TrimSpace("   padded   "))
+	fmt.Println(strings.Repeat("ab", 3))
+	fmt.Println(strings.Fields("  split   on   whitespace "))
+	fmt.Println(strings.HasPrefix(s, "Go"), strings.HasSuffix(s, "!"))
+
+	// Indexing a string gives a BYTE; slicing gives a substring
+	word := "Gopher"
+	fmt.Println(word[0], string(word[0]), word[1:4])
+
+	// Ranging over a string yields runes (Unicode-aware), with byte offsets
+	for i, ch := range "héllo" {
+		fmt.Printf("%d:%c ", i, ch)
+	}
+	fmt.Println()
+
+	// Efficient string building in loops
+	var sb strings.Builder
+	for i := 1; i <= 3; i++ {
+		fmt.Fprintf(&sb, "[%d]", i)
+	}
+	fmt.Println(sb.String())
+
+	// Common Printf verbs
+	type point struct{ X, Y int }
+	p := point{1, 2}
+	fmt.Printf("%v | %+v | %#v\n", p, p, p)
+	fmt.Printf("|%6d|%-6d|%06d|\n", 42, 42, 42)
+	fmt.Printf("|%8.3f|%x|%b|%q|\n", 3.14159, 255, 5, "quoted")
+
+	// Sprintf returns the formatted string instead of printing it
+	msg := fmt.Sprintf("%s has %d letters", word, len(word))
+	fmt.Println(msg)
+}`
+            },
+            {
+                category: "2 · Control Flow",
+                title: "If / Else & Switch",
+                desc: "if with init statement, switch on values, tagless switch, fallthrough",
+                code: String.raw`// Lesson: Conditionals
+package main
+
+import (
+	"fmt"
+	"math/rand"
+)
+
+func classify(n int) string {
+	// No parentheses around the condition; braces are mandatory
+	if n < 0 {
+		return "negative"
+	} else if n == 0 {
+		return "zero"
+	} else if n%2 == 0 {
+		return "positive even"
+	}
+	return "positive odd"
+}
+
+func main() {
+	for _, n := range []int{-3, 0, 4, 7} {
+		fmt.Printf("%d is %s\n", n, classify(n))
+	}
+
+	// if with a short statement: v only exists inside this if/else
+	if v := rand.Intn(10); v >= 5 {
+		fmt.Println("rolled high:", v)
+	} else {
+		fmt.Println("rolled low:", v)
+	}
+
+	// switch: cases do NOT fall through, so no 'break' is needed
+	day := "sat"
+	switch day {
+	case "sat", "sun": // several values in one case
+		fmt.Println("Weekend!")
+	case "mon":
+		fmt.Println("Back to work")
+	default:
+		fmt.Println("Midweek")
+	}
+
+	// switch with no expression = a tidy if/else-if chain
+	score := 83
+	switch {
+	case score >= 90:
+		fmt.Println("Grade A")
+	case score >= 80:
+		fmt.Println("Grade B")
+	default:
+		fmt.Println("Keep practicing")
+	}
+
+	// fallthrough explicitly continues into the next case
+	switch n := 1; n {
+	case 1:
+		fmt.Println("one")
+		fallthrough
+	case 2:
+		fmt.Println("...and case two runs too")
+	case 3:
+		fmt.Println("not printed")
+	}
+}`
+            },
+            {
+                category: "2 · Control Flow",
+                title: "Loops (every form of for)",
+                desc: "classic, while-style, infinite, continue, range, range-over-int, labels",
+                code: String.raw`// Lesson: Loops
+// Go has exactly ONE loop keyword - for - and it covers every style.
+package main
+
+import "fmt"
+
+func main() {
+	// 1. Classic C-style loop: init; condition; post
+	for i := 0; i < 3; i++ {
+		fmt.Println("classic:", i)
+	}
+
+	// 2. "while" loop: condition only
+	n := 1
+	for n < 50 {
+		n *= 3
+	}
+	fmt.Println("while-style result:", n)
+
+	// 3. Infinite loop + break
+	count := 0
+	for {
+		count++
+		if count == 4 {
+			break
+		}
+	}
+	fmt.Println("broke out at:", count)
+
+	// 4. continue skips to the next iteration
+	for i := 1; i <= 10; i++ {
+		if i%2 == 0 {
+			continue
+		}
+		fmt.Print(i, " ")
+	}
+	fmt.Println("<- odd numbers")
+
+	// 5. range over a slice gives index and value
+	fruits := []string{"apple", "banana", "cherry"}
+	for i, fruit := range fruits {
+		fmt.Printf("%d=%s ", i, fruit)
+	}
+	fmt.Println()
+
+	// Use _ (the blank identifier) to ignore the index
+	total := 0
+	for _, v := range []int{5, 10, 15} {
+		total += v
+	}
+	fmt.Println("sum:", total)
+
+	// 6. range over a map (iteration order is NOT guaranteed)
+	ages := map[string]int{"alice": 30}
+	for name, age := range ages {
+		fmt.Println(name, "is", age)
+	}
+
+	// 7. range over an integer (Go 1.22+)
+	for i := range 3 {
+		fmt.Print("tick", i, " ")
+	}
+	fmt.Println()
+
+	// 8. A labeled break exits the OUTER loop from inside a nested loop
+outer:
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			if i*j == 2 {
+				fmt.Println("found i*j == 2 at", i, j)
+				break outer
+			}
+		}
+	}
+
+	// Classic exercise: a multiplication table
+	for row := 1; row <= 4; row++ {
+		for col := 1; col <= 4; col++ {
+			fmt.Printf("%4d", row*col)
+		}
+		fmt.Println()
+	}
+}`
+            },
+            {
+                category: "3 · Collections",
+                title: "Arrays & Slices",
+                desc: "fixed arrays, append, slicing, shared backing arrays, copy, make, 2D",
+                code: String.raw`// Lesson: Arrays & Slices
+package main
+
+import (
+	"fmt"
+	"slices"
+)
+
+func main() {
+	// Arrays have a FIXED length that is part of their type ([3]int != [4]int)
+	var grid [3]int
+	grid[0] = 7
+	primes := [5]int{2, 3, 5, 7, 11}
+	fmt.Println(grid, primes, len(primes))
+
+	// Slices are dynamic views over an array - used far more often
+	nums := []int{10, 20, 30}
+	nums = append(nums, 40, 50)
+	fmt.Println("slice:", nums, "len:", len(nums), "cap:", cap(nums))
+
+	// s[low:high] includes low and excludes high
+	fmt.Println(nums[1:3], nums[:2], nums[3:])
+
+	// Careful: sub-slices SHARE the underlying array!
+	part := nums[0:2]
+	part[0] = 999
+	fmt.Println("after modifying part:", nums)
+
+	// copy() makes an independent copy
+	clone := make([]int, len(nums))
+	copy(clone, nums)
+	clone[0] = 1
+	fmt.Println("original:", nums, "clone:", clone)
+
+	// make(type, length, capacity) pre-allocates
+	buf := make([]string, 0, 10)
+	buf = append(buf, "a", "b")
+	fmt.Println(buf, "len:", len(buf), "cap:", cap(buf))
+
+	// 2D slice
+	matrix := [][]int{
+		{1, 2, 3},
+		{4, 5, 6},
+	}
+	for _, row := range matrix {
+		fmt.Println(row)
+	}
+
+	// Remove index 1 by appending the parts around it
+	letters := []string{"a", "b", "c", "d"}
+	letters = append(letters[:1], letters[2:]...)
+	fmt.Println("removed b:", letters)
+
+	// The slices package (Go 1.21+) has handy helpers
+	unsorted := []int{5, 2, 8, 1}
+	slices.Sort(unsorted)
+	fmt.Println("sorted:", unsorted, "contains 8?", slices.Contains(unsorted, 8))
+	fmt.Println("index of 5:", slices.Index(unsorted, 5), "max:", slices.Max(unsorted))
+
+	// A nil slice is valid, has length 0 and can be appended to
+	var empty []int
+	fmt.Println("nil?", empty == nil, "len:", len(empty))
+	empty = append(empty, 1)
+	fmt.Println(empty)
+}`
+            },
+            {
+                category: "3 · Collections",
+                title: "Maps",
+                desc: "create/update/delete, comma-ok lookup, counting, sorted iteration",
+                code: String.raw`// Lesson: Maps (hash tables)
+package main
+
+import (
+	"fmt"
+	"maps"
+	"slices"
+)
+
+func main() {
+	// map[KeyType]ValueType
+	stock := map[string]int{
+		"apples":  5,
+		"bananas": 12,
+	}
+
+	stock["cherries"] = 30 // insert
+	stock["apples"] += 10  // update
+	delete(stock, "bananas")
+	fmt.Println(stock, "size:", len(stock))
+
+	// Reading a missing key returns the zero value...
+	fmt.Println("kiwis:", stock["kiwis"])
+
+	// ...so use the "comma ok" idiom to test whether a key exists
+	if qty, ok := stock["apples"]; ok {
+		fmt.Println("apples in stock:", qty)
+	}
+	if _, ok := stock["kiwis"]; !ok {
+		fmt.Println("no kiwis found")
+	}
+
+	// Map iteration order is random: sort the keys for stable output
+	for _, k := range slices.Sorted(maps.Keys(stock)) {
+		fmt.Printf("%-9s %3d\n", k, stock[k])
+	}
+
+	// make() creates an empty map ready for writes; ++ works on missing keys
+	wordCount := make(map[string]int)
+	for _, w := range []string{"go", "is", "go", "fun", "go"} {
+		wordCount[w]++
+	}
+	fmt.Println(wordCount)
+
+	// Map of slices
+	groups := map[string][]string{}
+	groups["vowels"] = append(groups["vowels"], "a", "e")
+	groups["consonants"] = append(groups["consonants"], "b")
+	fmt.Println(groups)
+
+	// Maps are reference-like: a function can modify the caller's map
+	addItem(stock, "dates", 7)
+	fmt.Println("after addItem:", stock)
+
+	// A nil map can be read, but writing to it panics
+	var nilMap map[string]int
+	fmt.Println("nil map read:", nilMap["x"])
+}
+
+func addItem(m map[string]int, name string, qty int) {
+	m[name] = qty
+}`
+            },
+            {
+                category: "4 · Functions & Methods",
+                title: "Functions",
+                desc: "params, multiple returns, named returns, variadic, recursion, pass-by-value",
+                code: String.raw`// Lesson: Functions
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+// Parameters sharing a type can be grouped: (a, b int)
+func add(a, b int) int {
+	return a + b
+}
+
+// Multiple return values - the result plus an error is the Go idiom
+func divide(a, b float64) (float64, error) {
+	if b == 0 {
+		return 0, errors.New("cannot divide by zero")
+	}
+	return a / b, nil
+}
+
+// Named return values act like variables declared at the top
+func minMax(nums []int) (lo, hi int) {
+	lo, hi = nums[0], nums[0]
+	for _, n := range nums {
+		if n < lo {
+			lo = n
+		}
+		if n > hi {
+			hi = n
+		}
+	}
+	return // a "naked" return sends back lo and hi
+}
+
+// Variadic: accepts any number of ints, received as a []int
+func sum(nums ...int) int {
+	total := 0
+	for _, n := range nums {
+		total += n
+	}
+	return total
+}
+
+// Recursion
+func fib(n int) int {
+	if n < 2 {
+		return n
+	}
+	return fib(n-1) + fib(n-2)
+}
+
+// Arguments are passed BY VALUE: the function receives a copy
+func tryToChange(x int) int {
+	x = 100
+	return x
+}
+
+func main() {
+	fmt.Println("add:", add(3, 4))
+
+	// Call, then check the error immediately
+	if result, err := divide(10, 4); err == nil {
+		fmt.Println("divide:", result)
+	}
+	if _, err := divide(1, 0); err != nil {
+		fmt.Println("error:", err)
+	}
+
+	lo, hi := minMax([]int{4, -2, 9, 1})
+	fmt.Println("min/max:", lo, hi)
+
+	fmt.Println("sum():", sum(), "| sum(1,2,3):", sum(1, 2, 3))
+	values := []int{10, 20, 30}
+	fmt.Println("sum(values...):", sum(values...)) // spread a slice into variadic args
+
+	for i := 0; i < 10; i++ {
+		fmt.Print(fib(i), " ")
+	}
+	fmt.Println("<- fibonacci")
+
+	v := 5
+	changed := tryToChange(v)
+	fmt.Println("v is still", v, "but the function's copy became", changed)
+}`
+            },
+            {
+                category: "4 · Functions & Methods",
+                title: "Closures & Function Values",
+                desc: "functions as values, closures capturing state, higher-order functions",
+                code: String.raw`// Lesson: Closures & first-class functions
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+// A named function type
+type transform func(string) string
+
+// Functions can be passed as arguments...
+func applyAll(s string, fns ...transform) string {
+	for _, fn := range fns {
+		s = fn(s)
+	}
+	return s
+}
+
+// ...and returned. This closure "captures" count and keeps it alive.
+func counter() func() int {
+	count := 0
+	return func() int {
+		count++
+		return count
+	}
+}
+
+func multiplier(factor int) func(int) int {
+	return func(x int) int { return x * factor }
+}
+
+// Higher-order function: the caller decides what to keep
+func filter(nums []int, keep func(int) bool) []int {
+	var out []int
+	for _, n := range nums {
+		if keep(n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func main() {
+	shout := func(s string) string { return strings.ToUpper(s) + "!" }
+	fmt.Println(applyAll("  hello  ", strings.TrimSpace, shout))
+
+	next := counter()
+	fmt.Println(next(), next(), next()) // each call shares the same count
+	other := counter()
+	fmt.Println(other()) // an independent counter starts over
+
+	double, triple := multiplier(2), multiplier(3)
+	fmt.Println(double(5), triple(5))
+
+	nums := []int{1, 2, 3, 4, 5, 6, 7, 8}
+	evens := filter(nums, func(n int) bool { return n%2 == 0 })
+	big := filter(nums, func(n int) bool { return n > 5 })
+	fmt.Println("evens:", evens, "big:", big)
+
+	// Immediately-invoked function literal
+	product := func(a, b int) int { return a * b }(6, 7)
+	fmt.Println("IIFE:", product)
+}`
+            },
+            {
+                category: "4 · Functions & Methods",
+                title: "Pointers",
+                desc: "& and *, modifying via pointers, new(), nil pointers",
+                code: String.raw`// Lesson: Pointers
+package main
+
+import "fmt"
+
+type Player struct {
+	Name  string
+	Score int
+}
+
+// Receives a COPY of the struct - changes are lost on return
+func resetCopy(p Player) Player {
+	p.Score = 0
+	return p
+}
+
+// Receives a POINTER - changes affect the caller's struct
+func resetPointer(p *Player) {
+	p.Score = 0 // Go auto-dereferences: same as (*p).Score = 0
+}
+
+func increment(n *int) {
+	*n++ // * dereferences: change the value stored at that address
+}
+
+// Returning a pointer to a local variable is safe in Go
+func newPlayer(name string) *Player {
+	return &Player{Name: name, Score: 100}
+}
+
+func main() {
+	x := 10
+	ptr := &x // & takes the address of x
+	fmt.Println("x:", x, "| *ptr:", *ptr)
+	*ptr = 20
+	fmt.Println("x after *ptr = 20:", x)
+
+	increment(&x)
+	fmt.Println("after increment(&x):", x)
+
+	p := Player{"Ada", 50}
+	_ = resetCopy(p)
+	fmt.Println("after resetCopy:", p.Score) // still 50
+	resetPointer(&p)
+	fmt.Println("after resetPointer:", p.Score) // now 0
+
+	hero := newPlayer("Grace")
+	hero.Score += 25
+	fmt.Printf("%+v\n", *hero)
+
+	// new(T) allocates a zeroed T and returns a *T
+	count := new(int)
+	*count = 3
+	fmt.Println("new(int):", *count)
+
+	// The zero value of a pointer is nil - check before dereferencing
+	var missing *Player
+	if missing == nil {
+		fmt.Println("missing is nil; dereferencing it would panic")
+	}
+}`
+            },
+            {
+                category: "4 · Functions & Methods",
+                title: "Structs & Methods",
+                desc: "constructors, value vs pointer receivers, 7 ways methods are called, embedding",
+                code: String.raw`// Lesson: Structs & Methods - and how methods are called
+package main
+
+import (
+	"fmt"
+	"math"
+)
+
+// A struct groups related fields
+type Rectangle struct {
+	Width, Height float64
+}
+
+// Constructor convention: a NewXxx function returns a ready-to-use value
+func NewSquare(side float64) Rectangle {
+	return Rectangle{Width: side, Height: side}
+}
+
+// VALUE receiver: gets a copy - good for read-only methods
+func (r Rectangle) Area() float64 {
+	return r.Width * r.Height
+}
+
+func (r Rectangle) Perimeter() float64 {
+	return 2 * (r.Width + r.Height)
+}
+
+// POINTER receiver: can modify the original struct
+func (r *Rectangle) Scale(factor float64) {
+	r.Width *= factor
+	r.Height *= factor
+}
+
+// Methods can call other methods on the same receiver
+func (r Rectangle) Describe() string {
+	return fmt.Sprintf("%.1f x %.1f rectangle (area %.1f, perimeter %.1f)",
+		r.Width, r.Height, r.Area(), r.Perimeter())
+}
+
+// Methods can be declared on ANY named type, not only structs
+type Celsius float64
+
+func (c Celsius) ToFahrenheit() float64 {
+	return float64(c)*9/5 + 32
+}
+
+// Embedding: Circle gets Shape's fields and methods "promoted"
+type Shape struct {
+	Name string
+}
+
+func (s Shape) Hello() string { return "I am a " + s.Name }
+
+type Circle struct {
+	Shape  // embedded struct (no field name)
+	Radius float64
+}
+
+func (c Circle) Area() float64 { return math.Pi * c.Radius * c.Radius }
+
+func main() {
+	// 1. Dot notation: value.Method(args)
+	rect := Rectangle{Width: 3, Height: 4}
+	fmt.Println("1.", rect.Describe())
+
+	// 2. Pointer-receiver method on an addressable value: Go takes &rect for you
+	rect.Scale(2)
+	fmt.Println("2.", rect.Describe())
+
+	// 3. Value-receiver method through a pointer: Go dereferences for you
+	sq := NewSquare(5)
+	sqPtr := &sq
+	fmt.Println("3. square area via pointer:", sqPtr.Area())
+
+	// 4. Method value: bind a method to its receiver and call it later
+	areaFn := rect.Area
+	fmt.Println("4. method value:", areaFn())
+
+	// 5. Method expression: call like a plain function, receiver first
+	fmt.Println("5. method expression:", Rectangle.Perimeter(sq))
+
+	// 6. Methods on non-struct types
+	temp := Celsius(100)
+	fmt.Println("6.", temp, "C =", temp.ToFahrenheit(), "F")
+
+	// 7. Promoted methods/fields from an embedded struct
+	c := Circle{Shape: Shape{Name: "circle"}, Radius: 2}
+	fmt.Printf("7. %s | name: %s | area: %.2f\n", c.Hello(), c.Name, c.Area())
+
+	// Bonus: anonymous struct for quick one-off data
+	cfg := struct {
+		Host string
+		Port int
+	}{"localhost", 8080}
+	fmt.Printf("%+v\n", cfg)
+}`
+            },
+            {
+                category: "5 · Types & Errors",
+                title: "Interfaces",
+                desc: "implicit implementation, polymorphism, Stringer, type switch, sort.Interface",
+                code: String.raw`// Lesson: Interfaces
+package main
+
+import (
+	"fmt"
+	"math"
+	"sort"
+)
+
+// An interface is a set of method signatures. A type satisfies it
+// IMPLICITLY by having those methods - there is no "implements" keyword.
+type Shape interface {
+	Area() float64
+	Perimeter() float64
+}
+
+type Rect struct{ W, H float64 }
+type Circle struct{ R float64 }
+
+func (r Rect) Area() float64      { return r.W * r.H }
+func (r Rect) Perimeter() float64 { return 2 * (r.W + r.H) }
+
+func (c Circle) Area() float64      { return math.Pi * c.R * c.R }
+func (c Circle) Perimeter() float64 { return 2 * math.Pi * c.R }
+
+// fmt.Stringer is a built-in interface: String() controls how a value prints
+func (c Circle) String() string { return fmt.Sprintf("Circle(r=%.1f)", c.R) }
+
+// Works with ANY Shape - polymorphism, Go style
+func totalArea(shapes []Shape) float64 {
+	sum := 0.0
+	for _, s := range shapes {
+		sum += s.Area()
+	}
+	return sum
+}
+
+// A type switch branches on the concrete type stored in an interface
+func describe(v any) string {
+	switch x := v.(type) {
+	case int:
+		return fmt.Sprintf("int %d", x)
+	case string:
+		return fmt.Sprintf("string %q of length %d", x, len(x))
+	case Shape:
+		return fmt.Sprintf("shape with area %.2f", x.Area())
+	default:
+		return fmt.Sprintf("something else: %T", x)
+	}
+}
+
+// Implementing sort.Interface (Len, Less, Swap) to sort shapes by area
+type ByArea []Shape
+
+func (a ByArea) Len() int           { return len(a) }
+func (a ByArea) Less(i, j int) bool { return a[i].Area() < a[j].Area() }
+func (a ByArea) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+
+func main() {
+	shapes := []Shape{Rect{3, 4}, Circle{1}, Rect{1, 1}, Circle{2}}
+	fmt.Printf("total area: %.2f\n", totalArea(shapes))
+
+	sort.Sort(ByArea(shapes))
+	for _, s := range shapes {
+		fmt.Printf("%v -> area %.2f\n", s, s.Area())
+	}
+
+	// Type assertion with comma-ok
+	var s Shape = Circle{3}
+	if c, ok := s.(Circle); ok {
+		fmt.Println("it's a circle with radius", c.R)
+	}
+
+	for _, v := range []any{42, "gopher", Rect{2, 5}, 3.14} {
+		fmt.Println(describe(v))
+	}
+}`
+            },
+            {
+                category: "5 · Types & Errors",
+                title: "Error Handling",
+                desc: "error values, sentinel errors, wrapping with %w, errors.Is / errors.As",
+                code: String.raw`// Lesson: Error handling
+// Go has no exceptions: functions return an error value you check explicitly.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"strconv"
+)
+
+// Sentinel error: a package-level value callers can compare against
+var ErrNotFound = errors.New("not found")
+
+// Custom error type carrying extra context (anything with Error() string)
+type ValidationError struct {
+	Field string
+	Value int
+}
+
+func (e *ValidationError) Error() string {
+	return fmt.Sprintf("invalid %s: %d", e.Field, e.Value)
+}
+
+var users = map[int]string{1: "ada", 2: "linus"}
+
+func findUser(id int) (string, error) {
+	if id <= 0 {
+		return "", &ValidationError{Field: "id", Value: id}
+	}
+	name, ok := users[id]
+	if !ok {
+		// %w WRAPS the error: adds context but keeps the original inside
+		return "", fmt.Errorf("findUser(%d): %w", id, ErrNotFound)
+	}
+	return name, nil
+}
+
+func parseAndFind(input string) (string, error) {
+	id, err := strconv.Atoi(input)
+	if err != nil {
+		return "", fmt.Errorf("parsing %q: %w", input, err)
+	}
+	return findUser(id)
+}
+
+func main() {
+	for _, input := range []string{"1", "42", "-5", "abc"} {
+		name, err := parseAndFind(input)
+
+		// The idiomatic pattern: check err right after the call
+		if err != nil {
+			fmt.Println("ERROR:", err)
+
+			// errors.Is searches the wrap chain for a specific VALUE
+			if errors.Is(err, ErrNotFound) {
+				fmt.Println("   -> hint: try an id between 1 and 2")
+			}
+
+			// errors.As extracts a specific error TYPE from the chain
+			var vErr *ValidationError
+			if errors.As(err, &vErr) {
+				fmt.Println("   -> bad field:", vErr.Field)
+			}
+			continue
+		}
+		fmt.Println("OK: found user", name)
+	}
+}`
+            },
+            {
+                category: "5 · Types & Errors",
+                title: "Defer, Panic & Recover",
+                desc: "LIFO defers, cleanup, recovering from panics, argument evaluation",
+                code: String.raw`// Lesson: defer, panic, recover
+package main
+
+import "fmt"
+
+func deferOrder() {
+	// Deferred calls run when the function returns, in LIFO (stack) order
+	for i := 1; i <= 3; i++ {
+		defer fmt.Println("deferred", i)
+	}
+	fmt.Println("function body done")
+}
+
+// defer is ideal for cleanup: closing files, unlocking mutexes, etc.
+func processFile(name string) {
+	fmt.Println("open", name)
+	defer fmt.Println("close", name) // guaranteed to run, even on early return
+	fmt.Println("processing", name)
+}
+
+// recover() inside a deferred function stops a panic from crashing the program
+func safeDivide(a, b int) (result int, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("recovered: %v", r)
+		}
+	}()
+	return a / b, nil // integer division by zero panics
+}
+
+func main() {
+	deferOrder()
+	fmt.Println("---")
+	processFile("data.csv")
+	fmt.Println("---")
+
+	fmt.Println(safeDivide(10, 2))
+	fmt.Println(safeDivide(1, 0))
+
+	// Arguments to a deferred call are evaluated immediately
+	x := 1
+	defer fmt.Println("deferred x =", x) // prints 1, not 2
+	x = 2
+	fmt.Println("x is now", x)
+}`
+            },
+            {
+                category: "5 · Types & Errors",
+                title: "Generics",
+                desc: "type parameters, constraints, cmp.Ordered, generic Stack type",
+                code: String.raw`// Lesson: Generics (Go 1.18+)
+package main
+
+import (
+	"cmp"
+	"fmt"
+)
+
+// Type parameters go in square brackets. cmp.Ordered = types that support < >
+func Max[T cmp.Ordered](a, b T) T {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+// Map converts a []T into a []U using fn
+func Map[T, U any](items []T, fn func(T) U) []U {
+	out := make([]U, 0, len(items))
+	for _, it := range items {
+		out = append(out, fn(it))
+	}
+	return out
+}
+
+// A custom constraint: a union of types (~ also allows named types based on them)
+type Number interface {
+	~int | ~int64 | ~float64
+}
+
+func Sum[T Number](nums []T) T {
+	var total T
+	for _, n := range nums {
+		total += n
+	}
+	return total
+}
+
+// A generic type: a Stack that holds any element type
+type Stack[T any] struct {
+	items []T
+}
+
+func (s *Stack[T]) Push(v T) { s.items = append(s.items, v) }
+
+func (s *Stack[T]) Pop() (T, bool) {
+	var zero T
+	if len(s.items) == 0 {
+		return zero, false
+	}
+	last := s.items[len(s.items)-1]
+	s.items = s.items[:len(s.items)-1]
+	return last, true
+}
+
+func main() {
+	fmt.Println(Max(3, 7), Max("apple", "banana"), Max(2.5, 1.5))
+
+	lengths := Map([]string{"go", "rust", "python"}, func(s string) int { return len(s) })
+	fmt.Println("lengths:", lengths)
+
+	fmt.Println("int sum:", Sum([]int{1, 2, 3}), "| float sum:", Sum([]float64{1.5, 2.25}))
+
+	var s Stack[string]
+	s.Push("first")
+	s.Push("second")
+	for {
+		v, ok := s.Pop()
+		if !ok {
+			break
+		}
+		fmt.Println("popped:", v)
+	}
+}`
+            },
+            {
+                category: "6 · Concurrency",
+                title: "Goroutines & WaitGroup",
+                desc: "go keyword, sync.WaitGroup, protecting shared data with a Mutex",
+                code: String.raw`// Lesson: Goroutines
+package main
+
+import (
+	"fmt"
+	"sync"
+	"time"
+)
+
+func worker(id int, wg *sync.WaitGroup) {
+	defer wg.Done() // tell the WaitGroup we're finished when we return
+	fmt.Printf("worker %d starting\n", id)
+	time.Sleep(time.Duration(id) * 100 * time.Millisecond)
+	fmt.Printf("worker %d done\n", id)
+}
+
+func main() {
+	// A goroutine is a lightweight thread, started with the 'go' keyword
+	var wg sync.WaitGroup
+	for i := 1; i <= 3; i++ {
+		wg.Add(1)
+		go worker(i, &wg)
+	}
+	wg.Wait() // block until every worker has called Done()
+	fmt.Println("all workers finished")
+
+	// Shared data written by many goroutines must be protected by a Mutex
+	var mu sync.Mutex
+	results := map[int]int{}
+	var wg2 sync.WaitGroup
+	for n := 1; n <= 5; n++ {
+		wg2.Add(1)
+		go func() {
+			defer wg2.Done()
+			mu.Lock()
+			results[n] = n * n
+			mu.Unlock()
+		}()
+	}
+	wg2.Wait()
+	fmt.Println("squares:", results)
+}`
+            },
+            {
+                category: "6 · Concurrency",
+                title: "Channels & Select",
+                desc: "unbuffered/buffered channels, close+range, select with timeout",
+                code: String.raw`// Lesson: Channels - "share memory by communicating"
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+// chan<- int is a send-only channel parameter
+func producer(ch chan<- int, count int) {
+	for i := 1; i <= count; i++ {
+		ch <- i // send
+	}
+	close(ch) // tell receivers that no more values are coming
+}
+
+func main() {
+	// Unbuffered: a send blocks until another goroutine receives
+	ch := make(chan int)
+	go producer(ch, 5)
+	for v := range ch { // range keeps receiving until the channel is closed
+		fmt.Print(v, " ")
+	}
+	fmt.Println("<- received")
+
+	// Buffered: holds up to N values without a waiting receiver
+	buf := make(chan string, 2)
+	buf <- "a"
+	buf <- "b"
+	fmt.Println(<-buf, <-buf)
+
+	// select waits on several channel operations at once
+	fast := make(chan string)
+	slow := make(chan string)
+	go func() { time.Sleep(50 * time.Millisecond); fast <- "fast result" }()
+	go func() { time.Sleep(300 * time.Millisecond); slow <- "slow result" }()
+
+	for i := 0; i < 2; i++ {
+		select {
+		case msg := <-fast:
+			fmt.Println("got:", msg)
+		case msg := <-slow:
+			fmt.Println("got:", msg)
+		case <-time.After(200 * time.Millisecond):
+			fmt.Println("timeout! gave up waiting")
+		}
+	}
+
+	// Done-channel pattern: closing a channel broadcasts "finished"
+	done := make(chan struct{})
+	go func() {
+		fmt.Println("background job running")
+		close(done)
+	}()
+	<-done
+	fmt.Println("background job finished")
+}`
+            },
+            {
+                category: "7 · End-to-End Methods",
+                title: "Bank Account",
+                desc: "constructor -> methods -> methods calling methods -> errors -> report",
+                code: String.raw`// End-to-end example: a bank account
+// Follow the flow: types -> constructor -> methods -> main calls them in order.
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+// ---------- Types ----------
+
+var ErrInsufficientFunds = errors.New("insufficient funds")
+
+type Transaction struct {
+	Kind   string
+	Amount float64
+}
+
+type Account struct {
+	Owner   string        // Exported (capitalized): visible outside the package
+	balance float64       // unexported (lowercase): only this package can touch it
+	history []Transaction
+}
+
+// ---------- Constructor ----------
+
+func NewAccount(owner string, opening float64) *Account {
+	acc := &Account{Owner: owner}
+	if opening > 0 {
+		acc.Deposit(opening) // a constructor can call methods too
+	}
+	return acc
+}
+
+// ---------- Methods ----------
+
+func (a *Account) Deposit(amount float64) error {
+	if amount <= 0 {
+		return fmt.Errorf("deposit must be positive, got %.2f", amount)
+	}
+	a.balance += amount
+	a.record("deposit", amount)
+	return nil
+}
+
+func (a *Account) Withdraw(amount float64) error {
+	if amount > a.balance {
+		return fmt.Errorf("withdraw %.2f from %s: %w", amount, a.Owner, ErrInsufficientFunds)
+	}
+	a.balance -= amount
+	a.record("withdraw", amount)
+	return nil
+}
+
+// Transfer is built by composing two other methods
+func (a *Account) Transfer(to *Account, amount float64) error {
+	if err := a.Withdraw(amount); err != nil {
+		return fmt.Errorf("transfer to %s failed: %w", to.Owner, err)
+	}
+	return to.Deposit(amount)
+}
+
+// Read-only accessor: the only way to see the private balance
+func (a *Account) Balance() float64 { return a.balance }
+
+// unexported helper method used internally by Deposit/Withdraw
+func (a *Account) record(kind string, amount float64) {
+	a.history = append(a.history, Transaction{kind, amount})
+}
+
+func (a *Account) Statement() {
+	fmt.Printf("\nStatement for %s\n", a.Owner)
+	for i, t := range a.history {
+		fmt.Printf("  %d. %-8s %8.2f\n", i+1, t.Kind, t.Amount)
+	}
+	fmt.Printf("  Balance:    %8.2f\n", a.balance)
+}
+
+// ---------- Program flow ----------
+
+func main() {
+	alice := NewAccount("Alice", 100)
+	bob := NewAccount("Bob", 20)
+
+	// Step 1: a simple method call
+	if err := alice.Deposit(50); err == nil {
+		fmt.Println("Alice after deposit:", alice.Balance())
+	}
+
+	// Step 2: handling an error returned by a method
+	if err := bob.Withdraw(500); err != nil {
+		fmt.Println("WARN:", err)
+		if errors.Is(err, ErrInsufficientFunds) {
+			fmt.Println("      the caller can react to this specific error")
+		}
+	}
+
+	// Step 3: a method that calls other methods
+	if err := alice.Transfer(bob, 75); err == nil {
+		fmt.Println("Transferred 75 from Alice to Bob")
+	}
+	if err := bob.Transfer(alice, 1000); err != nil {
+		fmt.Println("WARN:", err)
+	}
+
+	// Step 4: invalid input is rejected
+	if err := alice.Deposit(-10); err != nil {
+		fmt.Println("WARN:", err)
+	}
+
+	alice.Statement()
+	bob.Statement()
+}`
+            },
+            {
+                category: "7 · End-to-End Methods",
+                title: "Shopping Cart",
+                desc: "method chaining, interface-based discount strategies, receipts",
+                code: String.raw`// End-to-end example: a shopping cart
+// Shows method chaining and swapping behaviour through an interface.
+package main
+
+import (
+	"fmt"
+	"strings"
+)
+
+type Product struct {
+	SKU   string
+	Name  string
+	Price float64
+}
+
+type LineItem struct {
+	Product  Product
+	Quantity int
+}
+
+func (li LineItem) Subtotal() float64 {
+	return li.Product.Price * float64(li.Quantity)
+}
+
+// Discount is an interface: any strategy with these methods plugs in
+type Discount interface {
+	Apply(total float64) float64
+	Name() string
+}
+
+type PercentOff struct{ Percent float64 }
+
+func (p PercentOff) Apply(total float64) float64 { return total * (1 - p.Percent/100) }
+func (p PercentOff) Name() string                { return fmt.Sprintf("%.0f%% off", p.Percent) }
+
+type FlatOff struct{ Amount, MinSpend float64 }
+
+func (f FlatOff) Apply(total float64) float64 {
+	if total >= f.MinSpend {
+		return total - f.Amount
+	}
+	return total
+}
+func (f FlatOff) Name() string {
+	return fmt.Sprintf("$%.0f off orders over $%.0f", f.Amount, f.MinSpend)
+}
+
+type Cart struct {
+	items    []LineItem
+	discount Discount
+}
+
+// Pointer receivers because these methods modify the cart.
+// Returning *Cart lets callers chain calls: cart.Add(...).Add(...)
+func (c *Cart) Add(p Product, qty int) *Cart {
+	for i := range c.items {
+		if c.items[i].Product.SKU == p.SKU {
+			c.items[i].Quantity += qty
+			return c
+		}
+	}
+	c.items = append(c.items, LineItem{p, qty})
+	return c
+}
+
+func (c *Cart) Remove(sku string) *Cart {
+	for i, li := range c.items {
+		if li.Product.SKU == sku {
+			c.items = append(c.items[:i], c.items[i+1:]...)
+			break
+		}
+	}
+	return c
+}
+
+func (c *Cart) SetDiscount(d Discount) *Cart {
+	c.discount = d
+	return c
+}
+
+func (c *Cart) Totals() (subtotal, total float64) {
+	for _, li := range c.items {
+		subtotal += li.Subtotal()
+	}
+	total = subtotal
+	if c.discount != nil {
+		total = c.discount.Apply(subtotal) // dynamic dispatch through the interface
+	}
+	return
+}
+
+func (c *Cart) Receipt() string {
+	var sb strings.Builder
+	sb.WriteString("RECEIPT\n")
+	for _, li := range c.items {
+		fmt.Fprintf(&sb, "  %-12s x%-2d %8.2f\n", li.Product.Name, li.Quantity, li.Subtotal())
+	}
+	sub, total := c.Totals()
+	fmt.Fprintf(&sb, "  %-16s %8.2f\n", "Subtotal", sub)
+	if c.discount != nil {
+		fmt.Fprintf(&sb, "  Discount: %s\n", c.discount.Name())
+	}
+	fmt.Fprintf(&sb, "  %-16s %8.2f\n", "TOTAL", total)
+	return sb.String()
+}
+
+func main() {
+	keyboard := Product{"KB-1", "Keyboard", 49.99}
+	mouse := Product{"MS-2", "Mouse", 19.50}
+	cable := Product{"CB-3", "USB Cable", 5.25}
+
+	cart := &Cart{}
+	cart.Add(keyboard, 1).Add(mouse, 2).Add(cable, 3).Add(mouse, 1)
+	fmt.Println(cart.Receipt())
+
+	cart.Remove("CB-3").SetDiscount(PercentOff{10})
+	fmt.Println(cart.Receipt())
+
+	cart.SetDiscount(FlatOff{Amount: 20, MinSpend: 100})
+	fmt.Println(cart.Receipt())
+}`
+            },
+            {
+                category: "8 · Complex Programs",
+                title: "Library Management System",
+                desc: "enums, maps of pointers, sentinel errors, predicates, sorting, reports",
+                code: String.raw`// Complex program 1: Library Management System
+// Ties together: custom types & enums, structs, maps, slices, methods,
+// interfaces (Stringer), error wrapping, closures and sorting.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"sort"
+	"strings"
+)
+
+// ================= Models =================
+
+type Genre int
+
+const (
+	Fiction Genre = iota
+	Science
+	History
+)
+
+// Genre implements fmt.Stringer, so %s and Println print its name
+func (g Genre) String() string {
+	return [...]string{"Fiction", "Science", "History"}[g]
+}
+
+type Book struct {
+	ID       int
+	Title    string
+	Author   string
+	Genre    Genre
+	Borrower string // empty when the book is on the shelf
+}
+
+func (b Book) Available() bool { return b.Borrower == "" }
+
+type Member struct {
+	Name     string
+	Borrowed []int // book IDs
+	MaxBooks int
+}
+
+// ================= Errors =================
+
+var (
+	ErrBookNotFound   = errors.New("book not found")
+	ErrMemberNotFound = errors.New("member not found")
+	ErrUnavailable    = errors.New("book already borrowed")
+	ErrLimitReached   = errors.New("borrow limit reached")
+)
+
+// ================= Service =================
+
+type Library struct {
+	books   map[int]*Book
+	members map[string]*Member
+	nextID  int
+	log     []string
+}
+
+func NewLibrary() *Library {
+	return &Library{books: map[int]*Book{}, members: map[string]*Member{}, nextID: 1}
+}
+
+func (l *Library) AddBook(title, author string, g Genre) *Book {
+	b := &Book{ID: l.nextID, Title: title, Author: author, Genre: g}
+	l.books[b.ID] = b
+	l.nextID++
+	return b
+}
+
+func (l *Library) Join(name string, maxBooks int) {
+	l.members[name] = &Member{Name: name, MaxBooks: maxBooks}
+}
+
+// lookup is a shared helper used by Borrow and Return
+func (l *Library) lookup(memberName string, bookID int) (*Member, *Book, error) {
+	m, ok := l.members[memberName]
+	if !ok {
+		return nil, nil, fmt.Errorf("%q: %w", memberName, ErrMemberNotFound)
+	}
+	b, ok := l.books[bookID]
+	if !ok {
+		return nil, nil, fmt.Errorf("id %d: %w", bookID, ErrBookNotFound)
+	}
+	return m, b, nil
+}
+
+func (l *Library) Borrow(memberName string, bookID int) error {
+	m, b, err := l.lookup(memberName, bookID)
+	if err != nil {
+		return err
+	}
+	switch {
+	case !b.Available():
+		return fmt.Errorf("%q: %w (by %s)", b.Title, ErrUnavailable, b.Borrower)
+	case len(m.Borrowed) >= m.MaxBooks:
+		return fmt.Errorf("%s: %w (max %d)", m.Name, ErrLimitReached, m.MaxBooks)
+	}
+	b.Borrower = m.Name
+	m.Borrowed = append(m.Borrowed, b.ID)
+	l.log = append(l.log, fmt.Sprintf("%s borrowed %q", m.Name, b.Title))
+	return nil
+}
+
+func (l *Library) Return(memberName string, bookID int) error {
+	m, b, err := l.lookup(memberName, bookID)
+	if err != nil {
+		return err
+	}
+	for i, id := range m.Borrowed {
+		if id == bookID {
+			m.Borrowed = append(m.Borrowed[:i], m.Borrowed[i+1:]...)
+			b.Borrower = ""
+			l.log = append(l.log, fmt.Sprintf("%s returned %q", m.Name, b.Title))
+			return nil
+		}
+	}
+	return fmt.Errorf("%s never borrowed %q", m.Name, b.Title)
+}
+
+// Search takes a predicate function, so callers decide what "matches"
+func (l *Library) Search(match func(*Book) bool) []*Book {
+	var out []*Book
+	for _, b := range l.books {
+		if match(b) {
+			out = append(out, b)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Title < out[j].Title })
+	return out
+}
+
+func (l *Library) Report() {
+	byGenre := map[Genre]int{}
+	borrowed := 0
+	for _, b := range l.books {
+		byGenre[b.Genre]++
+		if !b.Available() {
+			borrowed++
+		}
+	}
+	fmt.Println("\n=== LIBRARY REPORT ===")
+	fmt.Printf("Books: %d total, %d borrowed\n", len(l.books), borrowed)
+	for g := Fiction; g <= History; g++ {
+		fmt.Printf("  %-8s %s\n", g, strings.Repeat("#", byGenre[g]))
+	}
+	fmt.Println("Activity log:")
+	for i, entry := range l.log {
+		fmt.Printf("  %d) %s\n", i+1, entry)
+	}
+}
+
+// ================= Program =================
+
+func main() {
+	lib := NewLibrary()
+	dune := lib.AddBook("Dune", "Frank Herbert", Fiction)
+	cosmos := lib.AddBook("Cosmos", "Carl Sagan", Science)
+	lib.AddBook("Sapiens", "Yuval Noah Harari", History)
+	lib.AddBook("A Brief History of Time", "Stephen Hawking", Science)
+	lib.AddBook("Foundation", "Isaac Asimov", Fiction)
+
+	lib.Join("ada", 2)
+	lib.Join("alan", 1)
+
+	// A table of actions: each one is a closure returning an error
+	actions := []struct {
+		desc string
+		run  func() error
+	}{
+		{"ada borrows Dune", func() error { return lib.Borrow("ada", dune.ID) }},
+		{"alan borrows Dune", func() error { return lib.Borrow("alan", dune.ID) }},
+		{"alan borrows Cosmos", func() error { return lib.Borrow("alan", cosmos.ID) }},
+		{"alan borrows #3", func() error { return lib.Borrow("alan", 3) }},
+		{"grace borrows #5", func() error { return lib.Borrow("grace", 5) }},
+		{"ada borrows #99", func() error { return lib.Borrow("ada", 99) }},
+		{"ada returns Dune", func() error { return lib.Return("ada", dune.ID) }},
+		{"alan returns Dune", func() error { return lib.Return("alan", dune.ID) }},
+	}
+
+	for _, a := range actions {
+		if err := a.run(); err != nil {
+			fmt.Printf("[FAIL] %-20s -> %v\n", a.desc, err)
+			if errors.Is(err, ErrLimitReached) {
+				fmt.Println("       tip: return a book first")
+			}
+			continue
+		}
+		fmt.Printf("[ OK ] %s\n", a.desc)
+	}
+
+	fmt.Println("\nAvailable science books:")
+	for _, b := range lib.Search(func(b *Book) bool { return b.Genre == Science && b.Available() }) {
+		fmt.Printf("  #%d %s by %s\n", b.ID, b.Title, b.Author)
+	}
+
+	fmt.Println("\nTitles containing 'on':")
+	for _, b := range lib.Search(func(b *Book) bool { return strings.Contains(strings.ToLower(b.Title), "on") }) {
+		fmt.Printf("  %s (%s)\n", b.Title, b.Genre)
+	}
+
+	lib.Report()
+}`
+            },
+            {
+                category: "8 · Complex Programs",
+                title: "Concurrent Order Pipeline",
+                desc: "producer -> worker pool -> aggregator with channels, WaitGroup, fan-in",
+                code: String.raw`// Complex program 2: Concurrent order-processing pipeline
+//
+//   generateOrders  ->  [worker 1..N]  ->  aggregator (main)
+//      (channel)          (channel)
+//
+// Ties together: goroutines, channels, directional channel types,
+// WaitGroup fan-in, structs with methods, maps, sorting and errors.
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"sort"
+	"sync"
+	"time"
+)
+
+type Order struct {
+	ID       int
+	Customer string
+	Items    int
+	Price    float64
+}
+
+type Result struct {
+	Order    Order
+	Total    float64
+	WorkerID int
+	Err      error
+}
+
+// Stage 1: the producer emits orders, then closes the channel
+func generateOrders(n int) <-chan Order {
+	out := make(chan Order)
+	customers := []string{"ada", "bob", "cy", "dee"}
+	go func() {
+		defer close(out)
+		for i := 1; i <= n; i++ {
+			out <- Order{
+				ID:       i,
+				Customer: customers[rand.Intn(len(customers))],
+				Items:    rand.Intn(5) + 1,
+				Price:    float64(rand.Intn(5000)) / 100,
+			}
+		}
+	}()
+	return out
+}
+
+// Stage 2: every worker pulls from the same orders channel (work sharing)
+func worker(id int, orders <-chan Order, results chan<- Result, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for o := range orders {
+		time.Sleep(time.Duration(rand.Intn(30)) * time.Millisecond) // simulate work
+		r := Result{Order: o, WorkerID: id}
+		if o.Price < 5 {
+			r.Err = fmt.Errorf("order %d rejected: price %.2f below minimum", o.ID, o.Price)
+		} else {
+			r.Total = float64(o.Items) * o.Price * 1.08 // add 8% tax
+		}
+		results <- r
+	}
+}
+
+// Stage 3: the aggregator. Only main touches it, so no lock is needed.
+type Summary struct {
+	revenue    float64
+	byCustomer map[string]float64
+	perWorker  map[int]int
+	failures   []error
+}
+
+func NewSummary() *Summary {
+	return &Summary{byCustomer: map[string]float64{}, perWorker: map[int]int{}}
+}
+
+func (s *Summary) Add(r Result) {
+	s.perWorker[r.WorkerID]++
+	if r.Err != nil {
+		s.failures = append(s.failures, r.Err)
+		return
+	}
+	s.revenue += r.Total
+	s.byCustomer[r.Order.Customer] += r.Total
+}
+
+func (s *Summary) Print() {
+	fmt.Printf("Total revenue: $%.2f\n\n", s.revenue)
+
+	type ranked struct {
+		Name  string
+		Spent float64
+	}
+	var ranking []ranked
+	for name, spent := range s.byCustomer {
+		ranking = append(ranking, ranked{name, spent})
+	}
+	sort.Slice(ranking, func(i, j int) bool { return ranking[i].Spent > ranking[j].Spent })
+	fmt.Println("Top customers:")
+	for i, c := range ranking {
+		fmt.Printf("  %d. %-4s $%8.2f\n", i+1, c.Name, c.Spent)
+	}
+
+	fmt.Println("\nOrders handled per worker:")
+	ids := make([]int, 0, len(s.perWorker))
+	for id := range s.perWorker {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+	for _, id := range ids {
+		fmt.Printf("  worker %d: %d\n", id, s.perWorker[id])
+	}
+
+	fmt.Printf("\n%d failed orders\n", len(s.failures))
+	for _, err := range s.failures {
+		fmt.Println("  -", err)
+	}
+}
+
+func main() {
+	const numOrders, numWorkers = 20, 4
+	start := time.Now()
+
+	orders := generateOrders(numOrders)
+	results := make(chan Result)
+
+	var wg sync.WaitGroup
+	for id := 1; id <= numWorkers; id++ {
+		wg.Add(1)
+		go worker(id, orders, results, &wg)
+	}
+
+	// Fan-in: close results only after ALL workers have finished
+	go func() {
+		wg.Wait()
+		close(results)
+	}()
+
+	summary := NewSummary()
+	for r := range results {
+		summary.Add(r)
+	}
+
+	summary.Print()
+	fmt.Printf("\nProcessed %d orders with %d workers in %v\n",
+		numOrders, numWorkers, time.Since(start).Round(time.Millisecond))
+}`
+            },
+            {
+                category: "8 · Complex Programs",
+                title: "Maze Solver (BFS)",
+                desc: "2D grids, comparable structs as map keys, queues, path rebuilding",
+                code: String.raw`// Complex program 3: Maze solver using Breadth-First Search
+// BFS explores level by level, so the first path found is the shortest.
+// Ties together: structs as map keys, 2D slices, queues, methods,
+// multiple returns, error handling and strings.Builder.
+package main
+
+import (
+	"errors"
+	"fmt"
+	"strings"
+)
+
+type Point struct{ Row, Col int }
+
+func (p Point) Add(o Point) Point { return Point{p.Row + o.Row, p.Col + o.Col} }
+
+var directions = []Point{{-1, 0}, {1, 0}, {0, -1}, {0, 1}} // up, down, left, right
+
+type Maze struct {
+	grid       [][]rune
+	start, end Point
+}
+
+func ParseMaze(rows []string) (*Maze, error) {
+	m := &Maze{}
+	foundStart, foundEnd := false, false
+	for r, line := range rows {
+		row := []rune(line)
+		for c, ch := range row {
+			switch ch {
+			case 'S':
+				m.start, foundStart = Point{r, c}, true
+			case 'E':
+				m.end, foundEnd = Point{r, c}, true
+			}
+		}
+		m.grid = append(m.grid, row)
+	}
+	if !foundStart || !foundEnd {
+		return nil, errors.New("maze needs both an S and an E")
+	}
+	return m, nil
+}
+
+func (m *Maze) walkable(p Point) bool {
+	inBounds := p.Row >= 0 && p.Row < len(m.grid) && p.Col >= 0 && p.Col < len(m.grid[p.Row])
+	return inBounds && m.grid[p.Row][p.Col] != '#'
+}
+
+// Solve returns the shortest path from S to E (inclusive), or nil if none exists.
+// It also reports how many cells were explored.
+func (m *Maze) Solve() (path []Point, explored int) {
+	queue := []Point{m.start}
+	cameFrom := map[Point]Point{m.start: m.start} // structs work as map keys
+
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:] // dequeue from the front
+		explored++
+
+		if cur == m.end { // structs are comparable with ==
+			return m.rebuildPath(cameFrom), explored
+		}
+		for _, d := range directions {
+			next := cur.Add(d)
+			if _, seen := cameFrom[next]; !seen && m.walkable(next) {
+				cameFrom[next] = cur
+				queue = append(queue, next) // enqueue at the back
+			}
+		}
+	}
+	return nil, explored
+}
+
+func (m *Maze) rebuildPath(cameFrom map[Point]Point) []Point {
+	var path []Point
+	for p := m.end; p != m.start; p = cameFrom[p] {
+		path = append(path, p)
+	}
+	path = append(path, m.start)
+	// Reverse in place using two indexes
+	for i, j := 0, len(path)-1; i < j; i, j = i+1, j-1 {
+		path[i], path[j] = path[j], path[i]
+	}
+	return path
+}
+
+func (m *Maze) Render(path []Point) string {
+	onPath := map[Point]bool{}
+	for _, p := range path {
+		onPath[p] = true
+	}
+	var sb strings.Builder
+	for r, row := range m.grid {
+		for c, ch := range row {
+			if onPath[Point{r, c}] && ch == '.' {
+				ch = '*'
+			}
+			sb.WriteRune(ch)
+		}
+		sb.WriteRune('\n')
+	}
+	return sb.String()
+}
+
+func main() {
+	puzzles := []struct {
+		name string
+		rows []string
+	}{
+		{"Classic", []string{
+			"##########",
+			"#S...#...#",
+			"#.##.#.#.#",
+			"#.#..#.#.#",
+			"#.#.##.#.#",
+			"#...#..#E#",
+			"###...####",
+			"##########",
+		}},
+		{"Open field", []string{
+			"S.......",
+			"..####..",
+			"..#..#..",
+			"..#E.#..",
+			"........",
+		}},
+		{"Walled off", []string{
+			"#####",
+			"#S#E#",
+			"#####",
+		}},
+		{"Broken", []string{"#S..#"}},
+	}
+
+	for _, pz := range puzzles {
+		fmt.Printf("=== Maze: %s ===\n", pz.name)
+		m, err := ParseMaze(pz.rows)
+		if err != nil {
+			fmt.Println("error:", err)
+			fmt.Println()
+			continue
+		}
+		path, explored := m.Solve()
+		if path == nil {
+			fmt.Printf("No path exists (explored %d cells)\n\n", explored)
+			continue
+		}
+		fmt.Print(m.Render(path))
+		fmt.Printf("Shortest path: %d steps, explored %d cells\n\n", len(path)-1, explored)
+	}
+}`
+            }
+        ];
+
+        // --- 2. Project State & GitHub Sync ---
+        // Repo layout: projects/<slug>/main.go + projects/<slug>/meta.json (one folder per project).
+        const PROJECTS_ROOT = 'projects';
+
+        const state = {
+            projects: [],
+            currentProjectId: null,
+            editingId: null
+        };
+
+        const githubState = {
+            token: localStorage.getItem('goplay_github_token') || '',
+            owner: localStorage.getItem('goplay_github_owner') || '',
+            repo: localStorage.getItem('goplay_github_repo') || '',
+            createIfMissing: localStorage.getItem('goplay_github_create') === '1',
+            busy: false
+        };
+
+        let autoSaveTimer;
+
+        function generateProjectId() {
+            return 'gproj_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function slugify(text) {
+            return String(text || '')
+                .toLowerCase()
+                .trim()
+                .replace(/\.rs$/, '')
+                .replace(/[^a-z0-9._-]+/g, '-')
+                .replace(/^[-.]+|[-.]+$/g, '')
+                .slice(0, 64) || 'project';
+        }
+
+        function uniqueSlug(base, excludeId = null, remoteFiles = null) {
+            const taken = (s) =>
+                state.projects.some(p => p.id !== excludeId && p.slug === s) ||
+                (remoteFiles && [...remoteFiles.keys()].some(k => k.startsWith(`${PROJECTS_ROOT}/${s}/`)));
+            let slug = base;
+            let i = 2;
+            while (taken(slug)) slug = `${base}-${i++}`;
+            return slug;
+        }
+
+        // Folder names are fixed once a project has been pushed; before that they follow the title.
+        function refreshSlugIfUnsynced(project) {
+            if (!project.sync) project.slug = uniqueSlug(slugify(project.title), project.id);
+        }
+
+        function projectPaths(slug) {
+            return {
+                main: `${PROJECTS_ROOT}/${slug}/main.go`,
+                meta: `${PROJECTS_ROOT}/${slug}/meta.json`
+            };
+        }
+
+        // cyrb53-style hash of the synced fields, used to detect unpushed local edits.
+        function projectHash(p) {
+            const s = JSON.stringify([p.title || '', p.code || '']);
+            let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+            for (let i = 0; i < s.length; i++) {
+                const ch = s.charCodeAt(i);
+                h1 = Math.imul(h1 ^ ch, 2654435761);
+                h2 = Math.imul(h2 ^ ch, 1597334677);
+            }
+            h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+            h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+            return (h2 >>> 0).toString(16) + (h1 >>> 0).toString(16);
+        }
+
+        function isProjectDirty(p) {
+            return !p.sync || !!p.sync.conflict || projectHash(p) !== p.sync.hash;
+        }
+
+        function getSyncStatus(p) {
+            if (!p.sync) return 'new';
+            if (p.sync.conflict) return 'conflict';
+            return projectHash(p) !== p.sync.hash ? 'dirty' : 'synced';
+        }
+
+        function syncBadgeHTML(p) {
+            if (!isGitHubConnected()) return '';
+            const badges = {
+                new: ['cloud', 'text-gray-500 opacity-60', 'Not yet pushed to GitHub'],
+                dirty: ['cloud-upload', 'text-amber-500', 'Local changes not pushed to GitHub'],
+                conflict: ['triangle-alert', 'text-red-500', 'Conflict: changed both locally and on GitHub'],
+                synced: ['cloud', 'text-green-500', 'Synced with GitHub']
+            };
+            const [icon, cls, title] = badges[getSyncStatus(p)];
+            return `<span class="p-1 inline-flex" title="${title}"><i data-lucide="${icon}" class="w-3 h-3 ${cls}"></i></span>`;
+        }
+
+        function updateSyncBadges() {
+            document.querySelectorAll('[data-sync-badge]').forEach(el => {
+                const project = state.projects.find(p => p.id === el.dataset.syncBadge);
+                if (project) el.innerHTML = syncBadgeHTML(project);
+            });
+            lucide.createIcons();
+        }
+
+        function markProjectSynced(project, mainSha, metaSha) {
+            project.sync = {
+                mainSha: mainSha || null,
+                metaSha: metaSha || null,
+                hash: projectHash(project),
+                lastSyncedAt: new Date().toISOString(),
+                conflict: false
+            };
+        }
+
+        function markProjectConflict(project) {
+            project.sync = { ...(project.sync || {}), conflict: true };
+        }
+
+        function getCurrentProject() {
+            return state.projects.find(p => p.id === state.currentProjectId);
+        }
+
+        function createNewProject(code, titleOverride) {
+            const title = titleOverride || ('Untitled ' + (state.projects.length + 1));
+            const newProject = {
+                id: generateProjectId(),
+                slug: uniqueSlug(slugify(title)),
+                title: title,
+                code: code !== undefined ? code : snippets[0].code,
+                createdAt: new Date().toISOString()
+            };
+            state.projects.push(newProject);
+            saveData();
+            window.loadProject(newProject.id);
+            renderProjectList();
+            showToast('New project created');
+            return newProject;
+        }
+
+        function saveCurrentProjectState() {
+            const project = getCurrentProject();
+            if (project && editor) {
+                project.code = editor.getValue();
+                saveData();
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('goplay_projects', JSON.stringify(state.projects));
+            if (state.currentProjectId) localStorage.setItem('goplay_last_project_id', state.currentProjectId);
+            updateSyncBadges();
+        }
+
+        function loadData() {
+            const raw = localStorage.getItem('goplay_projects');
+            if (raw) {
+                try { state.projects = JSON.parse(raw); } catch (e) { state.projects = []; }
+            }
+            migrateProjects();
+        }
+
+        function migrateProjects() {
+            state.projects.forEach(p => {
+                if (!p.createdAt) p.createdAt = new Date().toISOString();
+                if (!p.slug) p.slug = uniqueSlug(slugify(p.title), p.id);
+            });
+        }
+
+        function debounceSave() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                saveCurrentProjectState();
+                renderProjectList();
+            }, 1000);
+        }
+
+        function renderProjectList() {
+            const projectList = document.getElementById('project-list');
+            if (!state.projects.length) {
+                projectList.innerHTML = '<div class="text-center text-gray-500 text-xs mt-4 px-2">No projects yet. Click + to create one.</div>';
+                return;
+            }
+            projectList.innerHTML = state.projects.map(p => {
+                const isEditing = state.editingId === p.id;
+                const isActive = p.id === state.currentProjectId;
+                let contentHTML, actionsHTML;
+
+                if (isEditing) {
+                    contentHTML = `<input id="edit-${p.id}" type="text" value="${escapeHtml(p.title)}" class="w-full text-xs bg-gray-700 border border-cyan-500 rounded px-1 py-0.5 text-gray-100" />`;
+                    actionsHTML = `<button class="text-green-500 hover:text-green-400 p-1 ml-1 relative z-30" onclick="saveEdit('${p.id}', event)"><i data-lucide="check" class="w-3.5 h-3.5"></i></button>`;
+                } else {
+                    contentHTML = `<div class="truncate text-xs font-medium ${isActive ? 'text-cyan-400' : 'text-gray-300'} pointer-events-none">${escapeHtml(p.title)}</div>`;
+                    actionsHTML = `
+                        <div class="flex items-center">
+                            <span data-sync-badge="${p.id}">${syncBadgeHTML(p)}</span>
+                            <button class="text-gray-500 hover:text-cyan-400 p-1 transition-colors relative z-20" title="Rename" onclick="startEdit('${p.id}', event)">
+                                <i data-lucide="pencil" class="w-3 h-3"></i>
+                            </button>
+                            <button class="text-gray-500 hover:text-red-500 p-1 transition-colors relative z-20" title="Delete" onclick="deleteProject('${p.id}', event)">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>
+                            </button>
+                        </div>`;
+                }
+
+                return `
+                    <div class="group flex items-center justify-between p-1.5 rounded hover:bg-gray-700 transition relative mb-0.5 ${isActive ? 'bg-gray-700 border-l-2 border-cyan-500' : ''}">
+                        <div class="absolute inset-0 z-0 cursor-pointer" onclick="loadProject('${p.id}')"></div>
+                        <div class="flex-1 min-w-0 mr-1 relative z-10 pointer-events-none">${contentHTML}</div>
+                        <div class="shrink-0 flex items-center relative z-20">${actionsHTML}</div>
+                    </div>`;
+            }).join('');
+            lucide.createIcons();
+        }
+
+        window.loadProject = function(id) {
+            saveCurrentProjectState();
+            state.currentProjectId = id;
+            const project = getCurrentProject();
+            if (project && editor) {
+                editor.setValue(project.code || '');
+            }
+            renderProjectList();
+            if (window.innerWidth < 768) {
+                const sb = document.getElementById('sidebar');
+                if (sb.classList.contains('open')) toggleMobileSidebar();
+            }
+        };
+
+        window.startEdit = function(id, event) {
+            event.stopPropagation();
+            state.editingId = id;
+            renderProjectList();
+            setTimeout(() => {
+                const input = document.getElementById(`edit-${id}`);
+                if (input) { input.focus(); input.select(); }
+            }, 0);
+        };
+
+        window.saveEdit = function(id, event) {
+            event.stopPropagation();
+            const input = document.getElementById(`edit-${id}`);
+            const project = state.projects.find(p => p.id === id);
+            if (input && project && input.value.trim()) {
+                project.title = input.value.trim();
+                refreshSlugIfUnsynced(project);
+            }
+            state.editingId = null;
+            saveData();
+            renderProjectList();
+        };
+
+        window.deleteProject = function(id, event) {
+            event.stopPropagation();
+            if (!confirm('Delete this project? This cannot be undone locally (GitHub copy, if any, is untouched).')) return;
+            const idx = state.projects.findIndex(p => p.id === id);
+            if (idx === -1) return;
+            state.projects.splice(idx, 1);
+            if (state.currentProjectId === id) {
+                if (state.projects.length) {
+                    window.loadProject(state.projects[0].id);
+                } else {
+                    createNewProject();
+                }
+            }
+            saveData();
+            renderProjectList();
+            showToast('Project deleted');
+        };
+
+        function showToast(msg, type = 'info') {
+            const t = document.createElement('div');
+            t.className = `px-4 py-2 rounded shadow-lg text-white text-sm font-semibold flex items-center gap-2 pointer-events-auto ${type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-cyan-600'}`;
+            t.innerHTML = `<span>${escapeHtml(msg)}</span>`;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'toast-enter';
+            wrapper.appendChild(t);
+
+            document.getElementById('toastContainer').appendChild(wrapper);
+            requestAnimationFrame(() => wrapper.className = 'toast-enter-active');
+
+            setTimeout(() => {
+                wrapper.className = 'toast-exit-active';
+                setTimeout(() => wrapper.remove(), 300);
+            }, 3000);
+        }
+
+        function openModal(modal) {
+            modal.classList.remove('hidden', 'pointer-events-none');
+            modal.classList.add('flex');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            const content = modal.querySelector('.modal-content');
+            if (content) content.classList.remove('scale-95');
+        }
+
+        function closeModal(modal) {
+            modal.classList.add('opacity-0');
+            const content = modal.querySelector('.modal-content');
+            if (content) content.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden', 'pointer-events-none');
+                modal.classList.remove('flex');
+            }, 200);
+        }
+
+        function updateGitHubButton() {
+            const btn = document.getElementById('github-btn');
+            const label = document.getElementById('github-btn-label');
+            const dot = document.getElementById('github-btn-dot');
+            if (githubState.token && githubState.owner && githubState.repo) {
+                label.textContent = `${githubState.owner}/${githubState.repo}`;
+                dot.classList.remove('hidden');
+                dot.classList.add('bg-green-500');
+                btn.title = 'GitHub PAT connected';
+            } else {
+                label.textContent = 'GitHub';
+                dot.classList.add('hidden');
+                dot.classList.remove('bg-green-500');
+                btn.title = 'GitHub PAT Sync';
+            }
+        }
+
+        function saveGitHubConfig() {
+            localStorage.setItem('goplay_github_token', githubState.token || '');
+            localStorage.setItem('goplay_github_owner', githubState.owner || '');
+            localStorage.setItem('goplay_github_repo', githubState.repo || '');
+            localStorage.setItem('goplay_github_create', githubState.createIfMissing ? '1' : '0');
+            updateGitHubButton();
+        }
+
+        function clearGitHubConfig() {
+            githubState.token = '';
+            githubState.owner = '';
+            githubState.repo = '';
+            localStorage.removeItem('goplay_github_token');
+            localStorage.removeItem('goplay_github_owner');
+            localStorage.removeItem('goplay_github_repo');
+            updateGitHubButton();
+        }
+
+        function base64Encode(str) {
+            const bytes = new TextEncoder().encode(str);
+            let binary = '';
+            bytes.forEach((b) => binary += String.fromCharCode(b));
+            return btoa(binary);
+        }
+
+        function base64Decode(b64) {
+            const binary = atob((b64 || '').replace(/\s/g, ''));
+            const bytes = Uint8Array.from(binary, c => c.charCodeAt(0));
+            return new TextDecoder().decode(bytes);
+        }
+
+        async function githubRequest(path, options = {}) {
+            if (!githubState.token) throw new Error('No GitHub token configured');
+
+            const res = await fetch(`https://api.github.com${path}`, {
+                ...options,
+                headers: {
+                    'Accept': 'application/vnd.github+json',
+                    'Authorization': `token ${githubState.token}`,
+                    'X-GitHub-Api-Version': '2022-11-28',
+                    ...(options.headers || {})
+                }
+            });
+
+            if (!res.ok) {
+                const body = await res.text();
+                let message = 'GitHub API request failed';
+                try {
+                    const json = JSON.parse(body);
+                    if (json.message) message = json.message;
+                } catch (e) {}
+                const error = new Error(message);
+                error.status = res.status;
+                throw error;
+            }
+
+            const text = await res.text();
+            return text ? JSON.parse(text) : null;
+        }
+
+        function isGitHubConnected() {
+            return !!(githubState.token && githubState.owner && githubState.repo);
+        }
+
+        function repoBase() {
+            return `/repos/${encodeURIComponent(githubState.owner)}/${encodeURIComponent(githubState.repo)}`;
+        }
+
+        function branchRefPath(branch) {
+            return branch.split('/').map(encodeURIComponent).join('/');
+        }
+
+        async function ensureGitHubRepoExists() {
+            if (!githubState.owner || !githubState.repo) throw new Error('GitHub owner and repo are required');
+            try {
+                return await githubRequest(repoBase());
+            } catch (err) {
+                if (err.status && err.status !== 404) throw err;
+                if (!githubState.createIfMissing) {
+                    throw new Error(`Repository ${githubState.owner}/${githubState.repo} does not exist. Enable "Create repo if it does not exist" in GitHub settings.`);
+                }
+                return await githubRequest('/user/repos', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: githubState.repo, private: false, auto_init: true })
+                });
+            }
+        }
+
+        // The Git Data API cannot operate on a repo with no commits, so seed one via the Contents API.
+        async function initializeEmptyRepo() {
+            await githubRequest(`${repoBase()}/contents/README.md`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    message: 'Initialize GoStudio projects repo',
+                    content: base64Encode('# GoStudio Projects\n\nEach folder under `projects/` is one GoStudio project (`main.go` + `meta.json`).\n')
+                })
+            });
+        }
+
+        function treeToFileMap(tree) {
+            const files = new Map();
+            (tree.tree || []).forEach(entry => {
+                if (entry.type === 'blob') files.set(entry.path, entry.sha);
+            });
+            return files;
+        }
+
+        async function getRemoteSnapshot() {
+            const repoInfo = await ensureGitHubRepoExists();
+            const branch = repoInfo.default_branch || 'main';
+
+            let ref;
+            try {
+                ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+            } catch (err) {
+                if (err.status !== 404 && err.status !== 409) throw err;
+                await initializeEmptyRepo();
+                ref = await githubRequest(`${repoBase()}/git/ref/heads/${branchRefPath(branch)}`);
+            }
+
+            const commitSha = ref.object.sha;
+            const commit = await githubRequest(`${repoBase()}/git/commits/${commitSha}`);
+            const tree = await githubRequest(`${repoBase()}/git/trees/${commit.tree.sha}?recursive=1`);
+            if (tree.truncated) {
+                showToast('Repository is very large; some projects may be missing from sync', 'error');
+            }
+
+            return { branch, commitSha, treeSha: commit.tree.sha, files: treeToFileMap(tree) };
+        }
+
+        async function commitTreeEntries(snapshot, entries, message) {
+            const tree = await githubRequest(`${repoBase()}/git/trees`, {
+                method: 'POST',
+                body: JSON.stringify({ base_tree: snapshot.treeSha, tree: entries })
+            });
+            const commit = await githubRequest(`${repoBase()}/git/commits`, {
+                method: 'POST',
+                body: JSON.stringify({ message, tree: tree.sha, parents: [snapshot.commitSha] })
+            });
+            try {
+                await githubRequest(`${repoBase()}/git/refs/heads/${branchRefPath(snapshot.branch)}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ sha: commit.sha })
+                });
+            } catch (err) {
+                if (err.status === 422) throw new Error('GitHub branch changed during sync. Please try again.');
+                throw err;
+            }
+            const newTree = await githubRequest(`${repoBase()}/git/trees/${tree.sha}?recursive=1`);
+            return treeToFileMap(newTree);
+        }
+
+        function buildProjectTreeEntries(project) {
+            const { main, meta } = projectPaths(project.slug);
+            const metaJson = JSON.stringify({
+                title: project.title,
+                slug: project.slug,
+                createdAt: project.createdAt,
+                updatedAt: new Date().toISOString()
+            }, null, 2) + '\n';
+            return [
+                { path: main, mode: '100644', type: 'blob', content: project.code || '' },
+                { path: meta, mode: '100644', type: 'blob', content: metaJson }
+            ];
+        }
+
+        function listRemoteProjects(files) {
+            const pattern = new RegExp(`^${PROJECTS_ROOT}/([^/]+)/(main\\.go|meta\\.json)$`);
+            const remote = new Map();
+            files.forEach((sha, path) => {
+                const match = path.match(pattern);
+                if (!match) return;
+                const entry = remote.get(match[1]) || { mainSha: null, metaSha: null };
+                if (match[2] === 'main.go') entry.mainSha = sha;
+                else entry.metaSha = sha;
+                remote.set(match[1], entry);
+            });
+            [...remote.keys()].forEach(slug => { if (!remote.get(slug).mainSha) remote.delete(slug); });
+            return remote;
+        }
+
+        function remoteChangedSinceSync(project, snapshot) {
+            const { main, meta } = projectPaths(project.slug);
+            const remoteMain = snapshot.files.get(main) || null;
+            const remoteMeta = snapshot.files.get(meta) || null;
+            if (!remoteMain && !remoteMeta) return false;
+            if (!project.sync) return true;
+            return remoteMain !== project.sync.mainSha || remoteMeta !== project.sync.metaSha;
+        }
+
+        async function fetchBlobText(sha) {
+            const blob = await githubRequest(`${repoBase()}/git/blobs/${sha}`);
+            return base64Decode(blob.content);
+        }
+
+        function reloadEditorFromProject(project) {
+            if (editor) editor.setValue(project.code || '');
+        }
+
+        function setSyncStatus(text) {
+            const el = document.getElementById('githubSyncStatus');
+            if (el) el.textContent = text || '';
+        }
+
+        async function runGitHubOperation(label, fn) {
+            if (!isGitHubConnected()) {
+                showToast('Connect to GitHub first', 'error');
+                return null;
+            }
+            if (githubState.busy) {
+                showToast('A GitHub sync is already in progress', 'info');
+                return null;
+            }
+
+            githubState.busy = true;
+            document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = true);
+            setSyncStatus(`${label}...`);
+
+            try {
+                saveCurrentProjectState();
+                return await fn();
+            } catch (err) {
+                showToast(`GitHub ${label.toLowerCase()} failed: ${err.message}`, 'error');
+                setSyncStatus(`${label} failed: ${err.message}`);
+                return null;
+            } finally {
+                githubState.busy = false;
+                document.querySelectorAll('.gh-sync-btn').forEach(b => b.disabled = false);
+                saveData();
+                renderProjectList();
+            }
+        }
+
+        // Pushes the given projects in one commit. Projects whose ids are in `force` overwrite GitHub without prompting.
+        async function pushProjectsCore(projects, snapshot, force = new Set()) {
+            const conflicts = projects.filter(p => !force.has(p.id) && remoteChangedSinceSync(p, snapshot));
+            let toPush = projects;
+
+            if (conflicts.length) {
+                const names = conflicts.map(p => `• ${p.title} (${PROJECTS_ROOT}/${p.slug})`).join('\n');
+                const overwrite = confirm(`These projects were changed on GitHub since your last sync:\n\n${names}\n\nOK = overwrite GitHub with your local version\nCancel = skip them (use Pull to get the GitHub version)`);
+                if (!overwrite) {
+                    conflicts.forEach(markProjectConflict);
+                    toPush = projects.filter(p => !conflicts.includes(p));
+                }
+            }
+
+            if (!toPush.length) return 0;
+
+            const entries = toPush.flatMap(buildProjectTreeEntries);
+            const message = toPush.length === 1
+                ? `Update ${toPush[0].slug} from GoStudio`
+                : `Sync ${toPush.length} projects from GoStudio`;
+            const files = await commitTreeEntries(snapshot, entries, message);
+
+            toPush.forEach(p => {
+                const { main, meta } = projectPaths(p.slug);
+                markProjectSynced(p, files.get(main), files.get(meta));
+            });
+            return toPush.length;
+        }
+
+        // mode 'pull': conflicts keep local and get flagged. mode 'sync': conflicts kept locally are returned for force-push.
+        async function pullProjectsCore(snapshot, mode = 'pull') {
+            const remote = listRemoteProjects(snapshot.files);
+            const keepLocal = new Set();
+            let added = 0, updated = 0, conflicts = 0;
+
+            for (const [slug, r] of remote) {
+                let local = state.projects.find(p => p.slug === slug);
+
+                if (local && local.sync && local.sync.mainSha === r.mainSha && local.sync.metaSha === r.metaSha) {
+                    continue;
+                }
+
+                if (local && isProjectDirty(local)) {
+                    const useRemote = confirm(mode === 'sync'
+                        ? `"${local.title}" changed both locally and on GitHub.\n\nOK = use the GitHub version (discard local changes)\nCancel = keep your local version (it will overwrite GitHub)`
+                        : `"${local.title}" has local changes, and GitHub has a different version.\n\nOK = replace local with the GitHub version\nCancel = keep local (marked as conflict)`);
+                    if (!useRemote) {
+                        if (mode === 'sync') {
+                            keepLocal.add(local.id);
+                        } else {
+                            markProjectConflict(local);
+                            conflicts++;
+                        }
+                        continue;
+                    }
+                }
+
+                setSyncStatus(`Downloading ${PROJECTS_ROOT}/${slug}...`);
+                const code = await fetchBlobText(r.mainSha);
+                let meta = {};
+                if (r.metaSha) {
+                    try { meta = JSON.parse(await fetchBlobText(r.metaSha)) || {}; } catch (e) { meta = {}; }
+                }
+
+                if (!local) {
+                    local = {
+                        id: generateProjectId(),
+                        slug,
+                        title: slug,
+                        code: '',
+                        createdAt: meta.createdAt || new Date().toISOString()
+                    };
+                    state.projects.push(local);
+                    added++;
+                } else {
+                    updated++;
+                }
+
+                local.title = (typeof meta.title === 'string' && meta.title.trim()) ? meta.title.trim() : (local.title || slug);
+                local.code = code;
+                markProjectSynced(local, r.mainSha, r.metaSha);
+
+                if (local.id === state.currentProjectId) reloadEditorFromProject(local);
+            }
+
+            return { added, updated, conflicts, keepLocal };
+        }
+
+        async function pushProjects(projects) {
+            return runGitHubOperation('Push', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const pushed = await pushProjectsCore(projects, snapshot);
+                const skipped = projects.length - pushed;
+                const msg = `Pushed ${pushed} project${pushed === 1 ? '' : 's'}` + (skipped ? `, skipped ${skipped}` : '');
+                setSyncStatus(msg);
+                showToast(msg, pushed ? 'success' : 'info');
+                return pushed;
+            });
+        }
+
+        async function pullProjects() {
+            return runGitHubOperation('Pull', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const { added, updated, conflicts } = await pullProjectsCore(snapshot, 'pull');
+                const msg = `Pulled: ${added} new, ${updated} updated` + (conflicts ? `, ${conflicts} conflict${conflicts === 1 ? '' : 's'}` : '');
+                setSyncStatus(msg);
+                showToast(msg, conflicts ? 'error' : 'success');
+            });
+        }
+
+        async function syncAllProjects() {
+            return runGitHubOperation('Sync', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const { added, updated, keepLocal } = await pullProjectsCore(snapshot, 'sync');
+                const toPush = state.projects.filter(p => isProjectDirty(p) || keepLocal.has(p.id));
+                setSyncStatus(`Pushing ${toPush.length} project${toPush.length === 1 ? '' : 's'}...`);
+                const pushed = toPush.length ? await pushProjectsCore(toPush, snapshot, keepLocal) : 0;
+                const msg = `Sync complete: ${added} new, ${updated} updated from GitHub, ${pushed} pushed`;
+                setSyncStatus(msg);
+                showToast(msg, 'success');
+            });
+        }
+
+        async function renameRemoteFolder() {
+            const project = getCurrentProject();
+            if (!project) return;
+
+            if (!project.sync) {
+                refreshSlugIfUnsynced(project);
+                saveData();
+                showToast(`Folder will be ${PROJECTS_ROOT}/${project.slug} on first push`, 'info');
+                return;
+            }
+
+            return runGitHubOperation('Rename', async () => {
+                const snapshot = await getRemoteSnapshot();
+                const oldSlug = project.slug;
+                const newSlug = uniqueSlug(slugify(project.title), project.id, snapshot.files);
+                if (slugify(project.title) === oldSlug) {
+                    setSyncStatus(`Folder already matches: ${PROJECTS_ROOT}/${oldSlug}`);
+                    return;
+                }
+                if (!confirm(`Move ${PROJECTS_ROOT}/${oldSlug} to ${PROJECTS_ROOT}/${newSlug} on GitHub?\n\nThe current local version will be written to the new folder.`)) {
+                    setSyncStatus('');
+                    return;
+                }
+
+                const deletions = [...snapshot.files.keys()]
+                    .filter(path => path.startsWith(`${PROJECTS_ROOT}/${oldSlug}/`))
+                    .map(path => ({ path, mode: '100644', type: 'blob', sha: null }));
+                const entries = [...deletions, ...buildProjectTreeEntries({ ...project, slug: newSlug })];
+                const files = await commitTreeEntries(snapshot, entries, `Rename ${oldSlug} to ${newSlug} from GoStudio`);
+                project.slug = newSlug;
+                const { main, meta } = projectPaths(newSlug);
+                markProjectSynced(project, files.get(main), files.get(meta));
+                setSyncStatus(`Moved to ${PROJECTS_ROOT}/${newSlug}`);
+                showToast(`Moved to ${PROJECTS_ROOT}/${newSlug}`, 'success');
+            });
+        }
+
+        function openGitHubModal() {
+            document.getElementById('githubTokenInput').value = githubState.token;
+            document.getElementById('githubOwnerInput').value = githubState.owner;
+            document.getElementById('githubRepoInput').value = githubState.repo;
+            document.getElementById('githubCreateRepoCheckbox').checked = githubState.createIfMissing;
+            document.getElementById('githubDisconnectBtn').classList.toggle('hidden', !(githubState.token && githubState.owner && githubState.repo));
+            document.getElementById('githubSyncSection').classList.toggle('hidden', !isGitHubConnected());
+            if (!githubState.busy) setSyncStatus('');
+            openModal(document.getElementById('githubModal'));
+            lucide.createIcons();
+        }
+
+        async function connectGitHubFromModal() {
+            const token = document.getElementById('githubTokenInput').value.trim();
+            const owner = document.getElementById('githubOwnerInput').value.trim();
+            const repo = document.getElementById('githubRepoInput').value.trim();
+            const createIfMissing = document.getElementById('githubCreateRepoCheckbox').checked;
+
+            if (!token || !owner || !repo) {
+                showToast('GitHub token, owner, and repo are required', 'error');
+                return;
+            }
+
+            try {
+                const userResp = await fetch('https://api.github.com/user', {
+                    headers: {
+                        'Accept': 'application/vnd.github+json',
+                        'Authorization': `token ${token}`,
+                        'X-GitHub-Api-Version': '2022-11-28'
+                    }
+                });
+
+                if (!userResp.ok) {
+                    const body = await userResp.text();
+                    throw new Error(body || 'Invalid GitHub token');
+                }
+
+                githubState.token = token;
+                githubState.owner = owner;
+                githubState.repo = repo;
+                githubState.createIfMissing = createIfMissing;
+                saveGitHubConfig();
+                closeModal(document.getElementById('githubModal'));
+                showToast('Connected to GitHub', 'success');
+                updateGitHubButton();
+                renderProjectList();
+            } catch (err) {
+                showToast(`GitHub connection failed: ${err.message}`, 'error');
+            }
+        }
+
+        function disconnectGitHub() {
+            clearGitHubConfig();
+            closeModal(document.getElementById('githubModal'));
+            renderProjectList();
+            showToast('Disconnected from GitHub', 'info');
+        }
+
+        // --- 3. Monaco Editor Setup ---
+        let editor;
+        
+        require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' }});
+        
+        require(['vs/editor/editor.main'], function() {
+            monaco.editor.defineTheme('go-dark', {
+                base: 'vs-dark',
+                inherit: true,
+                rules: [
+                    { token: 'comment', foreground: '6a9955' },
+                    { token: 'keyword', foreground: '569cd6' },
+                    { token: 'string', foreground: 'ce9178' },
+                ],
+                colors: {
+                    'editor.background': '#1e1e1e',
+                }
+            });
+
+            editor = monaco.editor.create(document.getElementById('monaco-editor'), {
+                value: snippets[0].code,
+                language: 'go',
+                theme: 'go-dark',
+                automaticLayout: false, // We handle layout manually for performance during resize
+                minimap: { enabled: false },
+                fontSize: 14,
+                lineNumbers: 'on',
+                scrollBeyondLastLine: false,
+                fontFamily: "'Fira Code', 'Consolas', 'Monaco', 'Courier New', monospace"
+            });
+
+            // Load persisted projects (or create a starter project) and show the current one.
+            loadData();
+            if (!state.projects.length) {
+                createNewProject(snippets[0].code);
+            } else {
+                const lastId = localStorage.getItem('goplay_last_project_id');
+                const toLoad = state.projects.find(p => p.id === lastId) || state.projects[0];
+                window.loadProject(toLoad.id);
+            }
+            renderProjectList();
+            updateGitHubButton();
+
+            editor.onDidChangeModelContent(() => debounceSave());
+
+            // Monaco binds Ctrl/Cmd+Enter to "insert line below" by default; override it to Run
+            // so the shortcut works the same whether focus is inside the editor or elsewhere.
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => runCode());
+            editor.addCommand(monaco.KeyMod.Shift | monaco.KeyMod.Alt | monaco.KeyCode.KeyF, () => formatCode());
+
+            // Initial layout calculation
+            setTimeout(() => editor.layout(), 100);
+            
+            // Window resize handler
+            window.addEventListener('resize', () => {
+                editor.layout();
+            });
+
+            renderSnippets();
+            initResizers();
+        });
+
+        // --- 4. UI Logic & Resizing ---
+        const snippetList = document.getElementById('snippet-list');
+        const outputConsole = document.getElementById('output-console');
+        const runBtn = document.getElementById('run-btn');
+        const statusMsg = document.getElementById('status-msg');
+        const clearBtn = document.getElementById('clear-btn');
+        
+        // Resizing Elements
+        const sidebar = document.getElementById('sidebar');
+        const resizerX = document.getElementById('resizer-x');
+        const outputPanel = document.getElementById('output-panel');
+        const resizerY = document.getElementById('resizer-y');
+        const workspace = document.getElementById('workspace');
+
+         // Toggle Elements
+        const desktopSidebarToggle = document.getElementById('desktop-sidebar-toggle');
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const closeSidebarMobile = document.getElementById('close-sidebar-mobile');
+        const sidebarBackdrop = document.getElementById('sidebar-backdrop');
+        const outputHeader = document.getElementById('output-header');
+        const outputChevron = document.getElementById('output-chevron');
+
+        // --- Resizable Panes ---
+        // A .resizer sits between flex siblings and sets an explicit size on its data-target pane.
+        // data-direction: 'col' (width) or 'row' (height). data-flex names the sibling that absorbs
+        // the remaining space (kept above a minimum). Size and position persist via localStorage.
+        const FLEX_MIN = { col: 150, row: 60 };
+
+        function getResizerStorageKey(r, dir) {
+            return `goplay_layout_${r.dataset.key}_${dir}`;
+        }
+
+        function getPaneSize(el, dir) {
+            const rect = el.getBoundingClientRect();
+            return dir === 'col' ? rect.width : rect.height;
+        }
+
+        function setPaneSize(r, dir, px) {
+            const target = document.getElementById(r.dataset.target);
+            const flex = r.dataset.flex ? document.getElementById(r.dataset.flex) : null;
+            const total = getPaneSize(r.parentElement, dir);
+            const min = parseFloat(r.dataset.min) || 60;
+            let max = total * (parseFloat(r.dataset.maxRatio) || 0.6);
+            if (flex) {
+                max = Math.min(max, getPaneSize(target, dir) + getPaneSize(flex, dir) - FLEX_MIN[dir]);
+            }
+            const size = Math.round(Math.min(Math.max(max, min), Math.max(min, px)));
+            target.style[dir === 'col' ? 'width' : 'height'] = size + 'px';
+            return size;
+        }
+
+        function refreshEditorLayout() {
+            if (editor) editor.layout();
+        }
+
+        function applyPaneLayout() {
+            const resizers = [...document.querySelectorAll('.resizer')];
+            resizers.forEach(r => {
+                const target = document.getElementById(r.dataset.target);
+                target.style.width = '';
+                target.style.height = '';
+            });
+            resizers.forEach(r => {
+                if (r.offsetParent === null) return;
+                const dir = r.dataset.direction;
+                const saved = parseFloat(localStorage.getItem(getResizerStorageKey(r, dir)));
+                if (!isNaN(saved)) setPaneSize(r, dir, saved);
+            });
+            refreshEditorLayout();
+        }
+
+        function initResizers() {
+            document.querySelectorAll('.resizer').forEach(r => {
+                const target = document.getElementById(r.dataset.target);
+                const dir = r.dataset.direction;
+
+                r.addEventListener('pointerdown', (e) => {
+                    if (e.button !== 0) return;
+                    e.preventDefault();
+                    const startSize = getPaneSize(target, dir);
+                    const startPos = dir === 'col' ? e.clientX : e.clientY;
+                    let size = startSize;
+                    let moved = false;
+                    let frame = null;
+
+                    r.setPointerCapture(e.pointerId);
+                    r.classList.add('dragging');
+                    document.body.classList.add(dir === 'col' ? 'resizing-col' : 'resizing-row');
+
+                    const onMove = (ev) => {
+                        const pos = dir === 'col' ? ev.clientX : ev.clientY;
+                        if (!moved && Math.abs(pos - startPos) < 2) return;
+                        moved = true;
+                        size = setPaneSize(r, dir, startSize + (pos - startPos));
+                        if (!frame) frame = requestAnimationFrame(() => { frame = null; refreshEditorLayout(); });
+                    };
+                    const onUp = () => {
+                        r.removeEventListener('pointermove', onMove);
+                        r.removeEventListener('pointerup', onUp);
+                        r.removeEventListener('pointercancel', onUp);
+                        r.classList.remove('dragging');
+                        document.body.classList.remove(dir === 'col' ? 'resizing-col' : 'resizing-row');
+                        if (moved) localStorage.setItem(getResizerStorageKey(r, dir), size);
+                        refreshEditorLayout();
+                    };
+
+                    r.addEventListener('pointermove', onMove);
+                    r.addEventListener('pointerup', onUp);
+                    r.addEventListener('pointercancel', onUp);
+                });
+
+                r.addEventListener('keydown', (e) => {
+                    const keys = dir === 'col' ? { ArrowLeft: -1, ArrowRight: 1 } : { ArrowUp: -1, ArrowDown: 1 };
+                    if (!(e.key in keys)) return;
+                    e.preventDefault();
+                    const step = e.shiftKey ? 64 : 16;
+                    const size = setPaneSize(r, dir, getPaneSize(target, dir) + keys[e.key] * step);
+                    localStorage.setItem(getResizerStorageKey(r, dir), size);
+                    refreshEditorLayout();
+                });
+
+                r.addEventListener('dblclick', () => {
+                    localStorage.removeItem(getResizerStorageKey(r, dir));
+                    target.style[dir === 'col' ? 'width' : 'height'] = '';
+                    refreshEditorLayout();
+                });
+            });
+
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(applyPaneLayout, 100);
+            });
+            applyPaneLayout();
+        }
+
+        // --- Collapse/Toggle Logic ---
+
+        // Desktop Sidebar Toggle
+        let isSidebarVisible = true;
+        desktopSidebarToggle.onclick = () => {
+            if (isSidebarVisible) {
+                sidebar.style.display = 'none';
+                resizerX.style.display = 'none';
+            } else {
+                sidebar.style.display = 'flex';
+                resizerX.style.display = 'block';
+            }
+            isSidebarVisible = !isSidebarVisible;
+            if (editor) editor.layout();
+        };
+
+        // Mobile Sidebar Toggle
+        const toggleMobileSidebar = () => {
+            sidebar.classList.toggle('open');
+            sidebarBackdrop.classList.toggle('open');
+        };
+        mobileMenuBtn.onclick = toggleMobileSidebar;
+        closeSidebarMobile.onclick = toggleMobileSidebar;
+        sidebarBackdrop.onclick = toggleMobileSidebar;
+
+        // Output Panel Toggle (Collapsible)
+        let isOutputCollapsed = false;
+        let lastOutputHeight = '192px'; // Default h-48
+
+        outputHeader.onclick = () => {
+            if (isOutputCollapsed) {
+                // Expand
+                outputPanel.style.height = lastOutputHeight;
+                outputChevron.style.transform = 'rotate(0deg)';
+                resizerY.style.display = 'block';
+                outputConsole.style.display = 'block';
+            } else {
+                // Collapse
+                lastOutputHeight = outputPanel.style.height || '192px';
+                outputPanel.style.height = '35px'; // Header height
+                outputChevron.style.transform = 'rotate(180deg)';
+                resizerY.style.display = 'none'; // Hide resizer when collapsed
+                outputConsole.style.display = 'none';
+            }
+            isOutputCollapsed = !isOutputCollapsed;
+            if (editor) setTimeout(() => editor.layout(), 50); // Small delay for transition
+        };
+
+
+        // --- Snippet Rendering ---
+        function renderSnippets() {
+            let currentCategory = "";
+            
+            snippets.forEach((s, index) => {
+                if (s.category !== currentCategory) {
+                    currentCategory = s.category;
+                    const header = document.createElement('div');
+                    header.className = "px-3 py-2 mt-2 text-xs font-bold text-gray-500 uppercase tracking-wider";
+                    header.innerText = currentCategory;
+                    snippetList.appendChild(header);
+                }
+
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-gray-700 hover:text-white rounded transition-colors flex items-start gap-2";
+                btn.title = s.desc || s.title;
+                btn.innerHTML = `<i data-lucide="code-2" class="w-3 h-3 mt-1 shrink-0"></i>
+                    <span class="min-w-0"><span class="block truncate">${escapeHtml(s.title)}</span>${s.desc ? `<span class="block truncate text-[11px] text-gray-500">${escapeHtml(s.desc)}</span>` : ''}</span>`;
+                
+                btn.onclick = () => {
+                    document.querySelectorAll('#snippet-list button').forEach(b => b.classList.remove('bg-gray-700', 'text-white'));
+                    btn.classList.add('bg-gray-700', 'text-white');
+                    if (!editor) return;
+                    // Only overwrite the current project if it is empty or still an untouched
+                    // snippet; otherwise open the lesson in a new project so user work is kept.
+                    const current = editor.getValue().trim();
+                    const isDisposable = !current || snippets.some(sn => sn.code.trim() === current);
+                    if (isDisposable) {
+                        editor.setValue(s.code);
+                        debounceSave();
+                    } else {
+                        createNewProject(s.code, s.title);
+                    }
+                    
+                    // Close mobile sidebar on selection
+                    if (window.innerWidth < 768) {
+                        toggleMobileSidebar();
+                    }
+                };
+
+                if (index === 0) btn.classList.add('bg-gray-700', 'text-white');
+                snippetList.appendChild(btn);
+            });
+            lucide.createIcons();
+        }
+
+        clearBtn.onclick = (e) => {
+            e.stopPropagation(); // Prevent header collapse trigger
+            outputConsole.textContent = "";
+        };
+
+        // --- Execution Logic (Go Playground: play.golang.org, CORS-enabled) ---
+        const GO_PLAYGROUND = 'https://play.golang.org';
+
+        function appendOutput(text, cls) {
+            const span = document.createElement('span');
+            if (cls) span.className = cls;
+            span.textContent = text;
+            outputConsole.appendChild(span);
+        }
+
+        async function runCode() {
+            if (!editor) return;
+            const code = editor.getValue();
+            // Tracks whether this run compiled/ran successfully, so the practice clock
+            // can be frozen on success but left running on a compile/runtime error.
+            let runSucceeded = false;
+
+            if (isOutputCollapsed) outputHeader.click();
+
+            runBtn.disabled = true;
+            runBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            runBtn.innerHTML = `<div class="spinner"></div>`;
+            statusMsg.classList.remove('hidden');
+            outputConsole.textContent = "";
+            appendOutput("Compiling and running...", 'text-gray-400');
+
+            try {
+                const response = await fetch(GO_PLAYGROUND + '/compile', {
+                    method: 'POST',
+                    body: new URLSearchParams({ version: '2', body: code, withVet: 'true' })
+                });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                const result = await response.json();
+                outputConsole.textContent = "";
+
+                if (result.Errors) {
+                    appendOutput("--- Compilation Error ---\n" + result.Errors, 'text-red-400');
+                    return;
+                }
+                if (result.VetErrors) {
+                    appendOutput("--- go vet warnings ---\n" + result.VetErrors + "\n", 'text-yellow-400');
+                }
+
+                let printed = false;
+                for (const ev of (result.Events || [])) {
+                    let msg = ev.Message || '';
+                    // The playground uses form feed (\f) as a "clear screen" signal.
+                    const ff = msg.lastIndexOf('\f');
+                    if (ff !== -1) { outputConsole.textContent = ""; msg = msg.slice(ff + 1); }
+                    if (!msg) continue;
+                    appendOutput(msg, ev.Kind === 'stderr' ? 'text-red-400' : 'text-green-400');
+                    printed = true;
+                }
+
+                if (result.Status && result.Status !== 0) {
+                    appendOutput(`\nProgram exited: status ${result.Status}`, 'text-red-400');
+                } else {
+                    if (!printed) appendOutput("(Program finished with no output)", 'text-gray-400');
+                    runSucceeded = true;
+                }
+            } catch (error) {
+                outputConsole.textContent = "";
+                appendOutput("Error connecting to Go Playground API:\n" + error.message, 'text-red-400');
+            } finally {
+                runBtn.disabled = false;
+                runBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+                runBtn.innerHTML = `<i data-lucide="play" class="w-4 h-4 fill-current"></i> <span class="hidden sm:inline">Run</span>`;
+                statusMsg.classList.add('hidden');
+                lucide.createIcons();
+                // Freeze the practice clock on success; keep it running on failure so
+                // the user's timed attempt continues until they actually get it right.
+                if (runSucceeded && window.PracticeClock && window.PracticeClock.isTracking()) {
+                    window.PracticeClock.stop();
+                }
+            }
+        }
+
+        // gofmt + goimports via the playground; applied as an edit so Ctrl+Z can undo it.
+        async function formatCode() {
+            if (!editor) return;
+            const fmtBtn = document.getElementById('fmt-btn');
+            fmtBtn.disabled = true;
+            try {
+                const response = await fetch(GO_PLAYGROUND + '/fmt', {
+                    method: 'POST',
+                    body: new URLSearchParams({ imports: 'true', body: editor.getValue() })
+                });
+                const result = await response.json();
+                if (result.Error) {
+                    if (isOutputCollapsed) outputHeader.click();
+                    outputConsole.textContent = "";
+                    appendOutput("--- Format Error ---\n" + result.Error, 'text-red-400');
+                    return;
+                }
+                if (typeof result.Body === 'string' && result.Body !== editor.getValue()) {
+                    const model = editor.getModel();
+                    editor.pushUndoStop();
+                    editor.executeEdits('gofmt', [{ range: model.getFullModelRange(), text: result.Body }]);
+                    editor.pushUndoStop();
+                }
+                showToast('Formatted with gofmt');
+            } catch (error) {
+                showToast('Format failed: ' + error.message, 'error');
+            } finally {
+                fmtBtn.disabled = false;
+            }
+        }
+
+        document.getElementById('fmt-btn').onclick = formatCode;
+        runBtn.onclick = runCode;
+
+        // Ctrl/Cmd+Enter runs the current code from anywhere, including inside the editor.
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                runCode();
+            }
+        });
+
+        // --- New Project & GitHub Sync Wiring ---
+        document.getElementById('new-project-btn').onclick = () => createNewProject();
+        document.getElementById('github-btn').onclick = openGitHubModal;
+        document.getElementById('githubConnectBtn').onclick = connectGitHubFromModal;
+        document.getElementById('githubDisconnectBtn').onclick = disconnectGitHub;
+        document.getElementById('githubPushCurrentBtn').onclick = () => { const p = getCurrentProject(); if (p) pushProjects([p]); };
+        document.getElementById('githubPushAllBtn').onclick = () => pushProjects([...state.projects]);
+        document.getElementById('githubPullBtn').onclick = pullProjects;
+        document.getElementById('githubSyncAllBtn').onclick = syncAllProjects;
+        document.getElementById('githubRenameFolderBtn').onclick = renameRemoteFolder;
+
+        document.querySelectorAll('.closeModal').forEach(btn => {
+            btn.onclick = function () { closeModal(this.closest('.fixed')); };
+        });
+
+        /* ---------------- Practice Clock (Stopwatch / Timer) ---------------- */
+        (function initClockWidget() {
+            const DEFAULT_DURATION_MS = 5 * 60 * 1000;
+            const STORAGE_MODE = 'goplay_clock_mode';
+            const STORAGE_DURATION = 'goplay_clock_duration_ms';
+
+            const elDisplay = document.getElementById('clockDisplay');
+            const elInput = document.getElementById('clockTimerInput');
+            const btnModeStopwatch = document.getElementById('clockModeStopwatch');
+            const btnModeTimer = document.getElementById('clockModeTimer');
+            const btnStartPause = document.getElementById('clockStartPause');
+            const btnStop = document.getElementById('clockStopBtn');
+            const btnReset = document.getElementById('clockResetBtn');
+            if (!elDisplay) return;
+
+            let mode = localStorage.getItem(STORAGE_MODE) === 'timer' ? 'timer' : 'stopwatch';
+            let durationMs = parseInt(localStorage.getItem(STORAGE_DURATION), 10) || DEFAULT_DURATION_MS;
+            let state = 'idle'; // idle | running | paused | stopped
+            let baseMs = 0;
+            let startTs = null;
+            let intervalId = null;
+
+            function formatClockTime(ms) {
+                if (ms < 0) ms = 0;
+                const totalSec = Math.floor(ms / 1000);
+                const h = Math.floor(totalSec / 3600);
+                const m = Math.floor((totalSec % 3600) / 60);
+                const s = totalSec % 60;
+                const pad = (n) => String(n).padStart(2, '0');
+                return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+            }
+
+            function parseDurationInput(str) {
+                str = (str || '').trim();
+                const m = str.match(/^(\d{1,3}):([0-5]?\d)$/);
+                if (m) {
+                    const mins = parseInt(m[1], 10), secs = parseInt(m[2], 10);
+                    return Math.min(Math.max((mins * 60 + secs) * 1000, 1000), 180 * 60000);
+                }
+                const n = parseInt(str, 10);
+                if (!isNaN(n) && n > 0) return Math.min(Math.max(n * 60000, 1000), 180 * 60000);
+                return DEFAULT_DURATION_MS;
+            }
+
+            function currentElapsed() {
+                return state === 'running' ? baseMs + (Date.now() - startTs) : baseMs;
+            }
+
+            function updateDisplay() {
+                const elapsed = currentElapsed();
+                elDisplay.textContent = mode === 'stopwatch'
+                    ? formatClockTime(elapsed)
+                    : formatClockTime(Math.max(durationMs - elapsed, 0));
+            }
+
+            function setIcon(btn, name) {
+                const icon = btn.querySelector('[data-lucide]');
+                if (icon) icon.setAttribute('data-lucide', name);
+            }
+
+            function updateButtons() {
+                setIcon(btnStartPause, state === 'running' ? 'pause' : 'play');
+                btnStartPause.title = state === 'running' ? 'Pause' : (state === 'paused' ? 'Resume' : 'Start');
+                btnStartPause.disabled = state === 'stopped';
+                btnStop.disabled = !(state === 'running' || state === 'paused');
+                btnModeStopwatch.classList.toggle('active', mode === 'stopwatch');
+                btnModeTimer.classList.toggle('active', mode === 'timer');
+                const modeLocked = state !== 'idle';
+                btnModeStopwatch.disabled = modeLocked;
+                btnModeTimer.disabled = modeLocked;
+                elInput.classList.toggle('hidden', mode !== 'timer');
+                elInput.disabled = state !== 'idle';
+                lucide.createIcons();
+            }
+
+            function clockBeep() {
+                try {
+                    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                    const o = ctx.createOscillator(); const g = ctx.createGain();
+                    o.type = 'sine'; o.frequency.value = 880;
+                    o.connect(g); g.connect(ctx.destination);
+                    g.gain.setValueAtTime(0.18, ctx.currentTime);
+                    o.start(); o.stop(ctx.currentTime + 0.5);
+                    o.onended = () => ctx.close();
+                } catch (e) { /* audio not available, ignore */ }
+            }
+
+            function finishTimer() {
+                baseMs = durationMs;
+                state = 'stopped';
+                clearInterval(intervalId); intervalId = null;
+                updateDisplay(); updateButtons();
+                elDisplay.classList.add('clock-flash');
+                setTimeout(() => elDisplay.classList.remove('clock-flash'), 3000);
+                clockBeep();
+                showToast("Time's up!", 'error');
+            }
+
+            function tick() {
+                updateDisplay();
+                if (mode === 'timer' && currentElapsed() >= durationMs) finishTimer();
+            }
+
+            function start() {
+                if (state === 'stopped' || state === 'running') return;
+                if (mode === 'timer' && durationMs - currentElapsed() <= 0) return;
+                state = 'running';
+                startTs = Date.now();
+                intervalId = setInterval(tick, 250);
+                updateButtons();
+            }
+
+            function pause() {
+                if (state !== 'running') return;
+                baseMs += Date.now() - startTs;
+                state = 'paused';
+                clearInterval(intervalId); intervalId = null;
+                updateDisplay(); updateButtons();
+            }
+
+            function stop() {
+                if (!(state === 'running' || state === 'paused')) return;
+                if (state === 'running') baseMs += Date.now() - startTs;
+                state = 'stopped';
+                clearInterval(intervalId); intervalId = null;
+                updateDisplay(); updateButtons();
+            }
+
+            function reset() {
+                clearInterval(intervalId); intervalId = null;
+                state = 'idle';
+                baseMs = 0;
+                startTs = null;
+                elDisplay.classList.remove('clock-flash');
+                updateDisplay(); updateButtons();
+            }
+
+            function setMode(next) {
+                if (state !== 'idle') { showToast('Reset the clock before switching modes.', 'error'); return; }
+                mode = next;
+                localStorage.setItem(STORAGE_MODE, mode);
+                updateDisplay(); updateButtons();
+            }
+
+            btnStartPause.addEventListener('click', () => (state === 'running' ? pause() : start()));
+            btnStop.addEventListener('click', stop);
+            btnReset.addEventListener('click', reset);
+            btnModeStopwatch.addEventListener('click', () => setMode('stopwatch'));
+            btnModeTimer.addEventListener('click', () => setMode('timer'));
+            elInput.addEventListener('change', () => {
+                durationMs = parseDurationInput(elInput.value);
+                elInput.value = formatClockTime(durationMs);
+                localStorage.setItem(STORAGE_DURATION, String(durationMs));
+                updateDisplay();
+            });
+
+            elInput.value = formatClockTime(durationMs);
+            updateDisplay();
+            updateButtons();
+
+            // Exposed so a successful run can freeze "coding time" (see runCode()).
+            // codingTime is distinct from how long the Go Playground took to execute:
+            // it's how long the clock ran while the user was writing/debugging.
+            window.PracticeClock = {
+                isTracking: () => state !== 'idle',
+                getElapsedMs: () => currentElapsed(),
+                stop,
+                format: formatClockTime
+            };
+        })();
+
+        lucide.createIcons();
+    </script>
+</body>
+</html>
